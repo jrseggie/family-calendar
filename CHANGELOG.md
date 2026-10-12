@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.1
+- A new install now shows the setup-password box (it was hidden behind a "couldn't load" message).
+- No more "preview URLs" warning when installing.
+
 ## 1.0.0 – first release
 - Month grid with a column per person, Upcoming list, Birthdays, School holidays, Changes, phone-calendar feed.
 - ⚠ Needs sorting: a child at a house with no adult, someone down for two places, a visit on a school day, a boarder's

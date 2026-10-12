@@ -1361,4 +1361,5 @@ document.addEventListener("click", (e) => {
 });
 $("#search").onclick = () => state.data && searchSheet();
 
-refresh().then(approvalLink).catch((e) => { $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });
+// "setup" = a new install showing its setup-password box (api() drew it) - leave that on screen
+refresh().then(approvalLink).catch((e) => { if (e.message !== "setup") $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });

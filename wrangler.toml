@@ -5,6 +5,8 @@ main = "src/worker.js"
 compatibility_date = "2025-09-01"
 # the calendar's free address: https://<name>.<your-subdomain>.workers.dev (a domain can be added later, see docs/HELP.md)
 workers_dev = true
+# no extra preview addresses for each version
+preview_urls = false
 
 # the website's files; anything that isn't a file (/api, /feed, /manifest.json) goes to the worker
 [assets]
