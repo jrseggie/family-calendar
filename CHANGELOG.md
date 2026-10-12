@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.9
+- Change the order of people (= the columns on the Month grid) with ↑ ↓ – on Setup → People or in the set-up wizard (the Family group too).
+- Set-up wizard: shorter role names (Child (boards), Helper, Visits the children) so they fit.
+
 ## 1.0.8
 - 🌴 Leave: a new "Leave" category for helpers (au pair, gardener, domestic …). Leave shows greyed and striped on the Month grid,
   as an "On leave" line on Upcoming and in the weekly email. A helper on leave isn't offered for staying over / house-sitting,

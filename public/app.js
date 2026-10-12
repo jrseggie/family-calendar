@@ -249,19 +249,21 @@ function welcomeCard() {
 const PLACE_ICONS = ["🏠", "🏡", "🏘️", "🏢", "🏖️", "🌊", "🏔️", "🏕️", "🌳", "🌾", "🏝️", "⛵", "🏫", "🛏️", "✈️", "🚗", "👵", "❤️"];
 const iconSelect = (attr, cur) => `<select ${attr} title="Icon" style="font-size:18px">${[...new Set([cur, ...PLACE_ICONS].filter(Boolean))]
   .map((i) => `<option ${i === cur ? "selected" : ""}>${i}</option>`).join("")}</select>`;
-const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "Child who boards at school", helper: "Helper (au pair, nanny, house-sitter)",
-  visitor: "Visits with the children (e.g. an ex-partner)" };
+const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "Child (boards)", helper: "Helper", visitor: "Visits the children" };
 // the wizard's role for someone already in the calendar (the reverse of WIZARD_ROLES in the API)
 const wizardRole = (p) => p.type === "helper" ? "helper" : p.type === "tracked" ? "visitor" : p.child ? (p.boards ? "boarder" : "child") : "adult";
+const WIZARD_ROLE_HELP = "Helper = au pair, nanny, gardener, house-sitter … · Visits the children = e.g. an ex-partner whose plans with the kids you track";
 function wizardForm() {
   const b = state.data.brand || {}, homes = (state.data.places || []).filter((p) => p.kind === "home");
-  const known = state.data.people.filter((p) => p.type !== "group" && p.active !== 0);
+  const known = state.data.people.filter((p) => p.active !== 0);   // in order, the Family group too (it can be moved)
   // people already in the calendar: name fixed (entries are filed under it - rename under Setup → People), role and school can change
   const personRow = (p = {}) => `<div class="vline wrow" ${p.id ? `data-id="${p.id}"` : ""}><input placeholder="Name" value="${esc(p.name || "")}" data-n
       ${p.id ? `readonly title="Rename under Setup → People" class="fixed"` : ""}>
-    <select data-r>${Object.entries(WIZARD_ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select>
-    <input placeholder="School" data-s value="${esc(p.school || "")}" ${["child", "boarder"].includes(p.role) ? "" : `style="visibility:hidden"`}><span class="vmove">${p.id ? `<span style="width:30px"></span>`
-      : `<button type="button" class="ackbtn" data-wdel title="Remove">✕</button>`}</span></div>`;
+    ${p.role === "group" ? `<span class="muted" style="align-self:center;font-size:13px">everyone in the family</span><input type="hidden" data-r value="group">`
+      : `<select data-r title="${esc(WIZARD_ROLE_HELP)}">${Object.entries(WIZARD_ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select>`}
+    <input placeholder="School" data-s value="${esc(p.school || "")}" ${["child", "boarder"].includes(p.role) ? "" : `style="visibility:hidden"`}><span class="vmove">
+      <button type="button" class="ackbtn" data-wup title="Move up">↑</button><button type="button" class="ackbtn" data-wdown title="Move down">↓</button>
+      ${p.id ? "" : `<button type="button" class="ackbtn" data-wdel title="Remove">✕</button>`}</span></div>`;
   const houseRow = (h = {}, i = 0) => `<div class="vline hrow"><input placeholder="${i ? "e.g. Beach House (leave empty if none)" : "e.g. Home, Town House"}" value="${esc(h.label || "")}" data-l>
     ${iconSelect("data-i", h.icon || (i ? "🏡" : "🏠"))}
     <input placeholder="Someone must sleep here because of… (e.g. the dogs)" value="${esc(h.needs || "")}" data-x></div>`;
@@ -269,8 +271,8 @@ function wizardForm() {
     <div class="two"><label>Family name<input name="family_name" value="${esc(b.family || "")}" placeholder="e.g. Smith" required></label>
       <label>Calendar name <small class="muted">(optional)</small><input name="site_name" value="${esc(b.site && b.site !== `${b.family} Calendar` ? b.site : "")}"
         placeholder="${esc(b.family ? b.family + " Calendar" : "Smith Calendar")}"></label></div>
-    <div><div class="lbl">Who's in the calendar?${known.length ? ` <small class="muted">(to remove someone: Setup → People)</small>` : ""}</div>
-      <div id="wpeople">${known.length ? known.map((p) => personRow({ id: p.id, name: p.name, role: wizardRole(p), school: p.school })).join("")
+    <div><div class="lbl">Who's in the calendar? <small class="muted">(↑ ↓ = the order of the columns on the calendar${known.length ? "; to remove someone: Setup → People" : ""})</small></div>
+      <div id="wpeople">${known.length ? known.map((p) => personRow({ id: p.id, name: p.name, role: p.type === "group" ? "group" : wizardRole(p), school: p.school })).join("")
         : personRow({ role: "adult" }) + personRow({ role: "adult" }) + personRow({ role: "child" })}</div>
       <button type="button" class="ackbtn" id="wadd" style="margin-top:6px">+ Add a person</button></div>
     <div><div class="lbl">Your houses <small class="muted">(a child at a house needs an adult there)</small></div>
@@ -281,7 +283,12 @@ function wizardForm() {
     <div class="actions"><button type="button" id="cancel">Not now</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#wadd").onclick = () => $("#wpeople").insertAdjacentHTML("beforeend", personRow());
-    $("#wpeople").onclick = (e) => { if (e.target.closest("[data-wdel]")) e.target.closest(".wrow").remove(); };
+    $("#wpeople").onclick = (e) => {
+      const row = e.target.closest(".wrow");
+      if (e.target.closest("[data-wdel]")) row.remove();
+      if (e.target.closest("[data-wup]") && row.previousElementSibling) row.previousElementSibling.before(row);
+      if (e.target.closest("[data-wdown]") && row.nextElementSibling) row.nextElementSibling.after(row);
+    };
     $("#wpeople").onchange = (e) => { const r = e.target.closest("[data-r]"); if (r) r.closest(".wrow").querySelector("[data-s]").style.visibility = ["child", "boarder"].includes(r.value) ? "" : "hidden"; };
     $("#f").onsubmit = (e) => {
       e.preventDefault();
@@ -881,9 +888,13 @@ async function renderSetup() {
   const [people, users, digest, places, settings, inbox] = await Promise.all([api("GET", "setup/people"), api("GET", "setup/users"), api("GET", "setup/digest"),
     api("GET", "setup/places"), api("GET", "setup/settings"), api("GET", "setup/inbox")]);
   state.setup = { people, users, digest, places, settings, inbox };
-  const pRows = people.map((p) => `<div class="row" data-person="${p.id}">
+  // in their order (= the order of the columns on the Month grid); ↑ ↓ move someone
+  const pRows = people.map((p, i) => `<div class="row" data-person="${p.id}">
       <span><span class="swatch" style="background:${p.color}"></span><b>${esc(p.name)}</b>
-        ${p.active ? "" : `<small>(hidden)</small>`}${personNote(p) ? `<br><small class="muted">${esc(personNote(p))}</small>` : ""}</span><small>${TYPE_INFO[p.type][0]}</small></div>`).join("");
+        ${p.active ? "" : `<small>(hidden)</small>`}${personNote(p) ? `<br><small class="muted">${esc(personNote(p))}</small>` : ""}</span>
+      <span class="vmove"><small style="align-self:center;margin-right:6px">${TYPE_INFO[p.type][0]}</small>
+        <button type="button" class="ackbtn" data-pmove="${i}|-1" title="Move up" ${i ? "" : "disabled"}>↑</button>
+        <button type="button" class="ackbtn" data-pmove="${i}|1" title="Move down" ${i < people.length - 1 ? "" : "disabled"}>↓</button></span></div>`).join("");
   const uRows = users.map((u) => {
     const extra = u.role === "limited"
       ? `sees ${esc(u.see || "nobody")}${u.see_school ? " + school holidays" : ""}${u.see_birthdays ? " + birthdays" : ""}${u.can_edit ? " · can add/edit" : " · view only"}`
@@ -930,6 +941,12 @@ async function renderSetup() {
     <p class="muted" style="font-size:12px">Logins use the person's email address: they sign in
       with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>`;
   $("#add-person").onclick = () => personForm();
+  document.querySelectorAll("[data-pmove]").forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    const [i, d] = b.dataset.pmove.split("|").map(Number), ids = people.map((p) => p.id);
+    [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
+    submit(() => api("PUT", "setup/people-order", { ids }), "Order saved");
+  });
   $("#add-place").onclick = () => placeForm();
   $("#site-settings").onclick = () => settingsForm();
   $("#inbox-settings").onclick = () => inboxForm();

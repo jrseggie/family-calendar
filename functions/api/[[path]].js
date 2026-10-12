@@ -439,14 +439,18 @@ async function setupWizard(request, env, u) {
   if (!people.some((p) => p.name === "Family")) stmts.push(env.DB.prepare("INSERT INTO people (name, color, type, active, sort, grid_column, family) VALUES ('Family', '#495057', 'group', 1, 99, 0, 0)"));
 
   // people
-  const list = (Array.isArray(b.people) ? b.people : []).map((p) => ({ id: +p.id || 0, name: clean(p.name, 40), role: WIZARD_ROLES[p.role] ? p.role : "adult", school: clean(p.school, 80) || null }))
+  const list = (Array.isArray(b.people) ? b.people : []).map((p) => ({ id: +p.id || 0, name: clean(p.name, 40),
+    role: p.role === "group" && p.id ? "group" : WIZARD_ROLES[p.role] ? p.role : "adult", school: clean(p.school, 80) || null }))
     .filter((p) => p.name || p.id);
+  const order = (p) => list.indexOf(p) + 1;   // the wizard's order = sort (the Month grid's columns)
   // people already in the calendar (wizard run again): change their role / school only if it was changed
   const roleOf = (p) => p.type === "helper" ? "helper" : p.type === "tracked" ? "visitor" : p.child ? (p.boards ? "boarder" : "child") : "adult";
   const changed = [];
   for (const p of list.filter((x) => x.id)) {
-    const cur = people.find((x) => x.id === p.id && x.type !== "group");
+    const cur = people.find((x) => x.id === p.id);
     if (!cur) continue;
+    if (cur.sort !== order(p)) stmts.push(env.DB.prepare("UPDATE people SET sort = ? WHERE id = ?").bind(order(p), cur.id));
+    if (cur.type === "group") continue;
     const r = WIZARD_ROLES[p.role], school = r.child ? p.school : null;
     if (roleOf(cur) !== p.role) stmts.push(env.DB.prepare("UPDATE people SET type = ?, child = ?, boards = ?, family = ?, grid_column = ?, home = ? WHERE id = ?")
       .bind(r.type, r.child, r.boards, r.family, r.grid_column, r.home ? (cur.home || houseKeys[0]) : cur.home, cur.id));
@@ -462,7 +466,7 @@ async function setupWizard(request, env, u) {
     taken.add(p.name.toLowerCase());
     const r = WIZARD_ROLES[p.role];
     stmts.push(env.DB.prepare("INSERT INTO people (name, color, type, active, sort, grid_column, family, child, boards, home, school) VALUES (?,?,?,1,?,?,?,?,?,?,?)")
-      .bind(p.name, WIZARD_COLORS[(people.length + i) % WIZARD_COLORS.length], r.type, people.length + i + 1, r.grid_column, r.family, r.child, r.boards,
+      .bind(p.name, WIZARD_COLORS[(people.length + i) % WIZARD_COLORS.length], r.type, list.some((x) => x.id) ? order(p) : people.length + i + 1, r.grid_column, r.family, r.child, r.boards,
             r.home ? houseKeys[0] : null, r.child ? p.school : null));
     added.push(p.name);
   });
@@ -912,7 +916,7 @@ export async function onRequest({ request, env, params }) {
     if (!u) return fail(403, "Your email hasn't been given access to this calendar yet – ask whoever runs this calendar.");
     const last = parts[parts.length - 1];
     const id = last && /^\d+$/.test(last) ? parseInt(last, 10) : null;
-    const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time"].includes(parts[1]);   // addressed by key / no id
+    const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time", "people-order"].includes(parts[1]);   // addressed by key / no id
     if (["PUT", "DELETE"].includes(request.method) && !id && !byKey) return fail(400, "Missing id");
 
     if (parts[0] === "all" && request.method === "GET") return await getAll(env, u);
@@ -935,6 +939,14 @@ export async function onRequest({ request, env, params }) {
       if (parts[1] === "people") return await setupPeople(request, env, u, id);
       if (parts[1] === "places") return await setupPlaces(request, env, u, decodeURIComponent(parts[2] || ""));
       if (parts[1] === "settings") return await setupSettings(request, env, u);
+      if (parts[1] === "people-order" && request.method === "PUT") {   // Setup > People ↑ ↓ (= the Month grid's column order)
+        const ids = (await request.json()).ids, people = await loadPeople(env);
+        if (!Array.isArray(ids) || !ids.every((id) => people.some((p) => p.id === id))) invalid("Unknown person");
+        const rest = people.filter((p) => !ids.includes(p.id)).map((p) => p.id);
+        await env.DB.batch([...ids, ...rest].map((id, i) => env.DB.prepare("UPDATE people SET sort = ? WHERE id = ?").bind(i + 1, id)));
+        await log(env, u, "People order", [...ids, ...rest].map((id) => people.find((p) => p.id === id).name).join(", "));
+        return json({ ok: true });
+      }
       if (parts[1] === "digest-time" && request.method === "PUT") {   // Setup > Weekly email > day and time
         const b = await request.json(), s = digestSchedule({ digest_day: b.day, digest_hour: b.hour, timezone: b.timezone });
         if (String(b.timezone || "") && s.tz !== b.timezone) invalid("Unknown time zone");
