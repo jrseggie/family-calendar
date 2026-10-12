@@ -137,6 +137,10 @@ dialog { overflow-x: hidden; }
 .actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 .actions button { padding: 9px 14px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); cursor: pointer; }
 .actions .primary { background: var(--brand); color: #fff; border-color: var(--brand); }
+button.primary, a.btn.primary { background: var(--brand); color: #fff; border: 1px solid var(--brand); border-radius: 10px; padding: 9px 16px; font-weight: 600; cursor: pointer; }
+/* the one thing to do next (set-up wizard, switch on sign-in): bright green so it can't be missed */
+button.go, a.btn.go { background: #2f9e44; color: #fff; border: 1px solid #2f9e44; border-radius: 10px; padding: 9px 16px; font-weight: 700; cursor: pointer; }
+button.go:hover, a.btn.go:hover { background: #37b24d; }
 .actions .danger { color: #c92a2a; margin-right: auto; }
 .meta { font-size: 12px; color: var(--muted); }
 .err { color: #c92a2a; font-size: 13px; min-height: 1em; }

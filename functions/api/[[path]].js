@@ -377,7 +377,9 @@ async function setupSettings(request, env, u) {
   if (request.method === "GET") return json({ ...Object.fromEntries(SETTING_KEYS.map((k) => [k, cur[k]])), brand: brand(cur, new URL(request.url).origin), emailSync: canSyncEmail(env) });
   if (request.method !== "PUT") return fail(405, "Method not allowed");
   const b = await request.json(), clean = (v, n) => String(v ?? "").trim().slice(0, n);
-  const rec = { family_name: clean(b.family_name, 40), site_name: clean(b.site_name, 40), short_name: clean(b.short_name, 14), site_url: clean(b.site_url, 100).replace(/\/+$/, "") };
+  const rec = { family_name: clean(b.family_name, 40), site_name: clean(b.site_name, 40), short_name: clean(b.short_name, 14), site_url: clean(b.site_url, 100).replace(/\/+$/, ""),
+    repo_url: clean(b.repo_url, 120).replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, "") };   // "owner/name" of the family's GitHub copy
+  if (rec.repo_url && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(rec.repo_url)) invalid("GitHub copy should look like github.com/yourname/family-calendar");
   if (rec.site_url && !/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}$/i.test(rec.site_url)) invalid("Web address should look like https://ourfamily.com");
   const stmts = Object.entries(rec).map(([k, v]) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v || null));
   if (!cur.uid_prefix) stmts.push(env.DB.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('uid_prefix', ?)").bind(crypto.randomUUID().slice(0, 8)));

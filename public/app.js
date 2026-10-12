@@ -76,7 +76,8 @@ function connectForm() {
       <b>email code</b> instead, and only the people you add can sign in.</p>
     <div class="two"><label>Your name<input name="name" required></label><label>Your email (you'll sign in with it)<input name="email" type="email" required></label></div>
     <details open><summary>Get the Cloudflare key (about 2 minutes)</summary><ol class="meta" style="margin:6px 0 0 18px;padding:0">
-      <li>Open <b>dash.cloudflare.com/profile/api-tokens</b> → <b>Create Token</b> → <b>Create Custom Token</b> → <b>Get started</b>.</li>
+      <li>Once: Cloudflare dashboard → <b>Zero Trust</b> in the menu → any team name → <b>Free</b> plan (it asks for a card; Free isn't charged).</li>
+      <li>Cloudflare dashboard → <b>person icon</b> (top right) → <b>Profile</b> → <b>API Tokens</b> → <b>Create Token</b> → <b>Create Custom Token</b> → <b>Get started</b>.</li>
       <li>Name: <i>Family calendar</i>. Permissions – add these rows (all <b>Account</b>, all <b>Edit</b>):<br>
         <b>Access: Apps and Policies</b> · <b>Access: Organizations, Identity Providers, and Groups</b> · <b>Workers Scripts</b> ·
         <b>Email Routing Addresses</b>, and one more: <b>Account Settings</b> – <b>Read</b>.</li>
@@ -135,8 +136,6 @@ async function refresh() {
   const tabOk = { birthdays: me.seeBirthdays, school: me.seeSchool, log: me.seeLog, info: me.isAdmin, setup: me.isAdmin };
   document.querySelectorAll("#tabs button").forEach((b) => { b.hidden = tabOk[b.dataset.view] === false; });
   if (tabOk[state.view] === false) state.view = "month";
-  // a new install: open on Upcoming, where the "set up your calendar" / "switch on sign-in" cards are (once per visit)
-  if ((state.data.needsWizard || state.data.setupMode) && !state.welcomed) { state.welcomed = true; state.view = "upcoming"; }
   for (const f of [...state.filter]) if (!names().includes(f)) state.filter.delete(f);
   render();
 }
@@ -238,14 +237,18 @@ function proposalView(p) {
 function welcomeCard() {
   if (state.data.setupMode && !state.data.needsWizard) return `<div class="card pad"><h3 style="margin-top:0">🔐 Last step: switch on sign-in</h3>
     <p class="muted">Right now only the setup password protects the calendar. Switch on the email-code sign-in so only your family can open it.</p>
-    <button class="primary" onclick="connectForm()">Switch on sign-in</button></div>`;
+    <button class="go" onclick="connectForm()">🔐 Switch on sign-in</button></div>`;
   if (!state.data.needsWizard) return "";
   return `<div class="card pad"><h3 style="margin-top:0">👋 Welcome – set up your calendar</h3>
     <p class="muted">Tell the calendar who's in your family, what you call your house and who needs looking after. It takes about two minutes
-      and you can change everything later on the ⚙ Setup tab.</p><button class="primary" onclick="wizardForm()">Start</button></div>`;
+      and you can change everything later on the ⚙ Setup tab.</p><button class="go" onclick="wizardForm()">👋 Start</button></div>`;
 }
 
 // ---------- set-up wizard: family name, people + roles, houses (POST setup/wizard; only adds, never removes)
+// house / place icons to pick from (a select, so nobody has to type an emoji)
+const PLACE_ICONS = ["🏠", "🏡", "🏘️", "🏢", "🏖️", "🌊", "🏔️", "🏕️", "🌳", "🌾", "🏝️", "⛵", "🏫", "🛏️", "✈️", "🚗", "👵", "❤️"];
+const iconSelect = (attr, cur) => `<select ${attr} title="Icon" style="font-size:18px">${[...new Set([cur, ...PLACE_ICONS].filter(Boolean))]
+  .map((i) => `<option ${i === cur ? "selected" : ""}>${i}</option>`).join("")}</select>`;
 const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "Child who boards at school", helper: "Helper (au pair, nanny, house-sitter)",
   visitor: "Visits with the children (e.g. an ex-partner)" };
 function wizardForm() {
@@ -255,7 +258,7 @@ function wizardForm() {
     <select data-r>${Object.entries(WIZARD_ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select>
     <input placeholder="School (children)" data-s value="${esc(p.school || "")}"><span class="vmove"><button type="button" class="ackbtn" data-wdel title="Remove">✕</button></span></div>`;
   const houseRow = (h = {}, i = 0) => `<div class="vline hrow"><input placeholder="${i ? "e.g. Beach House (leave empty if none)" : "e.g. Home, Town House"}" value="${esc(h.label || "")}" data-l>
-    <input value="${esc(h.icon || (i ? "🏡" : "🏠"))}" data-i maxlength="4" style="max-width:4em" title="Icon">
+    ${iconSelect("data-i", h.icon || (i ? "🏡" : "🏠"))}
     <input placeholder="Someone must sleep here because of… (e.g. the dogs)" value="${esc(h.needs || "")}" data-x></div>`;
   openDialog(`<form class="form" id="f" autocomplete="off"><h2>👋 Set up your calendar</h2>
     <div class="two"><label>Family name<input name="family_name" value="${esc(b.family || "")}" placeholder="e.g. Smith" required></label>
@@ -873,7 +876,7 @@ async function renderSetup() {
     <div class="card"><h3>This calendar</h3><div class="row" id="site-settings"><span><b>${esc(sb.site)}</b><br>
       <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}</small></span><small>Edit</small></div>
       <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b> <span id="update-note" class="muted"></span></span>
-        <span><button type="button" class="ackbtn" onclick="wizardForm()">Set-up wizard</button></span></div></div>
+        <span><button type="button" class="go" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
     <div class="card"><h3>People in the calendar</h3>${pRows}</div>
     <button class="btn-add" id="add-person">+ Add person</button>
     <div class="card"><h3>Places <small class="muted">where people sleep – a child at a house needs an adult there</small></h3>${places.map((p) =>
@@ -998,8 +1001,18 @@ async function checkForUpdate() {
   try {
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`).then((x) => x.ok ? x.json() : null);
     const latest = String(r?.tag_name || "").replace(/^v/, ""), cmp = (a, b) => a.split(".").map(Number).reduce((d, x, i) => d || x - (b.split(".").map(Number)[i] || 0), 0);
+    const mine = state.setup?.settings?.repo_url, wf = ".github/workflows/update.yml";
+    const updateLinks = !mine ? ` – add your GitHub copy under <b>This calendar → Edit</b> to update from here`
+      : ` – <a href="https://github.com/${esc(mine)}/actions/workflows/update.yml" target="_blank" rel="noopener"><b>Update now</b></a>
+         (GitHub → Run workflow) · no "Update Family Calendar" there? <a href="#" id="add-updater">Add the update button</a> first`;
     note.innerHTML = latest && cmp(latest, state.data.version) > 0
-      ? `· <b>version ${esc(latest)} is available</b> – <a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new and how to update</a>` : "· up to date";
+      ? `· <b>version ${esc(latest)} is available</b> (<a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new</a>)${updateLinks}` : "· up to date";
+    // GitHub's "new file" page with the update action filled in - the family only clicks Commit
+    $("#add-updater")?.addEventListener("click", async (e) => {
+      e.preventDefault();
+      const yml = await fetch(`https://raw.githubusercontent.com/${repo}/main/${wf}`).then((x) => x.text());
+      window.open(`https://github.com/${mine}/new/main?filename=${encodeURIComponent(wf)}&value=${encodeURIComponent(yml)}`, "_blank", "noopener");
+    });
   } catch { /* offline or GitHub busy - try again next time */ }
 }
 
@@ -1039,6 +1052,8 @@ function settingsForm() {
     <div class="two"><label>Calendar name<input name="site_name" value="${esc(s.site_name || "")}" placeholder="${esc(b.family ? b.family + " Calendar" : "Family Calendar")}"></label>
       <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
+    ${state.data.upstream ? `<label>Your GitHub copy <small class="muted">(for updates – the address of the copy Cloudflare made when you installed)</small>
+      <input name="repo_url" value="${esc(s.repo_url ? "github.com/" + s.repo_url : "")}" placeholder="github.com/yourname/family-calendar"></label>` : ""}
     <div class="meta">The name shows at the top of the site, on the emails, invites and the phone calendar. The web address is used in
       emails and invites, and the inbox address is inbox@ that domain.</div>
     <div class="err"></div>
@@ -1057,7 +1072,7 @@ function placeForm(pl) {
   const x = pl || { key: "", label: "", short: "", icon: "🏠", kind: "home", sort: state.setup.places.length + 1, active: 1 };
   openDialog(`<form class="form" id="f"><h2>${pl ? "Edit" : "Add"} place</h2>
     <div class="two"><label>Name<input name="label" value="${esc(x.label)}" placeholder="e.g. Beach House" required></label>
-      <label>Icon<input name="icon" value="${esc(x.icon)}" maxlength="4" style="max-width:5em"></label></div>
+      <label>Icon${iconSelect('name="icon"', x.icon)}</label></div>
     <div class="two"><label>Short name (for small screens)<input name="short" value="${esc(x.short)}" placeholder="e.g. Beach" maxlength="12"></label>
       <label>Order in lists<input type="number" name="sort" value="${x.sort}"></label></div>
     <label>Kind<select name="kind">${Object.entries(PLACE_KINDS).map(([k, v]) => `<option value="${k}" ${x.kind === k ? "selected" : ""}>${v}</option>`).join("")}</select></label>

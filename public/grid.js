@@ -58,7 +58,7 @@ function renderGrid(keepAnchor) {
   const anchor = keepAnchor && document.querySelector(".month-block");
   const anchorTop = anchor ? anchor.getBoundingClientRect().top : 0, anchorId = anchor?.id;
 
-  let html = `<p class="muted legend">Shaded = school holidays · ${activePlaces().map((p) => `${p.icon} ${esc(p.label)}`).join(" · ")} ·
+  let html = `${welcomeCard()}<p class="muted legend">Shaded = school holidays · ${activePlaces().map((p) => `${p.icon} ${esc(p.label)}`).join(" · ")} ·
     ❓ not planned · <span class="warn">⚠</span> on a date = something needs sorting (tap the date)</p>
     <button class="more" id="earlier">Show earlier month</button>`;
   for (let m = new Date(first); m <= last; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {

@@ -1,5 +1,12 @@
 # What's new in Family Calendar
 
+## 1.0.2
+- Opens on the Month view; the set-up and sign-in cards show there too, with bright green buttons.
+- House icons are picked from a list (set-up wizard and Setup → Places).
+- No inbox address is shown until the calendar has its own domain.
+- Clear instructions when Cloudflare's Zero Trust still has to be switched on.
+- Updates: fill in "Your GitHub copy" on Setup → This calendar, then "Add the update button" (first time) and "Update now".
+
 ## 1.0.1
 - A new install now shows the setup-password box (it was hidden behind a "couldn't load" message).
 - No more "preview URLs" warning when installing.

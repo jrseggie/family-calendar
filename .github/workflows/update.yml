@@ -12,7 +12,7 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Replace the code with the latest release
         env:
           UPSTREAM: jrseggie/family-calendar
@@ -22,8 +22,9 @@ jobs:
           echo "Latest release: $tag"
           mkdir -p /tmp/new && curl -fsSL "https://github.com/$UPSTREAM/archive/refs/tags/$tag.tar.gz" | tar xz -C /tmp/new --strip-components=1
           cp wrangler.toml /tmp/old-wrangler.toml
-          # everything from the release, except this repository's history
-          rsync -a --delete --exclude .git /tmp/new/ ./
+          # everything from the release, except this repository's history and its own workflows (GitHub doesn't let
+          # an action change workflow files - if the update action itself changes, the release notes say how to replace it)
+          rsync -a --delete --exclude .git --exclude .github /tmp/new/ ./
           # keep this calendar's own Worker name, database name and database ID
           for key in name database_name database_id; do
             line=$(grep -m1 -E "^$key *=" /tmp/old-wrangler.toml || true)

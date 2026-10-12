@@ -43,7 +43,13 @@ The 🔒 Info page is locked with a key that only exists in your Cloudflare acco
 switching on sign-in. If you ever reinstall, put it back as the Worker secret `VAULT_KEY` before opening the Info page.
 
 ## Updates
-**Setup** shows when a new version is out. On GitHub: your copy → **Actions** → **Update Family Calendar** → **Run workflow**.
+**Setup → This calendar** shows when a new version is out. Fill in **Your GitHub copy** there once (Edit). Then:
+**Add the update button** (first time only – click *Commit changes* on the GitHub page it opens) and **Update now** →
+*Run workflow*. Cloudflare rebuilds the calendar a minute later.
+
+## Sign-in says Zero Trust isn't switched on
+Cloudflare's free sign-in service has to be switched on once by hand: dashboard → **Zero Trust** → any team name → **Free**
+plan. It asks for card details; the Free plan (up to 50 people) isn't charged. Then click **Switch on sign-in** again.
 
 ## Something's wrong
 - **"The calendar's background jobs haven't run"** on Upcoming: after an update Cloudflare can take up to ~30 minutes to restart
