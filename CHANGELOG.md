@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.6
+- Setup → Smart inbox: a clear green "● On" / grey "○ Off" label.
+
 ## 1.0.5
 - Updates install themselves every night once the update job is added (older installs: replace the update job once – see Help).
 - Setup says which GitHub account to sign in as; Help explains GitHub's "404" page (shown when you're not signed in).

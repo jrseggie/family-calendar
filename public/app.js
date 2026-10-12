@@ -891,7 +891,7 @@ async function renderSetup() {
       `<div class="row" data-digest="${r.id}"><span><b>${esc(r.name || r.email)}</b><br><small>${esc(r.email)}</small></span>
         <span class="dbadges">${digestBadges(r)}</span></div>`).join("") || `<p class="muted pad">Nobody yet.</p>`}</div>
     <button class="btn-add" id="add-digest">+ Add email address</button>${settings.emailSync ? ` <button class="btn-add" id="sync-digest" title="Send Cloudflare's confirmation email to new addresses and check which are confirmed">🔄 Check confirmations now</button>` : ""}
-    <div class="card"><h3>📥 Smart inbox <small class="muted">${inbox.on || inbox.routine ? "on" : "off"}</small></h3><div class="row" id="inbox-settings"><span>
+    <div class="card"><h3>📥 Smart inbox ${inbox.on || inbox.routine ? `<span class="dbadge ok hstate">● On</span>` : `<span class="dbadge off hstate">○ Off</span>`}</h3><div class="row" id="inbox-settings"><span>
       ${inbox.routine ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by your <b>Claude Code inbox routine</b>
         and the dates show under <b>Waiting for approval</b>.<br><small class="muted">Last check ${esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))}
         · the calendar's own built-in reader stays off, so the two don't both pick up the same emails</small>` : ""}
@@ -899,7 +899,7 @@ async function renderSetup() {
         show under <b>Waiting for approval</b>.<br><small class="muted">Key ${esc(inbox.keyHint)} · last checked ${inbox.lastRun ? esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })) : "not yet"}</small>`
       : `Optional: forward school letters, invitations and bookings to ${esc(inbox.inbox || "the inbox address")} and Claude proposes the dates for you to approve.
         Needs your own Anthropic API key (pay-as-you-go, roughly R1–2 per email).`}
-      ${inbox.lastError ? `<br><small style="color:#c92a2a">⚠ Last problem: ${esc(inbox.lastError.detail)}</small>` : ""}</span><small>${inbox.on ? "Edit" : inbox.routine ? "Built-in reader" : "Set up"}</small></div></div>
+      ${inbox.lastError ? `<br><small style="color:#c92a2a">⚠ Last problem: ${esc(inbox.lastError.detail)}</small>` : ""}</span><small style="white-space:nowrap">${inbox.on ? "Edit" : inbox.routine ? "Built-in reader" : "Set up"}</small></div></div>
     <div class="card"><h3>🗄️ Backups</h3><p class="muted" style="margin:0 0 8px">Cloudflare keeps 30 days of restore points
       automatically, and on the 1st of each month a full backup is emailed to the admins. You can also download one now
       (🔒 Info items stay scrambled in it).</p><a class="btn" href="/api/setup/backup" download>⬇️ Download a backup</a></div>

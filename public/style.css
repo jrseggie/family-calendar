@@ -312,6 +312,7 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .dbadge.ok { background: color-mix(in srgb, #2f9e44 16%, var(--card)); color: color-mix(in srgb, #2f9e44 75%, var(--text)); }
 .dbadge.wait { background: color-mix(in srgb, #f08c00 18%, var(--card)); color: color-mix(in srgb, #e67700 80%, var(--text)); }
 .dbadge.off { background: var(--weekbg); color: var(--muted); }
+.dbadge.hstate { font-size: 13px; padding: 3px 11px; margin-left: 6px; vertical-align: 2px; }   /* on/off next to a card title */
 @media (max-width: 699px) { .row:has(.dbadges) { flex-direction: column; align-items: flex-start; gap: 6px; } .dbadges { justify-content: flex-start; } }
 
 /* helper staying / house-sitting: requested / confirmed tag on the entry */
