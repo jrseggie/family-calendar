@@ -875,8 +875,10 @@ async function renderSetup() {
   $("#main").innerHTML = `
     <div class="card"><h3>This calendar</h3><div class="row" id="site-settings"><span><b>${esc(sb.site)}</b><br>
       <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}</small></span><small>Edit</small></div>
-      <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""} <span id="update-note" class="muted"></span></span>
-        <span><button type="button" class="go" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
+      <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
+        <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>
+      <div class="row"><span><small class="muted">Change the family name, people or houses step by step</small></span>
+        <span><button type="button" class="ackbtn" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
     <div class="card"><h3>People in the calendar</h3>${pRows}</div>
     <button class="btn-add" id="add-person">+ Add person</button>
     <div class="card"><h3>Places <small class="muted">where people sleep – a child at a house needs an adult there</small></h3>${places.map((p) =>
@@ -1006,19 +1008,28 @@ async function checkForUpdate() {
   try {
     const r = await fetch(`https://api.github.com/repos/${repo}/releases/latest`).then((x) => x.ok ? x.json() : null);
     const latest = String(r?.tag_name || "").replace(/^v/, ""), cmp = (a, b) => a.split(".").map(Number).reduce((d, x, i) => d || x - (b.split(".").map(Number)[i] || 0), 0);
-    const mine = state.setup?.settings?.repo_url, wf = ".github/workflows/update.yml";
-    const updateLinks = !mine ? ` – add your GitHub copy under <b>This calendar → Edit</b> to update from here`
-      : ` – <a href="https://github.com/${esc(mine)}/actions/workflows/update.yml" target="_blank" rel="noopener"><b>Update now</b></a>
-         (GitHub → Run workflow) · no "Update Family Calendar" there? <a href="#" id="add-updater">Add the update button</a> first`;
-    note.innerHTML = latest && cmp(latest, state.data.version) > 0
-      ? `· <b>version ${esc(latest)} is available</b> (<a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new</a>)${updateLinks}` : "· up to date";
-    // GitHub's "new file" page with the update action filled in - the family only clicks Commit
-    $("#add-updater")?.addEventListener("click", async (e) => {
-      e.preventDefault();
-      const yml = await fetch(`https://raw.githubusercontent.com/${repo}/main/${wf}`).then((x) => x.text());
-      window.open(`https://github.com/${mine}/new/main?filename=${encodeURIComponent(wf)}&value=${encodeURIComponent(yml)}`, "_blank", "noopener");
-    });
+    const mine = state.setup?.settings?.repo_url;
+    const newer = latest && cmp(latest, state.data.version) > 0;
+    note.innerHTML = !newer ? "Up to date"
+      : `Update available: <b>${esc(latest)}</b> · <a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new</a>`;
+    // the one thing to press: GitHub's update page (the first time: This calendar → Edit, to say where the GitHub copy is)
+    if (newer) $("#version-actions").innerHTML = mine
+      ? `<a class="btn go" href="https://github.com/${esc(mine)}/actions/workflows/update.yml" target="_blank" rel="noopener"
+          title="Opens GitHub – click Run workflow">⬆️ Update to ${esc(latest)}</a>`
+      : `<button type="button" class="go" id="update-setup">⬆️ Update to ${esc(latest)}</button>`;
+    $("#update-setup")?.addEventListener("click", () => settingsForm(true));
   } catch { /* offline or GitHub busy - try again next time */ }
+}
+
+// "owner/name" from whatever was typed (github.com/owner/name, a full https address, …)
+const repoPath = (v) => String(v || "").trim().replace(/^https?:\/\//, "").replace(/^(www\.)?github\.com\//, "").replace(/(\.git)?\/*$/, "");
+
+// once per family: GitHub's "new file" page with the update job filled in - they only click Commit
+async function addUpdater(mine) {
+  const wf = ".github/workflows/update.yml", w = window.open("", "_blank");   // opened now so the browser doesn't block it
+  const yml = await fetch(`https://raw.githubusercontent.com/${state.data.upstream}/main/${wf}`).then((x) => x.text());
+  w.opener = null;
+  w.location = `https://github.com/${mine}/new/main?filename=${encodeURIComponent(wf)}&value=${encodeURIComponent(yml)}`;
 }
 
 function inboxForm() {
@@ -1079,7 +1090,7 @@ function digestTimeForm() {
   });
 }
 
-function settingsForm() {
+function settingsForm(forUpdate = false) {
   const s = state.setup.settings, b = s.brand;
   openDialog(`<form class="form" id="f"><h2>This calendar</h2>
     <label>Family name<input name="family_name" value="${esc(s.family_name || "")}" placeholder="e.g. Smith"></label>
@@ -1087,12 +1098,21 @@ function settingsForm() {
       <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
     ${state.data.upstream ? `<label>Your GitHub copy <small class="muted">(for updates – the address of the copy Cloudflare made when you installed)</small>
-      <input name="repo_url" value="${esc(s.repo_url ? "github.com/" + s.repo_url : "")}" placeholder="github.com/yourname/family-calendar"></label>` : ""}
+      <input name="repo_url" value="${esc(s.repo_url ? "github.com/" + s.repo_url : "")}" placeholder="github.com/yourname/family-calendar"></label>
+      <div class="meta">Once, after filling this in: <a href="#" id="add-updater">add the update job to your GitHub copy</a> (GitHub opens – click
+        <b>Commit changes</b>). After that the green Update button opens GitHub – click <b>Run workflow</b>.</div>` : ""}
     <div class="meta">The name shows at the top of the site, on the emails, invites and the phone calendar. The web address is used in
       emails and invites, and the inbox address is inbox@ that domain.</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
+    if (forUpdate) { const i = $("#f [name=repo_url]"); i?.focus(); i?.closest("label")?.classList.add("hl"); }
+    $("#add-updater")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      const mine = repoPath($("#f [name=repo_url]").value);
+      if (!/^[\w.-]+\/[\w.-]+$/.test(mine)) { $("#f .err").textContent = "Fill in your GitHub copy first (e.g. github.com/yourname/family-calendar)."; return; }
+      addUpdater(mine);
+    });
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const body = Object.fromEntries(new FormData($("#f")));

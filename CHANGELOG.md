@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.4
+- Setup → This calendar: a clean version line – "Update available" with one green "⬆️ Update to …" button (the first time it asks where your GitHub copy is, with a link to add the update job); the set-up wizard has its own small row.
+
 ## 1.0.3
 - Weekly email: choose the day, time and time zone (Setup → Weekly email → 🕖 Change day & time), e.g. Monday 07:00.
 - Setup → Weekly email: the badges no longer stretch.
