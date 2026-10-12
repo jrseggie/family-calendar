@@ -1,0 +1,28 @@
+# Family Calendar – one Cloudflare Worker: the website, its API, the phone-calendar feed and the email jobs.
+# Installed with the "Deploy to Cloudflare" button (README.md): Cloudflare creates the database and fills in its ID below.
+name = "family-calendar"
+main = "src/worker.js"
+compatibility_date = "2025-09-01"
+# the calendar's free address: https://<name>.<your-subdomain>.workers.dev (a domain can be added later, see docs/HELP.md)
+workers_dev = true
+
+# the website's files; anything that isn't a file (/api, /feed, /manifest.json) goes to the worker
+[assets]
+directory = "public"
+binding = "ASSETS"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "family-calendar"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations"
+
+# Sundays 16:00 UTC = 18:00 in South Africa (the week-ahead email); every 10 minutes: queued emails, smart inbox, housekeeping
+[triggers]
+crons = ["0 16 * * SUN", "*/10 * * * *"]
+
+# sending email (needs a domain with Cloudflare Email Routing - see docs/HELP.md; without one the calendar works, just no emails)
+[[send_email]]
+name = "MAILER"
+
+# everything else is set in the calendar itself (Setup tab and the set-up wizard) or saved by it as secrets

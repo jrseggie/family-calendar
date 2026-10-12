@@ -1,0 +1,36 @@
+# Update this calendar to the latest Family Calendar release: GitHub > Actions > "Update Family Calendar" > Run workflow.
+# Cloudflare rebuilds the calendar by itself a minute later (and applies any database changes).
+# Your calendar's entries and settings are not touched - they live in your Cloudflare database. Any changes YOU made to the
+# code are replaced (that's the deal: an update gives you exactly the released version). Your wrangler.toml keeps its own
+# Worker name, database name and database ID.
+name: Update Family Calendar
+on:
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Replace the code with the latest release
+        env:
+          UPSTREAM: jrseggie/family-calendar
+        run: |
+          set -euo pipefail
+          tag=$(curl -fsSL "https://api.github.com/repos/$UPSTREAM/releases/latest" | jq -r .tag_name)
+          echo "Latest release: $tag"
+          mkdir -p /tmp/new && curl -fsSL "https://github.com/$UPSTREAM/archive/refs/tags/$tag.tar.gz" | tar xz -C /tmp/new --strip-components=1
+          cp wrangler.toml /tmp/old-wrangler.toml
+          # everything from the release, except this repository's history
+          rsync -a --delete --exclude .git /tmp/new/ ./
+          # keep this calendar's own Worker name, database name and database ID
+          for key in name database_name database_id; do
+            line=$(grep -m1 -E "^$key *=" /tmp/old-wrangler.toml || true)
+            [ -n "$line" ] && sed -i -E "0,/^$key *=.*/s||$line|" wrangler.toml
+          done
+          git config user.name "Family Calendar updater"
+          git config user.email "updater@users.noreply.github.com"
+          git add -A
+          git commit -m "Update to Family Calendar $tag" || { echo "Already up to date"; exit 0; }
+          git push

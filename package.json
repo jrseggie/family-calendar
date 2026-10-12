@@ -1,0 +1,23 @@
+{
+  "name": "family-calendar",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test tests/*.test.mjs",
+    "deploy": "wrangler d1 migrations apply DB --remote && wrangler deploy"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.133.0",
+    "postal-mime": "^4.0.5"
+  },
+  "devDependencies": {
+    "wrangler": "^4.0.0"
+  },
+  "cloudflare": {
+    "bindings": {
+      "SETUP_CODE": {
+        "description": "A setup password you choose now (6+ characters). You type it once, the first time you open the calendar."
+      }
+    }
+  }
+}

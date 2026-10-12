@@ -1,0 +1,4 @@
+# Asked for on Cloudflare's "Deploy to Cloudflare" page:
+# SETUP_CODE = a setup password you choose now (at least 6 characters). You type it once when you first open the calendar;
+# it stops working as soon as you switch on sign-in in the set-up wizard.
+SETUP_CODE=
