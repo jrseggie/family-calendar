@@ -33,6 +33,16 @@ export function warnBox(title, lines) {
 </td></tr></table>`;
 }
 
+// a quiet box (e.g. 🌴 On leave) - same shape as warnBox, grey
+export function noteBox(title, lines) {
+  return `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="margin-bottom:18px">
+<tr><td bgcolor="#f1f3f5" style="background:#f1f3f5;border-left:4px solid #868e96;padding:10px 14px">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0">
+  <tr><td style="padding-bottom:4px;${FONT};font-size:14px;font-weight:bold;color:#495057">${esc(title)}</td></tr>
+  ${lines.map((l) => `<tr><td style="padding:3px 0;${FONT};font-size:14px;color:${INK}">${l}</td></tr>`).join("")}</table>
+</td></tr></table>`;
+}
+
 export const tag = (name, color) =>
   // Outlook on the PC ignores padding on a span, so the side padding is non-breaking spaces
   `<span style="background:${color};color:#ffffff;font-size:12px;font-weight:bold;padding:2px 0;line-height:20px;white-space:nowrap;${FONT}">&nbsp;&nbsp;${esc(name)}&nbsp;&nbsp;</span>`;

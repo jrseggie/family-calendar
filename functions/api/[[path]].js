@@ -18,7 +18,7 @@ import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
 import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
 
-const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "General"];
+const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
 const ROLES = ["admin", "editor", "viewer", "limited"];
 const PERSON_TYPES = ["household", "helper", "tracked", "group"];
 const PLACE_KEY = /^[a-z0-9_-]{1,30}$/;   // events.location = a key from the places table (Setup > Places)

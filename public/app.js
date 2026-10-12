@@ -206,7 +206,7 @@ function itemHTML(it, opts = {}) {
             <div class="title">${esc(it.text)}</div></div>`;
   }
   const e = it.ev;
-  const cls = ["item", e.important ? "important" : "", e.status === "Tentative" ? "tentative" : ""].join(" ");
+  const cls = ["item", e.important ? "important" : "", e.status === "Tentative" ? "tentative" : "", e.category === "Leave" ? "leave" : ""].join(" ");
   const range = e.end !== e.start ? `<span class="range">${fmtShort(e.start)} – ${fmtShort(e.end)}</span>` : "";
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
@@ -382,12 +382,22 @@ document.addEventListener("click", (e) => {
 }, true);
 
 // ---------- views
+// 🌴 who's on leave now or in the coming week (category "Leave" entries)
+function leaveCard() {
+  const today = todayISO(), week = iso(addDays(new Date(), 7));
+  const list = state.data.events.filter((e) => e.category === "Leave" && e.status !== "Cancelled" && e.end >= today && e.start <= week)
+    .sort((a, b) => a.start.localeCompare(b.start));
+  if (!list.length) return "";
+  return `<div class="leavebar">🌴 <b>On leave</b> · ${list.map((e) => `<span data-ev="${e.id}" style="cursor:pointer"><b style="color:${COLORS[whoList(e.who)[0]] || "inherit"}">${esc(whoList(e.who).join(" & "))}</b>
+    ${e.start <= today ? `until ${fmtShort(e.end)}` : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</span>`).join(" · ")}</div>`;
+}
+
 function renderUpcoming() {
   const start = mondayOf(new Date());
   const from = iso(start), to = iso(addDays(start, state.weeks * 7 - 1));
   const days = buildDays(from, to);
   const today = todayISO();
-  let html = welcomeCard() + jobsCard() + approvalCard() + sortingCard();
+  let html = welcomeCard() + jobsCard() + approvalCard() + sortingCard() + leaveCard();
   for (let w = 0; w < state.weeks; w++) {
     const mon = addDays(start, w * 7), sun = addDays(mon, 6);
     let body = "";
@@ -648,6 +658,7 @@ function eventForm(ev, preset = {}) {
     $("#dup")?.addEventListener("click", () => eventForm(null, { copy: { ...ev, id: undefined, series: undefined } }));
     if (ev) $("#del").onclick = () => deleteEvent(ev);
     f.elements.category.addEventListener("change", () => {
+      if (f.elements.category.value === "Leave" && !f.elements.title.value.trim()) f.elements.title.value = "🌴 On leave";
       if (f.elements.category.value !== "__holiday") return;
       const kid = [...who].find((p) => KIDS().includes(p)) || KIDS()[0];
       holidayForm(null, { child: kid, name: f.elements.title.value, start: f.elements.start.value, end: f.elements.end.value || f.elements.start.value });

@@ -27,8 +27,17 @@ const adults = () => CalendarRules.adults(state.data);
 const isHelperStay = (e) => e.location && whoList(e.who).some((p) => helpers().includes(p));
 const stayStatus = (e) => !isHelperStay(e) ? "" : e.status === "Tentative" ? ` <span class="stay req">⏳ requested</span>`
   : e.status === "Unavailable" ? ` <span class="stay no">🚫 can't stay</span>` : ` <span class="stay ok">✅ confirmed</span>`;
-// Setup type "Helper": au pair / nanny / house-sitter who can stay over with the kids or look after a house
+// Setup type "Helper": au pair / nanny / gardener / house-sitter who can stay over with the kids or look after a house
 const helpers = () => CalendarRules.helpers(state.data);
+// the helpers free on `key` (not on 🌴 leave) as a pick-list for the one-tap buttons ("@" in data-quickstay / data-housesit = the picked one)
+function helperPick(key) {
+  const free = CalendarRules.helpersFree(state.data, key);
+  if (free.length < 2) return free.length ? `<b class="hpick" data-h="${esc(free[0])}">${esc(free[0])}</b>` : "";
+  return `<select class="hpick" title="Who">${free.map((h) => `<option>${esc(h)}</option>`).join("")}</select>`;
+}
+const picked = (btn) => { const p = btn.closest(".qstay")?.querySelector(".hpick"); return p ? p.value || p.dataset.h : ""; };
+const allOnLeave = (key) => helpers().length && !CalendarRules.helpersFree(state.data, key).length
+  ? `<span class="qstay muted">🌴 ${helpers().length > 1 ? "All the helpers are" : `${esc(helpers()[0])} is`} on leave</span>` : "";
 
 const holidayOf = (child, key) => CalendarRules.holidayOf(state.data, child, key);
 const isSchoolDay = (child, key) => CalendarRules.isSchoolDay(state.data, child, key);
@@ -86,7 +95,7 @@ function barHTML(it, key, n, person, label, repeat = 0) {
   const icon = e.location && LOC()[e.location] && e.status !== "Unavailable" ? `<span class="li">${LOC()[e.location].icon}</span>` : "";
   let title = e.title;
   if (e.location && person) title = title.replace(new RegExp(`^${person}\\s+(at\\s+(the\\s+)?)?`, "i"), "");   // "Emma at Beach House" -> "Beach House"
-  const cls = ["gi", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
+  const cls = ["gi", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
                multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : ""].join(" ");
   const who = label ? `<b>${esc(label)}:</b> ` : visit && !title.toLowerCase().startsWith(visitor.toLowerCase()) ? `${esc(visitor)}: ` : "";
   const text = `${icon}${who}${esc(title)}${stayStatus(e)}`;
@@ -186,11 +195,12 @@ function dayWarnings(key) {
   if (!clashes.length) return "";
   const alone = KIDS().filter((k) => homes().includes(wh[k]?.loc) &&
     !Object.keys(wh).some((p) => adults().includes(p) && wh[p].loc === wh[k].loc));   // nobody at all, not even requested
-  const buttons = canAdd() ? alone.flatMap((k) => helpers().map((h) =>
-    `<span class="qstay">${esc(h)} with ${esc(k)}:
-      <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Tentative">⏳ Requested</button>
-      <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
-      <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Unavailable">🚫 Can't</button></span>`)).join("")
+  const pick = helperPick(key);
+  const buttons = canAdd() ? (pick ? alone.map((k) =>
+    `<span class="qstay">${pick} with ${esc(k)}:
+      <button type="button" data-quickstay="@|${esc(k)}|${key}|Tentative">⏳ Requested</button>
+      <button type="button" data-quickstay="@|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
+      <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button></span>`).join("") : alone.length ? allOnLeave(key) : "")
     + alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay"><button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")
     + houseButtons(key) : "";
   return `<div class="dwarn">${clashes.map((c) => `<div data-clash="${key}">⚠ ${esc(c)}</div>`).join("")}${buttons}</div>`;
@@ -244,13 +254,14 @@ function cellSheet(key, person) {
     ${whereTxt ? `<div class="meta">Sleeping: <b>${whereTxt}</b></div>` : ""}
     <div class="sheet-list">${items.map((it) => itemHTML(it)).join("") || `<p class="muted">Nothing on.</p>`}</div>
     <div class="actions"><button type="button" id="cancel">Close</button>
-      ${canAdd() && KIDS().includes(person) ? helpers().map((h) => `<button type="button" data-helper="${esc(h)}">🏠 ${esc(h)} staying with ${esc(person)}</button>`).join("") : ""}
+      ${canAdd() && KIDS().includes(person) && CalendarRules.helpersFree(state.data, key).length ? `<button type="button" id="helperstay">🏠 ${
+        helpers().length === 1 ? esc(helpers()[0]) : "Helper"} staying with ${esc(person)}</button>` : ""}
       ${canAdd() && isPerson ? `<button type="button" id="stay">🏠 Where are they staying?</button>` : ""}
       ${canAdd() ? `<button class="primary" id="addp">+ Add for ${esc(person)}</button>` : ""}</div></div>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#addp")?.addEventListener("click", () => eventForm(null, { date: key, who: person }));
     $("#stay")?.addEventListener("click", () => stayForm(person, key));
-    document.querySelectorAll("#dlg [data-helper]").forEach((b) => b.onclick = () => helperForm(b.dataset.helper, person, key, key));
+    $("#helperstay")?.addEventListener("click", () => helperForm(null, person, key, key));
   });
 }
 
@@ -270,22 +281,25 @@ function aloneUntil(kid, key) {
 
 // "<helper> staying with <child>": an entry for both of them at the child's house (Tentative = asked, not confirmed yet)
 function helperForm(helper, kid, from, to) {
-  openDialog(`<form class="form" id="f"><h2>${esc(helper)} staying with ${esc(kid)}</h2>
+  const free = CalendarRules.helpersFree(state.data, from);
+  if (!helper && free.length === 1) helper = free[0];
+  openDialog(`<form class="form" id="f"><h2>${helper ? esc(helper) : "🏠 Someone"} staying with ${esc(kid)}</h2>
+    ${helper ? "" : `<label>Who<select name="helper">${free.map((h) => `<option>${esc(h)}</option>`).join("")}</select></label>`}
     <div class="two"><label>From<input type="date" name="start" value="${from}" required></label>
       <label>To (last night)<input type="date" name="end" value="${to}" required></label></div>
     <label>Note (optional)<input name="note" placeholder="e.g. parents away for the weekend"></label>
     <div class="seg seg-loc"><label><input type="radio" name="stay" value="Tentative" checked> ⏳ Requested</label>
       <label><input type="radio" name="stay" value="Confirmed"> ✅ Confirmed</label>
       <label><input type="radio" name="stay" value="Unavailable"> 🚫 Can't stay</label></div>
-    <div class="meta">Shows in ${esc(kid)}'s column as ${LOC()[stayPlace(kid, from)]?.icon || "🏠"} ${esc(helper)} staying with ${esc(kid)}. Until it's confirmed the ⚠ stays.</div>
+    <div class="meta">Shows in ${esc(kid)}'s column as ${LOC()[stayPlace(kid, from)]?.icon || "🏠"} ${esc(helper || "…")} staying with ${esc(kid)}. Until it's confirmed the ⚠ stays.</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#f").onsubmit = (e) => {
       e.preventDefault();
-      const fd = new FormData($("#f"));
-      submit(() => api("POST", "events", { title: `${helper} staying with ${kid}` + (fd.get("note") ? ` – ${fd.get("note")}` : ""),
-        start: fd.get("start"), end: fd.get("end") || fd.get("start"), who: [kid, helper], category: "Household", location: stayPlace(kid, from),
+      const fd = new FormData($("#f")), who = helper || fd.get("helper");
+      submit(() => api("POST", "events", { title: `${who} staying with ${kid}` + (fd.get("note") ? ` – ${fd.get("note")}` : ""),
+        start: fd.get("start"), end: fd.get("end") || fd.get("start"), who: [kid, who], category: "Household", location: stayPlace(kid, from),
         status: fd.get("stay") || "Tentative" }), "Saved");
     };
   });
@@ -318,10 +332,11 @@ function stayForm(person, key) {
 function houseButtons(key) {
   return CalendarRules.houseNeeds(state.data, key).map((h) => {
     const pl = LOC()[h];
-    return helpers().map((x) => `<span class="qstay">${esc(x)} house-sitting ${esc(pl.label)}:
-        <button type="button" data-housesit="${esc(x)}|${esc(h)}|${key}|Tentative">⏳ Requested</button>
-        <button type="button" data-housesit="${esc(x)}|${esc(h)}|${key}|Confirmed">✅ Confirmed</button>
-        <button type="button" data-housesit="${esc(x)}|${esc(h)}|${key}|Unavailable">🚫 Can't</button></span>`).join("")
+    const pick = helperPick(key);
+    return (pick ? `<span class="qstay">${pick} house-sitting ${esc(pl.label)}:
+        <button type="button" data-housesit="@|${esc(h)}|${key}|Tentative">⏳ Requested</button>
+        <button type="button" data-housesit="@|${esc(h)}|${key}|Confirmed">✅ Confirmed</button>
+        <button type="button" data-housesit="@|${esc(h)}|${key}|Unavailable">🚫 Can't</button></span>` : allOnLeave(key))
       + `<span class="qstay"><button type="button" data-housenot="${esc(h)}|${key}" title="Nobody needs to be there these days (e.g. ${esc(pl.needs)} with you)">👌 ${esc(pl.label)}: not required</button></span>`;
   }).join("");
 }
@@ -386,12 +401,12 @@ function clashSheet(key) {
   openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h2>
     ${clashes.length ? `<div class="clashes">${clashes.map((c) => `<div>⚠ ${esc(c)}${ackBy(key, c) ? ` <small class="muted">· 👍 noted by ${esc(ackBy(key, c))}</small>` : ""}</div>`).join("")}</div>` : `<p class="muted">No clashes 👍</p>`}
     <div class="meta">${placesTxt}</div>
-    ${canAdd() && alone.length ? `<div class="dwarn" style="border-radius:10px;border:0">${alone.flatMap((k) => helpers().map((h) =>
-      `<span class="qstay">${esc(h)} with ${esc(k)}:
-        <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Tentative">⏳ Requested</button>
-        <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
-        <button type="button" data-quickstay="${esc(h)}|${esc(k)}|${key}|Unavailable">🚫 Can't</button>
-        <button type="button" data-helper="${esc(h)}" data-kid="${esc(k)}">Other dates…</button></span>`)).join("")}
+    ${canAdd() && alone.length ? `<div class="dwarn" style="border-radius:10px;border:0">${helperPick(key) ? alone.map((k) =>
+      `<span class="qstay">${helperPick(key)} with ${esc(k)}:
+        <button type="button" data-quickstay="@|${esc(k)}|${key}|Tentative">⏳ Requested</button>
+        <button type="button" data-quickstay="@|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
+        <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button>
+        <button type="button" data-helper="@" data-kid="${esc(k)}">Other dates…</button></span>`).join("") : allOnLeave(key)}
       ${alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay">${esc(k)} to school:
         <button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")}</div>` : ""}
     ${canAdd() && CalendarRules.houseNeeds(state.data, key).length ? `<div class="dwarn" style="border-radius:10px;border:0">${houseButtons(key)}</div>` : ""}
@@ -400,7 +415,7 @@ function clashSheet(key) {
     $("#cancel").onclick = closeDialog;
     $("#seeday").onclick = () => daySheet(key);
     document.querySelectorAll("#dlg [data-helper]").forEach((b) => b.onclick = () =>
-      helperForm(b.dataset.helper, b.dataset.kid, key, aloneUntil(b.dataset.kid, key)));
+      helperForm(picked(b), b.dataset.kid, key, aloneUntil(b.dataset.kid, key)));
   });
 }
 
@@ -413,10 +428,10 @@ document.addEventListener("click", (e) => {
   const ub = e.target.closest("[data-uber]");
   if (ub) { e.stopPropagation(); const [k, key] = ub.dataset.uber.split("|"); return uberForm(k, key); }
   const hs = e.target.closest("[data-housesit]"), hn = e.target.closest("[data-housenot]");
-  if (hs) { e.stopPropagation(); const [x, h, key, st] = hs.dataset.housesit.split("|"); return houseSit(x, h, key, st); }
+  if (hs) { e.stopPropagation(); const [x, h, key, st] = hs.dataset.housesit.split("|"); return houseSit(x === "@" ? picked(hs) : x, h, key, st); }
   if (hn) { e.stopPropagation(); const [h, key] = hn.dataset.housenot.split("|"); return houseNotForm(h, key); }
   const qs = e.target.closest("[data-quickstay]");
-  if (qs) { e.stopPropagation(); const [h, k, key, st] = qs.dataset.quickstay.split("|"); return quickStay(h, k, key, st); }
+  if (qs) { e.stopPropagation(); const [h, k, key, st] = qs.dataset.quickstay.split("|"); return quickStay(h === "@" ? picked(qs) : h, k, key, st); }
   const clash = e.target.closest("[data-clash]");
   if (cell && !ev && !e.target.closest("[data-sh]")) { e.stopPropagation(); const [k, p] = cell.dataset.cell.split("|"); cellSheet(k, p); }
   else if (clash) { e.stopPropagation(); clashSheet(clash.dataset.clash); }

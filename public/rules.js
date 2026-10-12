@@ -31,6 +31,10 @@
   // people who sleep somewhere: the household and helpers (au pair, nanny, house-sitter - no usual place, count as adults)
   const householdPeople = (data) => data.people.filter((p) => ["household", "helper"].includes(p.type) && p.active !== 0);
   const helpers = (data) => data.people.filter((p) => p.type === "helper" && p.active !== 0).map((p) => p.name);
+  // 🌴 a "Leave" entry (e.g. the gardener's annual leave): the entry if `name` is on leave on `key`
+  const onLeave = (data, name, key) => data.events.find((e) => e.category === "Leave" && e.status !== "Cancelled" && on(e, key) && expandWho(data, e.who).includes(name));
+  // the helpers who could stay over / house-sit on `key` (not on leave)
+  const helpersFree = (data, key) => helpers(data).filter((h) => !onLeave(data, h, key));
   const kids = (data) => householdPeople(data).filter((p) => p.child).map((p) => p.name);
   const adults = (data) => householdPeople(data).filter((p) => !p.child).map((p) => p.name);
   const tracked = (data) => data.people.filter((p) => p.type === "tracked").map((p) => p.name);
@@ -55,6 +59,8 @@
     const where = {};
     for (const person of householdPeople(data)) {
       const p = person.name;
+      // a helper on leave isn't at any house, whatever else says so (clashesFor flags a stay booked during their leave)
+      if (person.type === "helper" && onLeave(data, p, key)) { where[p] = { loc: null, set: [], explicit: false, tentative: false, leave: true }; continue; }
       const evs = data.events.filter((e) => e.location && !["Cancelled", "Unavailable"].includes(e.status) && on(e, key) && expandWho(data, e.who).includes(p));
       const set = [];
       for (const e of evs) if (!set.some((x) => x.loc === e.location)) set.push({ loc: e.location, ev: e });
@@ -94,6 +100,10 @@
       } else if (there.every((p) => where[p].tentative)) {
         out.push(`${there.join(" & ")} asked to stay at the ${pl.label} – not confirmed yet`);
       }
+    }
+    for (const p in where) if (where[p].leave) {
+      const stay = data.events.find((e) => e.location && !["Cancelled", "Unavailable"].includes(e.status) && on(e, key) && expandWho(data, e.who).includes(p));
+      if (stay) out.push(`${p} is on leave but down to stay at the ${LOC[stay.location]?.label || stay.location}`);
     }
     for (const p in where) if (where[p].loc === "conflict") out.push(`${p} is down for two places: ${where[p].set.map((s) => LOC[s.loc]?.label || s.loc).join(" and ")}`);
     // "tracked" people (e.g. an ex-partner's visits): their plans shouldn't fall on a child's school day
@@ -178,5 +188,5 @@
   const expiries = (fields) => (fields || []).filter((f) => !f.hide && EXPIRY_LABEL.test(f.k || ""))
     .map((f) => ({ k: f.k, date: expiryDate(f.v) })).filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
-  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked };
+  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked };
 })();

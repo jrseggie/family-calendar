@@ -2,7 +2,7 @@
 // previewed locally: node mail/preview.mjs
 // The ⚠ rules are public/rules.js - the same file the site uses.
 
-import { page, warnBox, tag, dayBlock, esc } from "./layout.js";
+import { page, warnBox, noteBox, tag, dayBlock, esc } from "./layout.js";
 import "../../public/rules.js";
 
 const clashRules = globalThis.CalendarRules;
@@ -62,6 +62,10 @@ export function buildDigest(data, from, to, site, opts = {}) {
     days.push({ key, ph, breaks, backs, bdays, evs });
   }
   const runs = clashRuns(data, from, to);
+  // 🌴 who's on leave at some point that week
+  const leave = data.events.filter((e) => e.category === "Leave" && e.status !== "Cancelled" && e.start <= to && e.end >= from)
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .map((e) => ({ who: whoList(e.who).join(" & "), when: e.start <= from ? `until ${nice(e.end)}` : `${nice(e.start)} – ${nice(e.end)}` }));
 
   const line = (e) => {
     const who = whoList(e.who);
@@ -79,6 +83,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
     text += "⚠ NEEDS SORTING\n" + runs.map((r) => `- ${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}: ${r.msg}`).join("\n") + "\n\n";
   }
   if (expiring.length) text += "⏳ RENEW SOON\n" + expiring.map((x) => `- ${x}`).join("\n") + "\n\n";
+  if (leave.length) text += "🌴 ON LEAVE\n" + leave.map((l) => `- ${l.who}: ${l.when}`).join("\n") + "\n\n";
   for (const d of days) {
     const rows = [
       ...(d.ph ? [`🇿🇦 ${d.ph}`] : []),
@@ -95,6 +100,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
   let body = runs.length ? warnBox("Needs sorting", runs.map((r) =>
     `<b>${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}</b> · ${esc(r.msg)}`)) : "";
   if (expiring.length) body += warnBox("Renew soon", expiring.map(esc));
+  if (leave.length) body += noteBox("🌴 On leave", leave.map((l) => `<b>${esc(l.who)}</b> · ${esc(l.when)}`));
   for (const d of days) {
     const wd = parse(d.key).getUTCDay();
     const rows = [

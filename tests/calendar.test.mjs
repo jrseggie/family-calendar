@@ -246,6 +246,26 @@ test("helpers + houses that need someone: empty house ⚠, house-sitter requeste
   assert.deepEqual(R.clashesFor(d([trip, notNeeded]), "2026-10-16"), ["Nobody is staying at the House (the dogs)"]);   // only the days it covers
 });
 
+test("leave: a helper on 🌴 leave isn't free, doesn't count at a house, and a stay booked during it is flagged; the email lists it", () => {
+  const fam = [{ name: "Mum", type: "household", active: 1, home: "home" }, { name: "Kid", type: "household", child: 1, active: 1, home: "home" },
+               { name: "Nanny", type: "helper", active: 1, grid_column: 0 }, { name: "Gardener", type: "helper", active: 1, grid_column: 0 }];
+  const pl = [{ key: "home", label: "House", short: "Home", icon: "🏡", kind: "home", needs: "the dogs" }, { key: "away", label: "Away", short: "Away", icon: "✈️", kind: "away" }];
+  const d = (events) => ({ people: fam, places: pl, events, schoolHolidays: [], publicHolidays: [], acks: [], recurring: [] });
+  const leave = ev("2026-10-14", "2026-10-20", "Nanny", "🌴 On leave", { category: "Leave" });
+  assert.deepEqual(R.helpersFree(d([leave]), "2026-10-15"), ["Gardener"]);
+  assert.deepEqual(R.helpersFree(d([leave]), "2026-10-21"), ["Nanny", "Gardener"]);   // back
+  assert.deepEqual(R.helpersFree(d([{ ...leave, status: "Cancelled" }]), "2026-10-15"), ["Nanny", "Gardener"]);
+  const trip = ev("2026-10-17", "2026-10-18", "Mum", "Cape Town", { location: "away" });
+  const stay = ev("2026-10-17", "2026-10-18", "Kid, Nanny", "Nanny staying with Kid", { location: "home" });
+  const c = R.clashesFor(d([leave, trip, stay]), "2026-10-17");
+  assert.ok(c.includes("Nanny is on leave but down to stay at the House"));
+  assert.ok(c.includes("Kid is at the House with no adult there"));   // she doesn't count while on leave
+  assert.deepEqual(R.clashesFor(d([trip, stay]), "2026-10-17"), []);   // without the leave she does
+  const mail = buildDigest(d([leave]), "2026-10-12", "2026-10-18", "https://example.com");
+  assert.match(mail.text, /🌴 ON LEAVE\s+- Nanny: Wed 14 Oct – Tue 20 Oct/);
+  assert.match(mail.html, /On leave/);
+});
+
 // ---------- names and addresses from the settings (Setup > This calendar)
 import { brand } from "../lib/settings.js";
 test("settings: names from the family name; Smith feed IDs unchanged; a new family has nothing of ours", () => {

@@ -244,6 +244,12 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .gi.open + .gi:not(.cont) { margin-top: 8px; }   /* a gap between separate entries in one square */
 .gi:not(.multi) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }   /* single-day entries get an outline */
 .gi.tent { font-style: italic; opacity: .8; }
+/* 🌴 on leave: greyed out and striped */
+.gi.leave { color: var(--muted); border-left-color: color-mix(in srgb, var(--c) 45%, var(--muted));
+  background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 6px, transparent 6px 11px); }
+.item.leave .title { color: var(--muted); }
+.leavebar { font-size: 13.5px; padding: 8px 12px; margin-bottom: 12px; border-radius: 10px; background: var(--card); border: 1px dashed var(--line); }
+.qstay .hpick, .form .qstay select.hpick { font: inherit; font-size: 13px; font-weight: 600; width: auto; min-width: 0; height: auto; margin: 0; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
 .gi.visit { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 6px, transparent 6px 11px); }
 .gi.bday { background: var(--birthday); border-left-color: #e64980; font-weight: 700; }
 .gmore { font-size: 10px; color: var(--muted); }

@@ -1,5 +1,11 @@
 # What's new in Family Calendar
 
+## 1.0.8
+- 🌴 Leave: a new "Leave" category for helpers (au pair, gardener, domestic …). Leave shows greyed and striped on the Month grid,
+  as an "On leave" line on Upcoming and in the weekly email. A helper on leave isn't offered for staying over / house-sitting,
+  doesn't count as an adult at a house, and a stay booked during their leave gets a ⚠.
+- "Staying with" / "house-sitting" buttons: pick the helper from a list (instead of a row of buttons per helper).
+
 ## 1.0.7
 - Set-up wizard, run again: shows everyone already in the calendar with their role and school (change them there); keeps the calendar name, phone-icon name and house short names.
 
