@@ -251,20 +251,27 @@ const iconSelect = (attr, cur) => `<select ${attr} title="Icon" style="font-size
   .map((i) => `<option ${i === cur ? "selected" : ""}>${i}</option>`).join("")}</select>`;
 const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "Child who boards at school", helper: "Helper (au pair, nanny, house-sitter)",
   visitor: "Visits with the children (e.g. an ex-partner)" };
+// the wizard's role for someone already in the calendar (the reverse of WIZARD_ROLES in the API)
+const wizardRole = (p) => p.type === "helper" ? "helper" : p.type === "tracked" ? "visitor" : p.child ? (p.boards ? "boarder" : "child") : "adult";
 function wizardForm() {
   const b = state.data.brand || {}, homes = (state.data.places || []).filter((p) => p.kind === "home");
-  const known = state.data.people.filter((p) => p.type !== "group").map((p) => p.name);
-  const personRow = (p = {}) => `<div class="vline wrow"><input placeholder="Name" value="${esc(p.name || "")}" data-n>
+  const known = state.data.people.filter((p) => p.type !== "group" && p.active !== 0);
+  // people already in the calendar: name fixed (entries are filed under it - rename under Setup → People), role and school can change
+  const personRow = (p = {}) => `<div class="vline wrow" ${p.id ? `data-id="${p.id}"` : ""}><input placeholder="Name" value="${esc(p.name || "")}" data-n
+      ${p.id ? `readonly title="Rename under Setup → People" class="fixed"` : ""}>
     <select data-r>${Object.entries(WIZARD_ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select>
-    <input placeholder="School (children)" data-s value="${esc(p.school || "")}"><span class="vmove"><button type="button" class="ackbtn" data-wdel title="Remove">✕</button></span></div>`;
+    <input placeholder="School" data-s value="${esc(p.school || "")}" ${["child", "boarder"].includes(p.role) ? "" : `style="visibility:hidden"`}><span class="vmove">${p.id ? `<span style="width:30px"></span>`
+      : `<button type="button" class="ackbtn" data-wdel title="Remove">✕</button>`}</span></div>`;
   const houseRow = (h = {}, i = 0) => `<div class="vline hrow"><input placeholder="${i ? "e.g. Beach House (leave empty if none)" : "e.g. Home, Town House"}" value="${esc(h.label || "")}" data-l>
     ${iconSelect("data-i", h.icon || (i ? "🏡" : "🏠"))}
     <input placeholder="Someone must sleep here because of… (e.g. the dogs)" value="${esc(h.needs || "")}" data-x></div>`;
   openDialog(`<form class="form" id="f" autocomplete="off"><h2>👋 Set up your calendar</h2>
     <div class="two"><label>Family name<input name="family_name" value="${esc(b.family || "")}" placeholder="e.g. Smith" required></label>
-      <label>Calendar name <small class="muted">(optional)</small><input name="site_name" placeholder="${esc(b.family ? b.family + " Calendar" : "Smith Calendar")}"></label></div>
-    <div><div class="lbl">Who's in the calendar?${known.length ? ` <small class="muted">(already there: ${esc(known.join(", "))} – add anyone else)</small>` : ""}</div>
-      <div id="wpeople">${known.length ? personRow() : personRow({ role: "adult" }) + personRow({ role: "adult" }) + personRow({ role: "child" })}</div>
+      <label>Calendar name <small class="muted">(optional)</small><input name="site_name" value="${esc(b.site && b.site !== `${b.family} Calendar` ? b.site : "")}"
+        placeholder="${esc(b.family ? b.family + " Calendar" : "Smith Calendar")}"></label></div>
+    <div><div class="lbl">Who's in the calendar?${known.length ? ` <small class="muted">(to remove someone: Setup → People)</small>` : ""}</div>
+      <div id="wpeople">${known.length ? known.map((p) => personRow({ id: p.id, name: p.name, role: wizardRole(p), school: p.school })).join("")
+        : personRow({ role: "adult" }) + personRow({ role: "adult" }) + personRow({ role: "child" })}</div>
       <button type="button" class="ackbtn" id="wadd" style="margin-top:6px">+ Add a person</button></div>
     <div><div class="lbl">Your houses <small class="muted">(a child at a house needs an adult there)</small></div>
       <div id="whouses">${houseRow(homes[0] || {}, 0)}${houseRow(homes[1] || {}, 1)}</div></div>
@@ -275,13 +282,15 @@ function wizardForm() {
     $("#cancel").onclick = closeDialog;
     $("#wadd").onclick = () => $("#wpeople").insertAdjacentHTML("beforeend", personRow());
     $("#wpeople").onclick = (e) => { if (e.target.closest("[data-wdel]")) e.target.closest(".wrow").remove(); };
+    $("#wpeople").onchange = (e) => { const r = e.target.closest("[data-r]"); if (r) r.closest(".wrow").querySelector("[data-s]").style.visibility = ["child", "boarder"].includes(r.value) ? "" : "hidden"; };
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const f = $("#f");
       const body = { family_name: f.elements.family_name.value, site_name: f.elements.site_name.value,
-        people: [...f.querySelectorAll(".wrow")].map((r) => ({ name: r.querySelector("[data-n]").value, role: r.querySelector("[data-r]").value, school: r.querySelector("[data-s]").value })),
+        people: [...f.querySelectorAll(".wrow")].map((r) => ({ id: +r.dataset.id || undefined, name: r.querySelector("[data-n]").value, role: r.querySelector("[data-r]").value, school: r.querySelector("[data-s]").value })),
         houses: [...f.querySelectorAll(".hrow")].map((r) => ({ label: r.querySelector("[data-l]").value, icon: r.querySelector("[data-i]").value, needs: r.querySelector("[data-x]").value })) };
-      submit(async () => { const r = await api("POST", "setup/wizard", body); submit.msg = r.added.length ? `Added ${r.added.join(", ")}` : "Saved"; }, () => submit.msg);
+      submit(async () => { const r = await api("POST", "setup/wizard", body);
+        submit.msg = [r.added.length && `Added ${r.added.join(", ")}`, r.changed?.length && `Updated ${r.changed.join(", ")}`].filter(Boolean).join(" · ") || "Saved"; }, () => submit.msg);
     };
   });
 }

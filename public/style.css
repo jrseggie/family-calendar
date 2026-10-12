@@ -398,6 +398,7 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .vnotes { font-size: 13px; white-space: pre-wrap; color: var(--text); background: var(--bg); border-radius: 8px; padding: 6px 8px; }
 .vline { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) auto auto; gap: 6px; align-items: center; margin-bottom: 6px; }
 .vline.wrow { grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr) auto; }   /* set-up wizard: name · role · school · ✕ */
+.vline.wrow input.fixed { font-weight: 600; background: transparent; border-color: transparent; }   /* someone already in the calendar */
 .vline.hrow { grid-template-columns: minmax(0, 1.2fr) 4em minmax(0, 1.4fr); }   /* house · icon · needs someone */
 .vmove { display: flex; gap: 3px; }
 .vmove .ackbtn { padding: 3px 8px; }

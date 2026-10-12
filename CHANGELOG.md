@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.7
+- Set-up wizard, run again: shows everyone already in the calendar with their role and school (change them there); keeps the calendar name, phone-icon name and house short names.
+
 ## 1.0.6
 - Setup → Smart inbox: a clear green "● On" / grey "○ Off" label.
 

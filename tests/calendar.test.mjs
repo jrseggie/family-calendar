@@ -400,6 +400,14 @@ test("set-up wizard: a new family's people, roles, houses and name; then the ⚠
   const [, again] = await call("POST", "setup/wizard", { family_name: "Mokoena", houses: [{ label: "Home" }], people: [{ name: "Lerato", role: "adult" }, { name: "Gogo", role: "helper" }] });
   assert.deepEqual(again.added, ["Gogo"]);
   assert.equal(db.prepare("SELECT child FROM people WHERE name = 'Lerato'").get().child, 1);
+  // ... but with their id (the wizard opened on a set-up calendar) their role and school change; untouched people stay as they are
+  const id = (n) => db.prepare("SELECT id FROM people WHERE name = ?").get(n).id;
+  db.exec("UPDATE places SET short = 'Hm' WHERE key = 'home'");
+  const [, third] = await call("POST", "setup/wizard", { family_name: "Mokoena", houses: [{ label: "Home", icon: "🏡", needs: "the cat" }],
+    people: [{ id: id("Lerato"), name: "Lerato", role: "boarder", school: "Hilton" }, { id: id("Thandi"), name: "Thandi", role: "adult" }, { id: id("Dad"), name: "Dad", role: "visitor" }] });
+  assert.deepEqual([third.added, third.changed], [[], ["Lerato"]]);
+  assert.deepEqual({ ...db.prepare("SELECT boards, school, home FROM people WHERE name = 'Lerato'").get() }, { boards: 1, school: "Hilton", home: "home" });
+  assert.equal(db.prepare("SELECT short FROM places WHERE key = 'home'").get().short, "Hm");   // same house name: its short name is kept
 });
 
 // ---------- a brand-new install: only the setup password works until sign-in is switched on; then "Switch on sign-in"

@@ -417,7 +417,8 @@ async function setupWizard(request, env, u) {
   if (!family) invalid("What's the family's name?");
   const people = await loadPeople(env), stmts = [], added = [];
   const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v);
-  stmts.push(put("family_name", family), put("site_name", clean(b.site_name, 40) || null), put("short_name", clean(b.short_name, 14) || null));
+  stmts.push(put("family_name", family), put("site_name", clean(b.site_name, 40) || null));
+  if (b.short_name !== undefined) stmts.push(put("short_name", clean(b.short_name, 14) || null));
   if (!(await loadSettings(env.DB)).uid_prefix) stmts.push(put("uid_prefix", crypto.randomUUID().slice(0, 8)));
 
   // houses: the first two "home" places are renamed (created if missing); the other starting places are added if missing
@@ -431,16 +432,31 @@ async function setupWizard(request, env, u) {
     const key = homes[i]?.key || (i === 0 ? "home" : `home${i + 1}`);
     houseKeys.push(key);
     stmts.push(env.DB.prepare(`INSERT INTO places (key, label, short, icon, kind, sort, active, needs) VALUES (?, ?, ?, ?, 'home', ?, 1, ?)
-      ON CONFLICT(key) DO UPDATE SET label = excluded.label, short = excluded.short, icon = excluded.icon, active = 1, needs = excluded.needs`)
+      ON CONFLICT(key) DO UPDATE SET short = CASE WHEN places.label = excluded.label THEN places.short ELSE excluded.short END,
+        label = excluded.label, icon = excluded.icon, active = 1, needs = excluded.needs`)
       .bind(key, h.label, h.label.slice(0, 12), h.icon, i + 1, h.needs));
   });
   if (!people.some((p) => p.name === "Family")) stmts.push(env.DB.prepare("INSERT INTO people (name, color, type, active, sort, grid_column, family) VALUES ('Family', '#495057', 'group', 1, 99, 0, 0)"));
 
   // people
-  const list = (Array.isArray(b.people) ? b.people : []).map((p) => ({ name: clean(p.name, 40), role: WIZARD_ROLES[p.role] ? p.role : "adult", school: clean(p.school, 80) || null }))
-    .filter((p) => p.name);
+  const list = (Array.isArray(b.people) ? b.people : []).map((p) => ({ id: +p.id || 0, name: clean(p.name, 40), role: WIZARD_ROLES[p.role] ? p.role : "adult", school: clean(p.school, 80) || null }))
+    .filter((p) => p.name || p.id);
+  // people already in the calendar (wizard run again): change their role / school only if it was changed
+  const roleOf = (p) => p.type === "helper" ? "helper" : p.type === "tracked" ? "visitor" : p.child ? (p.boards ? "boarder" : "child") : "adult";
+  const changed = [];
+  for (const p of list.filter((x) => x.id)) {
+    const cur = people.find((x) => x.id === p.id && x.type !== "group");
+    if (!cur) continue;
+    const r = WIZARD_ROLES[p.role], school = r.child ? p.school : null;
+    if (roleOf(cur) !== p.role) stmts.push(env.DB.prepare("UPDATE people SET type = ?, child = ?, boards = ?, family = ?, grid_column = ?, home = ? WHERE id = ?")
+      .bind(r.type, r.child, r.boards, r.family, r.grid_column, r.home ? (cur.home || houseKeys[0]) : cur.home, cur.id));
+    if (roleOf(cur) !== p.role || (r.child && (cur.school || null) !== school)) {
+      if (r.child) stmts.push(env.DB.prepare("UPDATE people SET school = ? WHERE id = ?").bind(school, cur.id));
+      changed.push(cur.name);
+    }
+  }
   const taken = new Set(people.map((p) => p.name.toLowerCase()));
-  list.forEach((p, i) => {
+  list.filter((p) => !p.id).forEach((p, i) => {
     if (/[,|]/.test(p.name) || ["everyone", "all", "family"].includes(p.name.toLowerCase())) invalid(`"${p.name}" can't be used as a name`);
     if (taken.has(p.name.toLowerCase())) return;   // already there - leave them as they are
     taken.add(p.name.toLowerCase());
@@ -452,8 +468,8 @@ async function setupWizard(request, env, u) {
   });
   if (list.some((p) => p.role === "boarder")) stmts.push(env.DB.prepare("INSERT OR IGNORE INTO places (key, label, short, icon, kind, sort) VALUES ('school', 'School (boarding)', 'School', '🏫', 'school', 3)"));
   await env.DB.batch(stmts);
-  await log(env, u, "Set-up wizard", `${family}: ${added.length ? "added " + added.join(", ") : "no new people"}; houses ${houses.map((h) => h.label).join(", ")}`);
-  return json({ ok: true, added });
+  await log(env, u, "Set-up wizard", `${family}: ${added.length ? "added " + added.join(", ") : "no new people"}${changed.length ? "; updated " + changed.join(", ") : ""}; houses ${houses.map((h) => h.label).join(", ")}`);
+  return json({ ok: true, added, changed });
 }
 
 // Setup > "📥 Smart inbox" (lib/inbox.js): the Anthropic key (stored scrambled, never sent back), model, notes, on/off
