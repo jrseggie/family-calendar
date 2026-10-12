@@ -19,9 +19,9 @@ database_name = "family-calendar"
 database_id = "00000000-0000-0000-0000-000000000000"
 migrations_dir = "migrations"
 
-# Sundays 16:00 UTC = 18:00 in South Africa (the week-ahead email); every 10 minutes: queued emails, smart inbox, housekeeping
+# every 10 minutes: the weekly email when it's time (Setup > Weekly email), queued emails, smart inbox, housekeeping
 [triggers]
-crons = ["0 16 * * SUN", "*/10 * * * *"]
+crons = ["*/10 * * * *"]
 
 # sending email (needs a domain with Cloudflare Email Routing - see docs/HELP.md; without one the calendar works, just no emails)
 [[send_email]]

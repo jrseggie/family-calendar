@@ -456,3 +456,25 @@ test("new install: setup password guards everything; Switch on sign-in sets up A
     assert.equal(db.prepare("SELECT value FROM settings WHERE key = 'site_url'").get().value, "https://smith-cal.smith.workers.dev");
   } finally { globalThis.fetch = realFetch; }
 });
+
+// ---------- weekly email: day, hour and time zone from Setup
+import { digestSchedule, digestDue, digestRange } from "../lib/digest-schedule.js";
+test("weekly email timing: default Sunday 18:00 SA; Monday 07:00 covers this week; once per day; other time zones", () => {
+  const sa = digestSchedule({});
+  assert.deepEqual([sa.day, sa.hour, sa.tz, sa.label], [0, 18, "Africa/Johannesburg", "Sundays 18:00"]);
+  const sun1800 = new Date("2026-10-11T16:00:00Z"), sun1810 = new Date("2026-10-11T16:10:00Z");   // 18:00 / 18:10 in SA
+  assert.equal(digestDue(sun1800, sa, null), true);
+  assert.equal(digestDue(sun1810, sa, "2026-10-11T16:00:05Z"), false);   // already went out today
+  assert.equal(digestDue(sun1810, sa, "2026-10-04T16:00:05Z"), true);    // last week's doesn't count
+  assert.equal(digestDue(new Date("2026-10-11T15:00:00Z"), sa, null), false);   // 17:00 - not yet
+  assert.deepEqual(digestRange(sun1800, sa), { sentOn: "2026-10-11", from: "2026-10-12", to: "2026-10-18" });   // same as before: next Mon-Sun
+  const mon7 = digestSchedule({ digest_day: "1", digest_hour: "7" });
+  const mondayMorning = new Date("2026-10-12T05:00:00Z");   // 07:00 in SA
+  assert.equal(digestDue(mondayMorning, mon7, null), true);
+  assert.deepEqual(digestRange(mondayMorning, mon7), { sentOn: "2026-10-12", from: "2026-10-12", to: "2026-10-18" });   // this Mon-Sun
+  const london = digestSchedule({ digest_day: "1", digest_hour: "7", timezone: "Europe/London" });
+  assert.equal(digestDue(mondayMorning, london, null), false);   // 06:00 in London (summer time)
+  assert.equal(digestDue(new Date("2026-10-12T06:00:00Z"), london, null), true);
+  assert.equal(digestSchedule({ timezone: "Not/AZone", digest_hour: "25" }).tz, "Africa/Johannesburg");
+  assert.equal(digestSchedule({ digest_hour: "25" }).hour, 18);
+});

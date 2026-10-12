@@ -1,6 +1,6 @@
 // Hourly housekeeping (from the 10-minute cron): clear out old stored mail, and email the admin (ALERT_TO) if a background job
 // has stopped working. Jobs report in to the `health` table:
-//   digest      - this worker, after the Sunday email
+//   digest      - this worker, after the weekly email (day and time from Setup > Weekly email)
 //   inbox_check - tools/fetch_inbox.py (the cloud routine, every 2 h 07:00-23:00 SAST)
 //   backup      - tools/backup.sh on a PC, if someone runs one (optional)
 //   email_sync  - lib/email-sync.js (hourly, when the Cloudflare key is set) or a PC task
@@ -41,7 +41,7 @@ export async function problems(env, now = new Date()) {
   if (stuck.n) out.push(`${stuck.n} queued email(s) haven't been sent for over an hour.`);
   const failed = await env.DB.prepare("SELECT subject, result FROM outbox WHERE sent_at > ? AND result LIKE '%FAILED%' ORDER BY id DESC LIMIT 3").bind(ago(DAY)).all();
   for (const f of failed.results) out.push(`Sending "${f.subject}" failed: ${String(f.result).slice(0, 200)}`);
-  if (h.digest !== undefined && older("digest", 8 * DAY)) out.push(`The Sunday "week ahead" email last went out ${when(h.digest)}.`);
+  if (h.digest !== undefined && older("digest", 8 * DAY)) out.push(`The weekly "week ahead" email last went out ${when(h.digest)}.`);
   // jobs that only some calendars have: judged once they've run at least once (or, for the email sync, once its key is set)
   if (h.backup !== undefined && older("backup", 9 * DAY)) out.push(`The weekly PC backup (tools/backup.sh) last ran ${when(h.backup)} – is that PC off?`);
   if (h.backup_email !== undefined && older("backup_email", 40 * DAY)) out.push(`The monthly backup email last went out ${when(h.backup_email)}.`);

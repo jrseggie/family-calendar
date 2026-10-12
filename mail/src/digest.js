@@ -29,10 +29,10 @@ export function weekAfter(now) {
 // "Needs sorting": the shared rules (public/rules.js); warnings marked "OK, noted" on the site are left out
 const clashRuns = (data, from, to) => clashRules.clashRuns(data, from, to);
 
-// 🔒 Info items whose expiry date is within 30 days of the Sunday the email goes out (or already past)
+// 🔒 Info items whose expiry date is within 30 days of the day the email goes out (or already past)
 const VAULT_ICON = { Vehicles: "🚗", Documents: "🪪", "Firearm licences": "🎯", Insurance: "🛡️", Medical: "🩺" };
-export function expiringSoon(data, from) {
-  const sunday = iso(addDays(parse(from), -1)), until = iso(addDays(parse(sunday), 30));
+export function expiringSoon(data, from, sentOn = iso(addDays(parse(from), -1))) {
+  const sunday = sentOn, until = iso(addDays(parse(sunday), 30));
   return (data.expiring || []).filter((x) => x.expires_on <= until).sort((a, b) => a.expires_on.localeCompare(b.expires_on)).map((x) => {
     const n = Math.round((parse(x.expires_on) - parse(sunday)) / 864e5);
     const when = n < 0 ? `expired ${short(x.expires_on)}` : n === 0 ? "expires today" : `${nice(x.expires_on)} (${n} day${n === 1 ? "" : "s"})`;
@@ -41,9 +41,10 @@ export function expiringSoon(data, from) {
 }
 
 // data.brand = lib/settings.js brand() (names); site = the calendar's web address
-export function buildDigest(data, from, to, site) {
+// opts.sentOn = the day it goes out (default: the day before `from`), opts.when = e.g. "every Sunday at 18:00"
+export function buildDigest(data, from, to, site, opts = {}) {
   const label = data.brand?.full || "Family Calendar";
-  const expiring = expiringSoon(data, from), LOC = clashRules.places(data);
+  const expiring = expiringSoon(data, from, opts.sentOn), LOC = clashRules.places(data);
   const color = Object.fromEntries(data.people.map((p) => [p.name, p.color]));
   const days = [];
   for (let d = parse(from); iso(d) <= to; d = addDays(d, 1)) {
@@ -110,7 +111,7 @@ export function buildDigest(data, from, to, site) {
       })];
     body += dayBlock(nice(d.key), wd === 0 || wd === 6, rows);
   }
-  const html = page("The week ahead", `${short(from)} – ${short(to)}`, body, `Sent every Sunday evening by the ${label}.`, site, label);
+  const html = page("The week ahead", `${short(from)} – ${short(to)}`, body, `Sent ${opts.when || "every Sunday evening"} by the ${label}.`, site, label);
 
   const subject = `Week ahead ${short(from)} – ${short(to)}${runs.length ? ` · ⚠ ${runs.length} to sort` : ""}${expiring.length ? ` · ⏳ ${expiring.length} to renew` : ""}`;
   return { subject, text, html };

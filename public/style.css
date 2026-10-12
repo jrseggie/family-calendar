@@ -304,7 +304,7 @@ button.go:hover, a.btn.go:hover { background: #37b24d; }
 @media (max-width: 699px) { .srow, .sorting .srow { grid-template-columns: 1fr; gap: 0; } .ackbtn { justify-self: start; margin-top: 4px; } }
 
 /* Setup > Weekly email status badges */
-.dbadges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+.dbadges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; align-items: center; align-self: center; }   /* pills keep their own height */
 .dbadge { font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
 .dbadge.ok { background: color-mix(in srgb, #2f9e44 16%, var(--card)); color: color-mix(in srgb, #2f9e44 75%, var(--text)); }
 .dbadge.wait { background: color-mix(in srgb, #f08c00 18%, var(--card)); color: color-mix(in srgb, #e67700 80%, var(--text)); }

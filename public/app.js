@@ -875,7 +875,7 @@ async function renderSetup() {
   $("#main").innerHTML = `
     <div class="card"><h3>This calendar</h3><div class="row" id="site-settings"><span><b>${esc(sb.site)}</b><br>
       <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}</small></span><small>Edit</small></div>
-      <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b> <span id="update-note" class="muted"></span></span>
+      <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""} <span id="update-note" class="muted"></span></span>
         <span><button type="button" class="go" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
     <div class="card"><h3>People in the calendar</h3>${pRows}</div>
     <button class="btn-add" id="add-person">+ Add person</button>
@@ -884,16 +884,20 @@ async function renderSetup() {
     <button class="btn-add" id="add-place">+ Add place</button>
     <div class="card"><h3>Who can sign in</h3>${uRows}</div>
     <button class="btn-add" id="add-user">+ Add login</button>
-    <div class="card"><h3>Weekly email <small class="muted">Sundays 18:00 – the week ahead + ⚠ things to sort</small></h3>${digest.map((r) =>
+    <div class="card"><h3>Weekly email <small class="muted">${esc(digestWhen(settings))} – the week ahead + ⚠ things to sort</small>
+      <button type="button" class="ackbtn" id="digest-time" style="float:right">🕖 Change day & time</button></h3>${digest.map((r) =>
       `<div class="row" data-digest="${r.id}"><span><b>${esc(r.name || r.email)}</b><br><small>${esc(r.email)}</small></span>
         <span class="dbadges">${digestBadges(r)}</span></div>`).join("") || `<p class="muted pad">Nobody yet.</p>`}</div>
     <button class="btn-add" id="add-digest">+ Add email address</button>${settings.emailSync ? ` <button class="btn-add" id="sync-digest" title="Send Cloudflare's confirmation email to new addresses and check which are confirmed">🔄 Check confirmations now</button>` : ""}
-    <div class="card"><h3>📥 Smart inbox <small class="muted">${inbox.on ? "on" : "off"}</small></h3><div class="row" id="inbox-settings"><span>
-      ${inbox.on ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by ${esc(inbox.models[inbox.model].split(" –")[0])} and the dates
+    <div class="card"><h3>📥 Smart inbox <small class="muted">${inbox.on || inbox.routine ? "on" : "off"}</small></h3><div class="row" id="inbox-settings"><span>
+      ${inbox.routine ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by your <b>Claude Code inbox routine</b>
+        and the dates show under <b>Waiting for approval</b>.<br><small class="muted">Last check ${esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))}
+        · the calendar's own built-in reader stays off, so the two don't both pick up the same emails</small>` : ""}
+      ${inbox.routine ? "" : inbox.on ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by ${esc(inbox.models[inbox.model].split(" –")[0])} and the dates
         show under <b>Waiting for approval</b>.<br><small class="muted">Key ${esc(inbox.keyHint)} · last checked ${inbox.lastRun ? esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })) : "not yet"}</small>`
       : `Optional: forward school letters, invitations and bookings to ${esc(inbox.inbox || "the inbox address")} and Claude proposes the dates for you to approve.
         Needs your own Anthropic API key (pay-as-you-go, roughly R1–2 per email).`}
-      ${inbox.lastError ? `<br><small style="color:#c92a2a">⚠ Last problem: ${esc(inbox.lastError.detail)}</small>` : ""}</span><small>${inbox.on ? "Edit" : "Set up"}</small></div></div>
+      ${inbox.lastError ? `<br><small style="color:#c92a2a">⚠ Last problem: ${esc(inbox.lastError.detail)}</small>` : ""}</span><small>${inbox.on ? "Edit" : inbox.routine ? "Built-in reader" : "Set up"}</small></div></div>
     <div class="card"><h3>🗄️ Backups</h3><p class="muted" style="margin:0 0 8px">Cloudflare keeps 30 days of restore points
       automatically, and on the 1st of each month a full backup is emailed to the admins. You can also download one now
       (🔒 Info items stay scrambled in it).</p><a class="btn" href="/api/setup/backup" download>⬇️ Download a backup</a></div>
@@ -911,6 +915,7 @@ async function renderSetup() {
   document.querySelectorAll("[data-place]").forEach((el) => el.onclick = () => placeForm(state.setup.places.find((p) => p.key === el.dataset.place)));
   $("#add-user").onclick = () => userForm();
   $("#add-digest").onclick = () => digestForm();
+  $("#digest-time").onclick = () => digestTimeForm();
   $("#sync-digest")?.addEventListener("click", async (e) => {
     e.target.disabled = true;
     try { const r = await api("POST", "setup/email-sync"); toast(r.changes.length ? r.changes.join(" · ") : "All up to date"); renderSetup(); }
@@ -1041,6 +1046,35 @@ function inboxForm() {
       const fd = new FormData($("#f"));
       submit(() => api("PUT", "setup/inbox", { key: fd.get("key"), model: fd.get("model"), notes: fd.get("notes"), on: fd.get("on") === "on" }),
         fd.get("key") ? "Key checked and saved" : "Saved");
+    };
+  });
+}
+
+// Setup > Weekly email: which day and hour it goes out, in which time zone
+const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+const digestWhen = (s) => {
+  const day = /^[0-6]$/.test(String(s.digest_day ?? "")) ? +s.digest_day : 0, hour = s.digest_hour != null && s.digest_hour !== "" ? +s.digest_hour : 18;
+  return `${WEEKDAYS[day]}s ${String(hour).padStart(2, "0")}:00${s.timezone && s.timezone !== "Africa/Johannesburg" ? ` (${s.timezone.split("/").pop().replace(/_/g, " ")} time)` : ""}`;
+};
+function digestTimeForm() {
+  const s = state.setup.settings, day = s.digest_day != null && s.digest_day !== "" ? +s.digest_day : 0, hour = s.digest_hour != null && s.digest_hour !== "" ? +s.digest_hour : 18;
+  const mine = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
+  const zones = [...new Set([s.timezone || "Africa/Johannesburg", "Africa/Johannesburg", mine, "Europe/London", "Europe/Amsterdam", "Asia/Dubai",
+    "Australia/Sydney", "Australia/Perth", "Pacific/Auckland", "America/New_York", "America/Chicago", "America/Los_Angeles", "America/Toronto"].filter(Boolean))];
+  openDialog(`<form class="form" id="f"><h2>🕖 When the weekly email goes out</h2>
+    <div class="two"><label>Day<select name="day">${WEEKDAYS.map((d, i) => `<option value="${i}" ${i === day ? "selected" : ""}>${d}</option>`).join("")}</select></label>
+      <label>Time<select name="hour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === hour ? "selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("")}</select></label></div>
+    <label>Time zone<select name="timezone">${zones.map((z) => `<option ${z === (s.timezone || "Africa/Johannesburg") ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></label>
+    <div class="meta">Sent in the evening, it covers the 7 days from the next day (e.g. Sunday 18:00 → Monday to Sunday).
+      Sent in the morning, it covers the 7 days from that day (e.g. Monday 07:00 → Monday to Sunday).</div>
+    <div class="err"></div>
+    <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
+    $("#cancel").onclick = closeDialog;
+    $("#f").onsubmit = (e) => {
+      e.preventDefault();
+      const fd = new FormData($("#f"));
+      submit(async () => { const r = await api("PUT", "setup/digest-time", { day: +fd.get("day"), hour: +fd.get("hour"), timezone: fd.get("timezone") });
+        submit.msg = `Weekly email: ${r.label}`; }, () => submit.msg);
     };
   });
 }

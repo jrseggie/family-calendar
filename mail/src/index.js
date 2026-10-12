@@ -6,7 +6,8 @@
 //  - hourly (first 10-minute run of each hour): delete stored mail older than 30 days; email ALERT_TO if a job stopped (health.js)
 import { page, esc } from "./layout.js";
 import { EmailMessage } from "cloudflare:email";
-import { buildDigest, weekAfter } from "./digest.js";
+import { buildDigest } from "./digest.js";
+import { digestSchedule, digestDue, digestRange, DAYS } from "../../lib/digest-schedule.js";
 import { publicHolidays as saPublicHolidays } from "./holidays.js";
 import { purge, healthCheck, markHealthy } from "./health.js";
 import { brand, loadSettings } from "../../lib/settings.js";
@@ -14,7 +15,6 @@ import { dumpDatabase, gzip } from "../../lib/backup.js";
 import { syncEmailAddresses } from "../../lib/email-sync.js";
 import { processInbox } from "../../lib/inbox.js";
 
-const DIGEST_CRON = "0 16 * * SUN";   // must match wrangler.toml
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
 
@@ -35,8 +35,10 @@ export default {
   async scheduled(event, env, ctx) {
     // "last job run" stamp: the site warns admins (Upcoming) when the scheduled jobs haven't run for 30 minutes
     ctx.waitUntil(markHealthy(env, "jobs", event.cron));
-    if (event.cron === DIGEST_CRON) ctx.waitUntil(sendDigest(env, new Date(event.scheduledTime)));
-    else ctx.waitUntil((async () => {
+    if (event.cron !== "*/10 * * * *") return;   // only the 10-minute job does anything (an old Sunday-only trigger is ignored)
+    ctx.waitUntil((async () => {
+      // the weekly email: on the day and hour chosen on Setup > Weekly email (in the family's time zone), once
+      await maybeDigest(env, new Date(event.scheduledTime)).catch((e) => console.log("weekly email:", String(e)));
       // smart inbox (only when switched on in Setup): one new email -> proposals + approval email in the outbox
       await processInbox(env).then((r) => r && console.log("inbox:", r))
         .catch((e) => { console.log("inbox error:", String(e)); return markHealthy(env, "inbox_error", String(e.message || e).slice(0, 500)); });
@@ -150,10 +152,17 @@ async function loadData(env) {
   return { events, recurring, schoolHolidays, publicHolidays: saPublicHolidays(publicHolidays), people, places, acks, expiring, brand: brand(settings, env.SITE) };
 }
 
+async function maybeDigest(env, now) {
+  const sched = digestSchedule(await loadSettings(env.DB));
+  const last = await env.DB.prepare("SELECT at FROM health WHERE key = 'digest'").first();
+  if (digestDue(now, sched, last?.at)) await sendDigest(env, now);
+}
+
 export async function sendDigest(env, now) {
   const data = await loadData(env);
-  const { from, to } = weekAfter(now);
-  const { subject, text, html } = buildDigest(data, from, to, data.brand.url || env.SITE);
+  const sched = digestSchedule(await loadSettings(env.DB)), { from, to, sentOn } = digestRange(now, sched);
+  const { subject, text, html } = buildDigest(data, from, to, data.brand.url || env.SITE,
+    { sentOn, when: `every ${DAYS[sched.day]} at ${String(sched.hour).padStart(2, "0")}:00` });
   const result = await sendTo(env, await recipients(env), subject, text, html);   // ONLY_TO (--var when testing) = just that address
   if (!env.ONLY_TO && !result.includes("FAILED")) await markHealthy(env, "digest", result);
 }

@@ -14,7 +14,8 @@ import { brand, loadSettings, SETTING_KEYS } from "../../lib/settings.js";
 import { dumpDatabase } from "../../lib/backup.js";
 import { syncEmailAddresses, canSyncEmail } from "../../lib/email-sync.js";
 import { inboxConfig, sealKey, testKey, INBOX_MODELS } from "../../lib/inbox.js";
-import { VERSION, UPSTREAM_REPO } from "../../lib/version.js";
+import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
+import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "General"];
@@ -242,7 +243,7 @@ async function getAll(env, u) {
           editablePeople: canEditAll(u) ? null : (u.can_edit ? u.seeList : []),
           seeSchool: seesSchool(u), seeBirthdays: seesBirthdays(u), seeLog: canEditAll(u), demo: demo(env) },
     people, categories: CATEGORIES, places: await loadPlaces(env), brand: brand(await loadSettings(env.DB), env.ORIGIN || ""),
-    version: VERSION, upstream: UPSTREAM_REPO, needsWizard: isAdmin(u) && !(await loadSettings(env.DB)).family_name,
+    version: VERSION, unreleased: UNRELEASED, upstream: UPSTREAM_REPO, needsWizard: isAdmin(u) && !(await loadSettings(env.DB)).family_name,
     admins: (await env.DB.prepare("SELECT name FROM users WHERE role = 'admin' AND active = 1 ORDER BY id").all()).results.map((r) => r.name),
     events: events.results.filter((e) => eventVisible(u, e.who, familyOf(allPeople))),
     recurring: seesBirthdays(u) ? recurring.results : [],
@@ -460,7 +461,9 @@ async function setupInbox(request, env, u) {
   const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v);
   if (request.method === "GET") {
     const c = await inboxConfig(env), h = Object.fromEntries((await env.DB.prepare("SELECT key, at, detail FROM health WHERE key IN ('inbox_check','inbox_error')").all()).results.map((r) => [r.key, r]));
-    return json({ on: c.on, model: c.model, notes: c.notes, keyHint: c.keyHint, models: INBOX_MODELS, lastRun: h.inbox_check?.at || null,
+    // a Claude Code cloud routine (tools/fetch_inbox.py) reading the inbox instead: it stamps inbox_check too, without "(smart inbox)"
+    const routine = !c.on && h.inbox_check && !/smart inbox/.test(h.inbox_check.detail || "") && Date.now() - new Date(h.inbox_check.at).getTime() < 26 * 3600e3;
+    return json({ on: c.on, routine, model: c.model, notes: c.notes, keyHint: c.keyHint, models: INBOX_MODELS, lastRun: h.inbox_check?.at || null,
                   lastError: h.inbox_error && (!h.inbox_check || h.inbox_error.at > h.inbox_check.at) ? h.inbox_error : null, inbox: brand(await loadSettings(env.DB)).inbox });
   }
   if (request.method !== "PUT") return fail(405, "Method not allowed");
@@ -893,7 +896,7 @@ export async function onRequest({ request, env, params }) {
     if (!u) return fail(403, "Your email hasn't been given access to this calendar yet – ask whoever runs this calendar.");
     const last = parts[parts.length - 1];
     const id = last && /^\d+$/.test(last) ? parseInt(last, 10) : null;
-    const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare"].includes(parts[1]);   // addressed by key / no id
+    const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time"].includes(parts[1]);   // addressed by key / no id
     if (["PUT", "DELETE"].includes(request.method) && !id && !byKey) return fail(400, "Missing id");
 
     if (parts[0] === "all" && request.method === "GET") return await getAll(env, u);
@@ -916,6 +919,14 @@ export async function onRequest({ request, env, params }) {
       if (parts[1] === "people") return await setupPeople(request, env, u, id);
       if (parts[1] === "places") return await setupPlaces(request, env, u, decodeURIComponent(parts[2] || ""));
       if (parts[1] === "settings") return await setupSettings(request, env, u);
+      if (parts[1] === "digest-time" && request.method === "PUT") {   // Setup > Weekly email > day and time
+        const b = await request.json(), s = digestSchedule({ digest_day: b.day, digest_hour: b.hour, timezone: b.timezone });
+        if (String(b.timezone || "") && s.tz !== b.timezone) invalid("Unknown time zone");
+        const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v));
+        await env.DB.batch([put("digest_day", s.day), put("digest_hour", s.hour), put("timezone", s.tz)]);
+        await log(env, u, "Weekly email time", `${DAYS[s.day]} ${String(s.hour).padStart(2, "0")}:00 (${s.tz})`);
+        return json({ ok: true, ...s });
+      }
       if (parts[1] === "inbox") return await setupInbox(request, env, u);
       if (parts[1] === "wizard") return await setupWizard(request, env, u);
       if (parts[1] === "cloudflare" && request.method === "POST") {   // wizard: "Switch on sign-in" (lib/cloudflare-setup.js)

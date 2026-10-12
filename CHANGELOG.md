@@ -1,5 +1,10 @@
 # What's new in Family Calendar
 
+## 1.0.3
+- Weekly email: choose the day, time and time zone (Setup → Weekly email → 🕖 Change day & time), e.g. Monday 07:00.
+- Setup → Weekly email: the badges no longer stretch.
+- Help: what to do if an update doesn't show up.
+
 ## 1.0.2
 - Opens on the Month view; the set-up and sign-in cards show there too, with bright green buttons.
 - House icons are picked from a list (set-up wizard and Setup → Places).
