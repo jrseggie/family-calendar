@@ -1010,8 +1010,11 @@ async function checkForUpdate() {
     const latest = String(r?.tag_name || "").replace(/^v/, ""), cmp = (a, b) => a.split(".").map(Number).reduce((d, x, i) => d || x - (b.split(".").map(Number)[i] || 0), 0);
     const mine = state.setup?.settings?.repo_url;
     const newer = latest && cmp(latest, state.data.version) > 0;
-    note.innerHTML = !newer ? "Up to date"
-      : `Update available: <b>${esc(latest)}</b> · <a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new</a>`;
+    const owner = mine ? mine.split("/")[0] : "";
+    note.innerHTML = !newer ? `Up to date${mine ? " · new versions install themselves overnight" : ""}`
+      : `Update available: <b>${esc(latest)}</b> · <a href="${esc(r.html_url)}" target="_blank" rel="noopener">what's new</a>` + (mine
+        ? `<br>Installs itself tonight – or now: the green button opens GitHub (signed in as <b>${esc(owner)}</b>), click <b>Run workflow</b>.`
+        : "");
     // the one thing to press: GitHub's update page (the first time: This calendar → Edit, to say where the GitHub copy is)
     if (newer) $("#version-actions").innerHTML = mine
       ? `<a class="btn go" href="https://github.com/${esc(mine)}/actions/workflows/update.yml" target="_blank" rel="noopener"
@@ -1099,8 +1102,8 @@ function settingsForm(forUpdate = false) {
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
     ${state.data.upstream ? `<label>Your GitHub copy <small class="muted">(for updates – the address of the copy Cloudflare made when you installed)</small>
       <input name="repo_url" value="${esc(s.repo_url ? "github.com/" + s.repo_url : "")}" placeholder="github.com/yourname/family-calendar"></label>
-      <div class="meta">Once, after filling this in: <a href="#" id="add-updater">add the update job to your GitHub copy</a> (GitHub opens – click
-        <b>Commit changes</b>). After that the green Update button opens GitHub – click <b>Run workflow</b>.</div>` : ""}
+      <div class="meta">Once, after filling this in: <a href="#" id="add-updater">add the update job to your GitHub copy</a> (GitHub opens –
+        sign in to GitHub first if it says "404" – then click <b>Commit changes</b>). From then on new versions install themselves overnight.</div>` : ""}
     <div class="meta">The name shows at the top of the site, on the emails, invites and the phone calendar. The web address is used in
       emails and invites, and the inbox address is inbox@ that domain.</div>
     <div class="err"></div>

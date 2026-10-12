@@ -1,4 +1,5 @@
-# Update this calendar to the latest Family Calendar release: GitHub > Actions > "Update Family Calendar" > Run workflow.
+# Update this calendar to the latest Family Calendar release. Runs by itself every night (03:17 South African time) and
+# whenever you click GitHub > Actions > "Update Family Calendar" > Run workflow. Nothing new = nothing changes.
 # Cloudflare rebuilds the calendar by itself a minute later (and applies any database changes).
 # Your calendar's entries and settings are not touched - they live in your Cloudflare database. Any changes YOU made to the
 # code are replaced (that's the deal: an update gives you exactly the released version). Your wrangler.toml keeps its own
@@ -6,6 +7,8 @@
 name: Update Family Calendar
 on:
   workflow_dispatch:
+  schedule:
+    - cron: "17 1 * * *"
 permissions:
   contents: write
 jobs:
@@ -25,6 +28,8 @@ jobs:
           # everything from the release, except this repository's history and its own workflows (GitHub doesn't let
           # an action change workflow files - if the update action itself changes, the release notes say how to replace it)
           rsync -a --delete --exclude .git --exclude .github /tmp/new/ ./
+          cmp -s /tmp/new/.github/workflows/update.yml .github/workflows/update.yml \
+            || echo "::notice::This update job itself has a newer version - see docs/HELP.md, Updates (replace update.yml)"
           # keep this calendar's own Worker name, database name and database ID
           for key in name database_name database_id; do
             line=$(grep -m1 -E "^$key *=" /tmp/old-wrangler.toml || true)

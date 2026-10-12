@@ -43,9 +43,16 @@ The 🔒 Info page is locked with a key that only exists in your Cloudflare acco
 switching on sign-in. If you ever reinstall, put it back as the Worker secret `VAULT_KEY` before opening the Info page.
 
 ## Updates
-**Setup → This calendar** shows when a new version is out. Fill in **Your GitHub copy** there once (Edit). Then:
-**Add the update button** (first time only – click *Commit changes* on the GitHub page it opens) and **Update now** →
-*Run workflow*. Cloudflare rebuilds the calendar a minute later.
+New versions install themselves every night (about 03:17 South African time) once the update job is in your GitHub copy:
+**Setup → This calendar → Edit**, fill in **Your GitHub copy**, click **add the update job** under it and *Commit changes* on the
+GitHub page it opens. To update straight away: the green **⬆️ Update** button on Setup → *Run workflow*. Cloudflare rebuilds
+the calendar a minute later.
+- **GitHub shows "404 – not the web page you are looking for"**: your copy is private, so GitHub hides it until you sign in.
+  Sign in (as the account that owns the copy) and the page appears.
+- **Added the update job before version 1.0.5?** It doesn't run by itself yet. On GitHub open your copy →
+  `.github/workflows/update.yml` → ✏️ (edit) → replace everything with the new one from
+  `github.com/jrseggie/family-calendar/blob/main/.github/workflows/update.yml` → *Commit changes*. (The job can't replace itself –
+  a run then shows a notice when there's a newer one.)
 
 ## Sign-in says Zero Trust isn't switched on
 Cloudflare's free sign-in service has to be switched on once by hand: dashboard → **Zero Trust** → any team name → **Free**

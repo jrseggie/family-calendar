@@ -39,10 +39,11 @@ backups, updates.
 
 ## Updates
 
-When a new version comes out, the ⚙ Setup tab says so, with an **Update now** link (it opens GitHub: click **Run workflow**).
-The first time, use **Add the update button** next to it and click **Commit changes** on the page it opens – Cloudflare's
-install doesn't copy that button over. Your calendar and settings are kept; changes you made to the code yourself are
-replaced by the new version.
+Once set up, new versions **install themselves overnight**. Set-up (once): **⚙ Setup → This calendar → Edit → Your GitHub copy**,
+then the link under it, **add the update job** – GitHub opens (sign in if it shows "404") – click **Commit changes**.
+(Cloudflare's install doesn't copy the update job over, so this one step is by hand.)
+Can't wait for the night? When Setup says a new version is out, the green **⬆️ Update** button opens GitHub: click **Run workflow**.
+Your calendar and settings are kept; changes you made to the code yourself are replaced by the new version.
 
 ## What's new
 
