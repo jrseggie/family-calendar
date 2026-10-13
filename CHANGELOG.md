@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.13
+- Changes → Recently deleted: names as outlined pills in each person's colour (like the filter row), easier to read.
+- Changes tab: who made each change is shown in their own colour.
+
 ## 1.0.12
 - 🗓 Plan the holiday: tap a child's 🌿 holiday (or a ❓ day) and set where they sleep as stretches – "Town House 27 Nov – 12 Dec,
   Beach House 13 Dec – 3 Jan …" – with a count of nights still not planned. "Same for <other child>" copies it to the days they're also on holiday.

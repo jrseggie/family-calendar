@@ -543,12 +543,16 @@ async function renderLog() {
   const [rows, gone] = await Promise.all([api("GET", "log"), api("GET", "deleted")]);
   const when = (s) => new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const deleted = gone.length ? `<div class="card log"><h3>🗑 Recently deleted <small class="muted">(can be restored for 30 days)</small></h3>${gone.map((g) =>
-    `<div class="row del-row"><span><small>${esc(when(g.at))} · ${esc(g.by || "")}</small><br><b>${esc(g.title)}</b> ${pchips(whoList(g.who))}
+    `<div class="row del-row"><span><small>${esc(when(g.at))} · ${byName(g.by)}</small><br><b>${esc(g.title)}</b> ${whoList(g.who).map((p) => `<span class="pill" style="--c:${COLORS[p] || "var(--muted)"}">${esc(p)}</span>`).join(" ")}
       <small class="muted">${fmtShort(g.start)}${g.end !== g.start ? " – " + fmtShort(g.end) : ""}${g.n > 1 ? ` + ${g.n - 1} more repeat${g.n > 2 ? "s" : ""}` : ""}</small></span>
       <button type="button" class="ackbtn" data-restore="${esc(g.batch)}">↩ Restore</button></div>`).join("")}</div>` : "";
   $("#main").innerHTML = deleted + `<div class="card log"><h3>Recent changes</h3>${rows.map((r) =>
-    `<div class="row"><small>${esc(new Date(r.at.endsWith("Z") ? r.at : r.at + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))} · ${esc(r.user)}</small><br>
+    `<div class="row"><small>${esc(new Date(r.at.endsWith("Z") ? r.at : r.at + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))} · ${byName(r.user)}</small><br>
      <b>${esc(r.action)}</b> ${esc(r.details || "")}</div>`).join("")}</div>`;
+}
+// who made a change, in their own colour (a login whose name is a person in the calendar); others (e.g. Claude) grey
+function byName(n) {
+  return n && COLORS[n] ? `<b class="byname" style="--c:${COLORS[n]}">${esc(n)}</b>` : esc(n || "");
 }
 
 function renderFilters() {
