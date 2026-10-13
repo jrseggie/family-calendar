@@ -7,8 +7,8 @@
 import { page, esc } from "./layout.js";
 import { EmailMessage } from "cloudflare:email";
 import { buildDigest } from "./digest.js";
-import { digestSchedule, digestDue, digestRange, DAYS } from "../../lib/digest-schedule.js";
-import { publicHolidays as saPublicHolidays } from "./holidays.js";
+import { digestSchedule, digestDue, digestRange, DAYS, localParts } from "../../lib/digest-schedule.js";
+import { publicHolidays } from "../../lib/holidays.js";
 import { purge, healthCheck, markHealthy } from "./health.js";
 import { brand, loadSettings } from "../../lib/settings.js";
 import { dumpDatabase, gzip } from "../../lib/backup.js";
@@ -39,14 +39,15 @@ export default {
     if (event.cron !== "*/10 * * * *") return;   // only the 10-minute job does anything (an old Sunday-only trigger is ignored)
     ctx.waitUntil((async () => {
       // the weekly email: on the day and hour chosen on Setup > Weekly email (in the family's time zone), once
-      await maybeDigest(env, new Date(event.scheduledTime)).catch((e) => console.log("weekly email:", String(e)));
-      // smart inbox (only when switched on in Setup): one new email -> proposals + approval email in the outbox
+      const t = new Date(event.scheduledTime), step = (name, p) => p.catch((e) => console.log(`${name}:`, String(e)));   // one failing step never stops the others
+      await step("weekly email", maybeDigest(env, t));
+      await step("outbox", sendOutbox(env));
+      // once a day: "this calendar is in use" to the Family Calendar maker (Setup > This calendar; lib/usage.js)
+      await step("usage check-in", sendUsage(env, t));
+      if (t.getUTCMinutes() < 10) await step("hourly", hourly(env, t));
+      // smart inbox last (the slowest step; only when switched on in Setup): one new email -> proposals + approval email in the outbox
       await processInbox(env).then((r) => r && console.log("inbox:", r))
         .catch((e) => { console.log("inbox error:", String(e)); return markHealthy(env, "inbox_error", String(e.message || e).slice(0, 500)); });
-      await sendOutbox(env);
-      // once a day: "this calendar is in use" to the Family Calendar maker (Setup > This calendar; lib/usage.js)
-      await sendUsage(env, new Date(event.scheduledTime)).catch((e) => console.log("usage check-in:", String(e)));
-      if (new Date(event.scheduledTime).getUTCMinutes() < 10) await hourly(env, new Date(event.scheduledTime));
     })());
   },
 
@@ -89,25 +90,25 @@ async function hourly(env, now = new Date()) {
   }
 }
 
-// on the 1st-3rd of each month (South African date), email the admins a full backup of the database (.sql.gz), so there
-// is always a recent copy outside Cloudflare. Cloudflare itself also keeps 30 days of restore points.
+// on the 1st-3rd of each month (in the calendar's time zone), email the admins a full backup of the database (.sql.gz), so
+// there is always a recent copy outside Cloudflare. Cloudflare itself also keeps 30 days of restore points.
 async function monthlyBackup(env, now = new Date()) {
-  const sa = new Date(now.getTime() + 2 * 3600e3), month = sa.toISOString().slice(0, 7);
-  if (sa.getUTCDate() > 3 || sa.getUTCHours() < 7) return;
+  const tz = brand(await loadSettings(env.DB)).tz, here = localParts(now, tz), month = here.date.slice(0, 7);
+  if (+here.date.slice(8) > 3 || here.hour < 7) return;
   const last = await env.DB.prepare("SELECT at FROM health WHERE key = 'backup_email'").first();
-  if (last && new Date(new Date(last.at).getTime() + 2 * 3600e3).toISOString().slice(0, 7) === month) return;
+  if (last && localParts(new Date(last.at), tz).date.slice(0, 7) === month) return;
   const to = (await env.DB.prepare(`SELECT DISTINCT u.email FROM users u JOIN digest_recipients d ON lower(d.email) = lower(u.email)
     WHERE u.role = 'admin' AND u.active = 1 AND d.verified = 1`).all()).results.map((r) => r.email);
   if (!to.length) return;
-  const b = brand(await loadSettings(env.DB), env.SITE), day = sa.toISOString().slice(0, 10);
+  const b = brand(await loadSettings(env.DB), env.SITE), day = here.date;
   const file = { name: `calendar-backup-${day}.sql.gz`, type: "application/gzip", bytes: await gzip(await dumpDatabase(env.DB, now)) };
   const text = `A full backup of the ${b.full}, ${day} (attached). Keep the email - you won't normally need it.\n` +
     `Cloudflare also keeps 30 days of restore points. Admins can download a fresh backup any time on the Setup tab.\n\n${b.url}\n`;
   const html = page("Monthly backup", day, `<p>A full backup of the calendar is attached (<b>${esc(file.name)}</b>). Just keep this email –
     you won't normally need it. 🔒 Info items are in it scrambled, exactly as stored.</p><p style="color:#495057">Cloudflare also keeps 30 days
     of restore points, and admins can download a fresh backup any time on the ⚙ Setup tab.</p>`, "Sent on the 1st of every month to the calendar's admins.", b.url, b.full);
-  const result = await sendTo(env, to, `🗄️ ${b.site} backup – ${day}`, text, html, null, file);
-  if (!result.includes("FAILED")) await markHealthy(env, "backup_email", `${file.name}, ${file.bytes.length} bytes: ${result}`);
+  const r = await sendOnce(env, "backup_email", month, to, `🗄️ ${b.site} backup – ${day}`, text, html, file);
+  if (r.all) await markHealthy(env, "backup_email", `${file.name}, ${file.bytes.length} bytes: ${r.result}`);
 }
 
 const recipients = async (env) => env.ONLY_TO ? [env.ONLY_TO]
@@ -129,6 +130,21 @@ async function sendTo(env, emails, subject, text, html, ics = null, file = null)
   return results.join("; ");
 }
 
+// send to everyone once per `period` (the weekly email's day, the backup's month): addresses that already got it are skipped,
+// so if one address fails only that one is tried again on the next run - nobody gets it twice
+async function sendOnce(env, key, period, emails, subject, text, html, file = null) {
+  const row = await env.DB.prepare("SELECT detail FROM health WHERE key = ?").bind(`${key}_progress`).first().catch(() => null);
+  let done = [];
+  try { const p = JSON.parse(row?.detail || "{}"); if (p.period === period) done = p.done || []; } catch { /* start again */ }
+  const todo = emails.filter((e) => !done.includes(e.toLowerCase()));
+  if (!todo.length) return { result: "already sent", all: true };
+  const result = await sendTo(env, todo, subject, text, html, null, file), lines = result.split("; ");
+  const ok = todo.filter((e) => lines.includes(`${e} ok`));
+  await env.DB.prepare("INSERT INTO health (key, at, detail) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET at = excluded.at, detail = excluded.detail")
+    .bind(`${key}_progress`, new Date().toISOString(), JSON.stringify({ period, done: [...done, ...ok.map((e) => e.toLowerCase())] })).run();
+  return { result, all: ok.length === todo.length };
+}
+
 // queued emails: claim each row first so two runs can't send it twice
 export async function sendOutbox(env) {
   const rows = (await env.DB.prepare("SELECT * FROM outbox WHERE sent_at IS NULL ORDER BY id LIMIT 5").all()).results;
@@ -144,7 +160,7 @@ export async function sendOutbox(env) {
 
 async function loadData(env) {
   const q = (sql) => env.DB.prepare(sql).all().then((r) => r.results);
-  const [events, recurring, schoolHolidays, publicHolidays, people] = await Promise.all([
+  const [events, recurring, schoolHolidays, oneOffHolidays, people] = await Promise.all([
     q("SELECT * FROM events"), q("SELECT * FROM recurring"), q("SELECT * FROM school_holidays"),
     q("SELECT * FROM public_holidays"), q("SELECT * FROM people")]);
   const acks = await q("SELECT day, msg FROM acknowledged").catch(() => []);
@@ -152,7 +168,7 @@ async function loadData(env) {
   // 🔒 Info: only the plain expiry copy (date + "title – label"), never the encrypted details
   const expiring = await q("SELECT section, expires_on, expiry_label FROM vault_items WHERE expires_on IS NOT NULL").catch(() => []);
   const places = await q("SELECT * FROM places ORDER BY sort, key").catch(() => []);
-  return { events, recurring, schoolHolidays, publicHolidays: saPublicHolidays(publicHolidays), people, places, acks, expiring, brand: brand(settings, env.SITE) };
+  return { events, recurring, schoolHolidays, publicHolidays: publicHolidays(settings, oneOffHolidays), people, places, acks, expiring, brand: brand(settings, env.SITE) };
 }
 
 async function maybeDigest(env, now) {
@@ -166,8 +182,9 @@ export async function sendDigest(env, now) {
   const sched = digestSchedule(await loadSettings(env.DB)), { from, to, sentOn } = digestRange(now, sched);
   const { subject, text, html } = buildDigest(data, from, to, data.brand.url || env.SITE,
     { sentOn, when: `every ${DAYS[sched.day]} at ${String(sched.hour).padStart(2, "0")}:00` });
-  const result = await sendTo(env, await recipients(env), subject, text, html);   // ONLY_TO (--var when testing) = just that address
-  if (!env.ONLY_TO && !result.includes("FAILED")) await markHealthy(env, "digest", result);
+  if (env.ONLY_TO) return void await sendTo(env, await recipients(env), subject, text, html);   // ONLY_TO (--var when testing) = just that address
+  const r = await sendOnce(env, "digest", sentOn, await recipients(env), subject, text, html);
+  if (r.all) await markHealthy(env, "digest", r.result);
 }
 
 // ---------- calendar invite: mixed { alternative { text, html, text/calendar;method=REQUEST }, invite.ics }

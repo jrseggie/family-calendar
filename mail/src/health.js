@@ -6,6 +6,7 @@
 //   email_sync  - lib/email-sync.js (hourly, when the Cloudflare key is set) or a PC task
 import { brand, loadSettings } from "../../lib/settings.js";
 import { canSyncEmail } from "../../lib/email-sync.js";
+import { localParts } from "../../lib/digest-schedule.js";
 import { page, warnBox, esc } from "./layout.js";
 
 const DAY = 864e5;
@@ -26,12 +27,12 @@ export async function purge(env) {
 export const markHealthy = (env, key, detail = null) =>
   env.DB.prepare("INSERT OR REPLACE INTO health (key, at, detail) VALUES (?, ?, ?)").bind(key, new Date().toISOString(), detail).run();
 
-const when = (s) => s ? new Date(s).toLocaleString("en-GB", { timeZone: "Africa/Johannesburg", dateStyle: "medium", timeStyle: "short" }) : "never";
-
 export async function problems(env, now = new Date()) {
   const h = Object.fromEntries((await env.DB.prepare("SELECT key, at FROM health").all()).results.map((r) => [r.key, r.at]));
   const older = (key, ms) => !h[key] || new Date(h[key]).getTime() < now.getTime() - ms;
-  const sastHour = (now.getUTCHours() + 2) % 24;
+  const tz = brand(await loadSettings(env.DB)).tz;   // the calendar's time zone (Setup > This calendar)
+  const when = (s) => s ? new Date(s).toLocaleString("en-GB", { timeZone: tz, dateStyle: "medium", timeStyle: "short" }) : "never";
+  const sastHour = localParts(now, tz).hour;   // the hour where the family is
   const out = [];
   // the routine runs 07:00-23:00 every 2 hours; only judge it in the daytime so the overnight gap doesn't count
   if (h.inbox_check !== undefined && sastHour >= 10 && sastHour <= 23 && older("inbox_check", 5 * 3600e3)) out.push(`The inbox check (cloud routine) last ran ${when(h.inbox_check)} – emails to inbox@ aren't being picked up.`);

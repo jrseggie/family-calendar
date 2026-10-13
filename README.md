@@ -51,6 +51,9 @@ used in the last 30 days, and how many changes were made. Your calendar's **name
 set-up wizard (or choose "Yes" on **⚙ Setup → This calendar**). Never entries, people, email addresses or the web address.
 Turn it off there any time ("Off – send nothing").
 
+## Credits
+Public holidays come from [date-holidays](https://github.com/commenthol/date-holidays) (ISC licence; holiday data CC BY 3.0).
+
 ## What's new
 
 See [CHANGELOG.md](CHANGELOG.md).

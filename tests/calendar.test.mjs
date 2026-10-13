@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import "../public/rules.js";
-import { saHolidays, publicHolidays } from "../mail/src/holidays.js";
+import { publicHolidays } from "../lib/holidays.js";
 import { feedCalendar, fold } from "../lib/ics.js";
 import { repeatDates } from "../lib/repeat.js";
 import { buildDigest, weekAfter } from "../mail/src/digest.js";
@@ -11,7 +11,7 @@ import { buildDigest, weekAfter } from "../mail/src/digest.js";
 const R = globalThis.CalendarRules;
 // the test family = how the Smiths are set up on the Setup tab (children, boarder, usual house, places)
 const people = ["Emma", "Leo", "Anna", "Tom", "Nomsa"].map((name, i) => ({ name, type: name === "Nomsa" ? "helper" : "household", active: 1, grid_column: name === "Nomsa" ? 0 : 1, family: name === "Nomsa" ? 0 : 1, color: "#123456", sort: i,
-    child: ["Emma", "Leo"].includes(name) ? 1 : 0, boards: name === "Leo" ? 1 : 0, home: name === "Nomsa" ? null : "town" }))
+    child: ["Emma", "Leo"].includes(name) ? 1 : 0, boards: name === "Leo" ? 1 : 0, school: ["Emma", "Leo"].includes(name) ? "Town School" : null, home: name === "Nomsa" ? null : "town" }))
   .concat([{ name: "Family", type: "group", active: 1, grid_column: 0, color: "#495057" }, { name: "Mark", type: "tracked", active: 1, grid_column: 0, color: "#c92a2a" }]);
 let nextId = 1;
 const ev = (start, end, who, title, extra = {}) => ({ id: nextId++, start, end, who, title, category: "General", status: "Confirmed", important: 0, location: null, ...extra });
@@ -19,23 +19,30 @@ const places = [["town", "Town House", "🏠", "home"], ["beach", "Beach House",
   ["friend", "Friend's house", "🛏️", "friend"], ["other", "Other / away", "✈️", "away"]].map(([key, label, icon, kind], sort) => ({ key, label, short: label, icon, kind, sort, active: 1 }));
 const data = (events, more = {}) => ({ people, places, events, schoolHolidays: [], publicHolidays: [], acks: [], ...more });
 
-// ---------- SA public holidays
-test("SA holidays: Easter-based days and Sunday -> Monday", () => {
-  const h = Object.fromEntries(saHolidays(2026).map((x) => [x.date, x.name]));
+// ---------- public holidays (lib/holidays.js: the calendar's country, + extra countries for information)
+const yearOf = (y, settings = {}, rows = []) => Object.fromEntries(publicHolidays(settings, rows, new Date(`${y}-06-01`)).filter((h) => h.date.startsWith(String(y)) && h.main).map((x) => [x.date, x.name]));
+test("SA holidays: Easter-based days and Sunday -> Monday (the default country)", () => {
+  const h = yearOf(2026);
   assert.equal(h["2026-04-03"], "Good Friday");
   assert.equal(h["2026-04-06"], "Family Day");
   assert.equal(h["2026-12-16"], "Day of Reconciliation");
-  const h27 = Object.fromEntries(saHolidays(2027).map((x) => [x.date, x.name]));
-  assert.equal(h27["2027-03-22"], "Human Rights Day (observed)");   // 21 March 2027 is a Sunday
+  assert.equal(h["2026-08-10"], "National Women's Day (observed)");
+  assert.equal(yearOf(2027)["2027-03-22"], "Human Rights Day (observed)");   // 21 March 2027 is a Sunday
 });
 test("SA holidays: Christmas on a Sunday moves past Day of Goodwill", () => {
-  const h = Object.fromEntries(saHolidays(2022).map((x) => [x.date, x.name]));
+  const h = yearOf(2022);
   assert.equal(h["2022-12-26"], "Day of Goodwill");
   assert.equal(h["2022-12-27"], "Christmas Day (observed)");
 });
-test("SA holidays: one-off days from the table are added", () => {
-  const list = publicHolidays([{ date: "2026-11-04", name: "Local elections" }], new Date("2026-10-01"));
-  assert.ok(list.some((x) => x.date === "2026-11-04" && x.name === "Local elections"));
+test("holidays: one-off days from the table; another country + state; extra countries are information only", () => {
+  assert.equal(yearOf(2026, {}, [{ date: "2026-11-04", name: "Local elections" }])["2026-11-04"], "Local elections");
+  const by = yearOf(2026, { country: "DE", region: "BY" });
+  assert.equal(by["2026-01-06"], "Epiphany");   // Bavaria only
+  assert.equal(yearOf(2026, { country: "DE", region: "BE" })["2026-01-06"], undefined);
+  const both = publicHolidays({ country: "ZA", extra_countries: "GB" }, [], new Date("2026-06-01"));
+  const boxing = both.find((h) => h.date === "2026-12-28");
+  assert.deepEqual([boxing.flag, boxing.main], ["🇬🇧", false]);
+  assert.equal(R.isSchoolDay(data([], { publicHolidays: both }), "Emma", "2026-12-28"), true);   // a UK holiday doesn't close Emma's school
 });
 
 // ---------- the ⚠ rules (public/rules.js)
@@ -232,7 +239,7 @@ test("Info reminders: a month before each expiry, today if that's passed, none o
 // ---------- another family entirely: nothing in the rules may assume the Smiths
 test("rules: a different family (3 kids, one house, no boarders, a tracked dad) gets the right ⚠", () => {
   const fam = ["Mia", "Leo", "Zoe", "Mum", "Gran"].map((name, i) => ({ name, type: "household", active: 1, family: name !== "Gran" ? 1 : 0, grid_column: 1, sort: i,
-    child: ["Mia", "Leo", "Zoe"].includes(name) ? 1 : 0, boards: 0, home: "home" }))
+    child: ["Mia", "Leo", "Zoe"].includes(name) ? 1 : 0, boards: 0, home: "home", school: ["Mia", "Leo", "Zoe"].includes(name) ? "Hill School" : null }))
     .concat([{ name: "Dad", type: "tracked", active: 1, grid_column: 0 }]);
   const pl = [{ key: "home", label: "House", short: "Home", icon: "🏡", kind: "home" }, { key: "away", label: "Away", short: "Away", icon: "✈️", kind: "away" }];
   const d = (events) => ({ people: fam, places: pl, events, schoolHolidays: [], publicHolidays: [], acks: [] });
@@ -316,6 +323,25 @@ test("usage check-in: anonymous by default, the name only when chosen, nothing w
   assert.equal(sent[0][1].name, undefined);
 });
 import { VERSION as VERSION_NOW } from "../lib/version.js";
+test("review fixes: no school day without a school; a firm plan wins over a pencilled-in one; changes only from the calendar's own pages", async () => {
+  const tot = { name: "Tot", type: "household", child: 1, active: 1, home: "town" };
+  const d = data([ev("2026-10-14", "2026-10-14", "Anna, Tom", "beach", { location: "beach" })], { people: [...people.filter((p) => p.name !== "Emma"), tot] });
+  assert.equal(R.isSchoolDay(d, "Tot", "2026-10-14"), false);
+  assert.ok(R.clashesFor(d, "2026-10-14").includes("Tot is at the Town House with no adult there"));   // still home alone - just no "(lifts!)"
+  const firm = ev("2026-10-14", "2026-10-14", "Emma", "at Kim's", { location: "beach" });
+  const maybe = ev("2026-10-14", "2026-10-14", "Emma", "Town?", { location: "town", status: "Tentative" });
+  assert.equal(R.whereOn(data([firm, maybe]), "2026-10-14").Emma.loc, "beach");   // not "conflict"
+  assert.deepEqual(R.maybesFor(data([firm, maybe]), "2026-10-14").filter((m) => /two places/.test(m)).length, 1);
+  const db = freshDb();
+  const env = { DB: d1Like(db), DEMO: "true" };
+  const call = (headers) => apiHandler({ request: new Request("http://localhost/api/events", { method: "POST", headers: { "content-type": "application/json", ...headers },
+    body: JSON.stringify({ title: "x", start: "2026-10-14", who: ["Family"] }) }), env, params: { path: ["events"] } }).then(async (r) => (await r.json()).error || "ok");
+  const blocked = /only be made from the calendar itself/;
+  assert.match(await call({ Origin: "https://evil.example" }), blocked);
+  assert.match(await call({ "Sec-Fetch-Site": "cross-site" }), blocked);
+  assert.doesNotMatch(await call({ Origin: "http://localhost", "Sec-Fetch-Site": "same-origin" }), blocked);   // the calendar's own page
+});
+
 // ---------- names and addresses from the settings (Setup > This calendar)
 import { brand } from "../lib/settings.js";
 test("settings: names from the family name; Smith feed IDs unchanged; a new family has nothing of ours", () => {
@@ -333,7 +359,7 @@ test("settings: names from the family name; Smith feed IDs unchanged; a new fami
 import { dumpDatabase, gzip } from "../lib/backup.js";
 import { DatabaseSync } from "node:sqlite";
 const fakeD1 = (db) => ({ prepare: (sql) => ({ all: async () => ({ results: db.prepare(sql).all().map((r) => ({ ...r })) }) }) });
-test("backup: dump of the database restores identically (quotes, NULLs, emoji, blobs), Cloudflare tables left out", async () => {
+test("backup: dump restores identically (quotes, NULLs, emoji, blobs), keeps the migrations list, and restores over a fresh install", async () => {
   const a = new DatabaseSync(":memory:");
   a.exec(`CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, notes TEXT, n REAL);
     CREATE INDEX ev_t ON events(title);
@@ -343,7 +369,8 @@ test("backup: dump of the database restores identically (quotes, NULLs, emoji, b
     INSERT INTO events (title, notes, n) VALUES ('Emma''s "exam"', NULL, 1.5), ('🐕 dogs; DROP TABLE x', 'line1\nline2', NULL);
     INSERT INTO inbox_parts VALUES (1, X'0102'); INSERT INTO d1_migrations VALUES (1, '0001.sql'); INSERT INTO files VALUES (1, X'00ff10');`);
   const sql = await dumpDatabase(fakeD1(a));
-  assert.doesNotMatch(sql, /inbox_parts|d1_migrations/);
+  assert.doesNotMatch(sql, /inbox_parts/);
+  assert.match(sql, /INSERT OR REPLACE INTO "d1_migrations"/);   // so later updates don't re-run old database changes
   const b = new DatabaseSync(":memory:");
   b.exec(sql);
   assert.deepEqual(b.prepare("SELECT * FROM events ORDER BY id").all().map((r) => ({ ...r })), a.prepare("SELECT * FROM events ORDER BY id").all().map((r) => ({ ...r })));
@@ -351,6 +378,11 @@ test("backup: dump of the database restores identically (quotes, NULLs, emoji, b
   b.exec("INSERT INTO events (title) VALUES ('next')");   // AUTOINCREMENT carries on after the restored ids
   assert.equal(b.prepare("SELECT max(id) m FROM events").get().m, 3);
   assert.ok((await gzip(sql)).length < sql.length);
+  // into a fresh install that already has a row with the same id: the backup's row wins, no error
+  const c = new DatabaseSync(":memory:");
+  c.exec("CREATE TABLE events (id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT NOT NULL, notes TEXT, n REAL); INSERT INTO events (title) VALUES ('fresh')");
+  c.exec(sql);
+  assert.equal(c.prepare("SELECT title FROM events WHERE id = 1").get().title, `Emma's "exam"`);
 });
 
 // ---------- smart inbox (lib/inbox.js) end to end, with a stand-in for Claude and node's SQLite standing in for D1
@@ -424,6 +456,27 @@ test("smart inbox: email -> proposals + approval email; same email again = dupli
   sent = null;
   assert.match(await processInbox(env, fake), /Duplicate/);
   assert.equal(sent, null);
+});
+
+test("smart inbox: an email it can't read is tried 3 times, then set aside, and the next one goes through", async () => {
+  const db = freshDb(), key = btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(32))));
+  const env = { DB: d1Like(db), VAULT_KEY: key, SITE: "https://example.com" };
+  const { sealKey } = await import("../lib/inbox.js");
+  db.prepare("INSERT INTO settings (key, value) VALUES ('inbox_key', ?), ('inbox_on', '1')").run(await sealKey(env, "sk-ant-test"));
+  for (const subject of ["Fwd: broken", "Fwd: fine"]) {
+    const id = db.prepare("INSERT INTO inbox_mail (received_at, from_addr, subject, size) VALUES ('2026-10-12T08:00:00Z','tom@example.com',?,1) RETURNING id").get(subject).id;
+    db.prepare("INSERT INTO inbox_parts (mail_id, seq, data) VALUES (?, 0, ?)").run(id, new TextEncoder().encode(RAW(subject, [37, 80, 68, 70, subject.length])));
+  }
+  const broken = { beta: { messages: { create: async () => { throw new Error("credit balance too low"); } } } };
+  for (let i = 0; i < 3; i++) {
+    db.exec("UPDATE inbox_mail SET claimed_at = NULL");   // as if 15 minutes had passed
+    await assert.rejects(processInbox(env, broken), /credit/);
+  }
+  const ok = { beta: { messages: { create: async () => ({ stop_reason: "end_turn", content: [{ type: "text", text: JSON.stringify({ summary: "x", check: [], nothing_reason: "nothing dated", items: [] }) }] }) } } };
+  assert.match(await processInbox(env, ok), /Nothing to add: fine/);
+  assert.deepEqual(db.prepare("SELECT subject, status, attempts FROM inbox_mail ORDER BY id").all().map((r) => ({ ...r })),
+    [{ subject: "Fwd: broken", status: "failed", attempts: 3 }, { subject: "Fwd: fine", status: "fetched", attempts: 1 }]);
+  assert.ok(db.prepare("SELECT 1 FROM change_log WHERE action = 'Inbox: couldn''t read'").get());
 });
 
 test("smart inbox helpers: forwards clean to the same text; similar titles; items validated", () => {

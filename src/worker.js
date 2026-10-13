@@ -19,6 +19,12 @@ export default {
     const f = path.match(/^\/feed\/([^/]+)$/);
     if (f) return feed({ request, env, params: { token: f[1] } });
     if (path === "/manifest.json") return manifest({ request, env });
+    // the family's own app icons (drawn on Setup, public/appicon.js), else the standard ones from public/
+    if (/^\/(icon-192|icon-512|icon-maskable|apple-touch-icon)\.png$/.test(path)) {
+      const row = await env.DB.prepare("SELECT png FROM app_icons WHERE name = ?").bind(path.slice(1)).first().catch(() => null);
+      if (row?.png) return new Response(new Uint8Array(row.png), { headers: { "content-type": "image/png", "cache-control": "public, max-age=86400" } });
+      return env.ASSETS.fetch(new Request(new URL(`/icons${path}`, url), request));   // the standard icons live in public/icons/
+    }
     return env.ASSETS.fetch(request);   // everything else: the site's files (index.html, app.js, icons …)
   },
   scheduled: (event, env, ctx) => mail.scheduled(event, env, ctx),

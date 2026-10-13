@@ -35,7 +35,9 @@ for approval**. Nothing is added until you approve it. **Setup → 📥 Smart in
 - Cloudflare keeps 30 days of restore points by itself.
 - On the 1st of every month the admins get a full backup by email (if emails are set up).
 - **Setup → 🗄️ Backups → Download a backup** any time.
-- To restore a backup into an empty calendar: `npx wrangler d1 execute <database> --remote --file calendar-backup-….sql`
+- To restore a backup (into the same calendar, or a fresh install of it): unzip the `.sql.gz`, then
+  `npx wrangler d1 execute <database> --remote --file calendar-backup-….sql`. What's in the backup replaces what's there;
+  newer entries that aren't in the backup stay. For the 🔒 Info page, put the recovery key back as the Worker secret `VAULT_KEY`.
   (or ask someone technical to).
 
 ## The recovery key

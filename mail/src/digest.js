@@ -49,7 +49,9 @@ export function buildDigest(data, from, to, site, opts = {}) {
   const days = [];
   for (let d = parse(from); iso(d) <= to; d = addDays(d, 1)) {
     const key = iso(d);
-    const ph = data.publicHolidays.find((h) => h.date === key)?.name;
+    const main = data.publicHolidays.find((h) => h.date === key && h.main !== false);
+    const ph = main ? `${main.flag || ""} ${main.name}`.trim() : null;
+    const phx = data.publicHolidays.filter((h) => h.date === key && h.main === false).map((h) => `${h.flag} ${h.name}`);
     const breaks = data.schoolHolidays.filter((h) => h.start === key || (key === from && h.start < key && h.end >= key));
     const backs = data.schoolHolidays.filter((h) => iso(addDays(parse(h.end), 1)) === key);
     const bdays = data.recurring.filter((r) => r.month === d.getUTCMonth() + 1 && r.day === d.getUTCDate()).map((r) => {
@@ -59,7 +61,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
     // trips show on their first day (or Monday if they started earlier), with the end date
     const evs = data.events.filter((e) => e.status !== "Cancelled" && (e.start === key || (key === from && e.start < key && e.end >= key)))
       .sort((a, b) => b.important - a.important);
-    days.push({ key, ph, breaks, backs, bdays, evs });
+    days.push({ key, ph, phx, breaks, backs, bdays, evs });
   }
   const runs = clashRuns(data, from, to);
   const sentOn = opts.sentOn || iso(addDays(parse(from), -1));
@@ -97,7 +99,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
   if (leave.length) text += "🌴 ON LEAVE\n" + leave.map((l) => `- ${l.who}: ${l.when}`).join("\n") + "\n\n";
   for (const d of days) {
     const rows = [
-      ...(d.ph ? [`🇿🇦 ${d.ph}`] : []),
+      ...(d.ph ? [d.ph] : []), ...d.phx,
       ...d.breaks.map((h) => `🌿 ${h.child}: ${h.name} starts (to ${short(h.end)})`),
       ...d.backs.map((h) => `🎒 ${h.child} back at school`),
       ...d.bdays.map((b) => b.text), ...d.evs.map((e) => line(e).text)];
@@ -119,6 +121,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
     const wd = parse(d.key).getUTCDay();
     const rows = [
       ...(d.ph ? [{ who: tag("Public holiday", "#7048a8"), text: esc(d.ph) }] : []),
+      ...d.phx.map((x) => ({ who: tag("Holiday elsewhere", "#868e96"), text: esc(x) })),
       ...d.breaks.map((h) => ({ who: tag(h.child, color[h.child] || "#495057"), text: `🌿 ${esc(h.name)} starts ${grey(`(to ${short(h.end)})`)}` })),
       ...d.backs.map((h) => ({ who: tag(h.child, color[h.child] || "#495057"), text: "🎒 Back at school" })),
       ...d.bdays.map((b) => ({ who: b.type === "Memorial" ? tag("In memory", "#868e96") : b.type === "Anniversary" ? tag("Anniversary", "#c2255c") : tag("Birthday", "#c2255c"),

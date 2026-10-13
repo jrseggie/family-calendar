@@ -1,6 +1,6 @@
 // The ⚠ rules, shared by the site (public/grid.js), the Sunday email (mail/src/digest.js) and the tests (tests/).
 // Plain script: in the browser it is loaded before grid.js; the worker and tests `import "../public/rules.js"`.
-// Everything works on a data object { events, people, places, schoolHolidays, publicHolidays: [{date, name}], acks? }
+// Everything works on a data object { events, people, places, schoolHolidays, publicHolidays: [{date, name, flag?, main?}], acks? }
 // and ISO day keys ("2026-10-14"); dates are handled in UTC so the browser and the worker agree.
 // Nothing here knows the family: who the children are, who boards, where people usually sleep and which places
 // are houses all come from the Setup tab (people.child / boards / home, the places table).
@@ -42,10 +42,12 @@
   // the house a child normally lives at (for "X staying with Y" entries); falls back to the first house
   const homeOf = (data, name) => { const h = personOf(data, name).home; return h && homePlaces(data).includes(h) ? h : homePlaces(data)[0] || null; };
   const holidayOf = (data, child, key) => data.schoolHolidays.find((h) => h.child === child && on(h, key));
-  const publicHoliday = (data, key) => data.publicHolidays.find((h) => h.date === key)?.name || null;
+  const publicHoliday = (data, key) => data.publicHolidays.find((h) => h.date === key && h.main !== false)?.name || null;   // extra countries: information only
 
-  // a "Study" entry (exam study day at home) also means no school run
+  // a "Study" entry (exam study day at home) also means no school run. Only children with a school (Setup > People) have
+  // school days - a toddler is never "at home on a school day"
   function isSchoolDay(data, child, key) {
+    if (!String(personOf(data, child).school || "").trim()) return false;
     const wd = parse(key).getUTCDay();
     const study = data.events.some((e) => e.category === "Study" && on(e, key) && expandWho(data, e.who).includes(child));
     return wd !== 0 && wd !== 6 && !publicHoliday(data, key) && !holidayOf(data, child, key) && !study;
@@ -61,7 +63,9 @@
       const p = person.name;
       // a helper on leave isn't at any house, whatever else says so (clashesFor flags a stay booked during their leave)
       if (person.type === "helper" && onLeave(data, p, key)) { where[p] = { loc: null, set: [], explicit: false, tentative: false, leave: true }; continue; }
-      const evs = data.events.filter((e) => e.location && !["Cancelled", "Unavailable"].includes(e.status) && on(e, key) && expandWho(data, e.who).includes(p));
+      const all = data.events.filter((e) => e.location && !["Cancelled", "Unavailable"].includes(e.status) && on(e, key) && expandWho(data, e.who).includes(p));
+      // a firm plan wins over a pencilled-in one (that only gives an "If … goes ahead" note, maybesFor)
+      const firm = all.filter((e) => !pencilled(data, e)), evs = firm.length ? firm : all;
       const set = [];
       for (const e of evs) if (!set.some((x) => x.loc === e.location)) set.push({ loc: e.location, ev: e });
       if (set.length) { where[p] = { loc: set.length === 1 ? set[0].loc : "conflict", set, explicit: true, tentative: evs.every((e) => e.status === "Tentative") }; continue; }

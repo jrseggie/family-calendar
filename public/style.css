@@ -10,14 +10,14 @@
   :root:not([data-theme="light"]) {
     --bg: #12151b; --card: #1b2029; --text: #e7e9ee; --muted: #9aa3b2; --line: #2b313d;
     --brand: #22365c; --important: #5a4e12; --birthday: #5b2740; --school: #1f4a2b; --school-text: #a6e3b4;
-    --public: #b38f00; --public-text: #fffbe6; --weekend: #2b2416; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
+    --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12151b; --card: #1b2029; --text: #e7e9ee; --muted: #9aa3b2; --line: #2b313d;
   --brand: #22365c; --important: #5a4e12; --birthday: #5b2740; --school: #1f4a2b; --school-text: #a6e3b4;
-  --public: #b38f00; --public-text: #fffbe6; --weekend: #2b2416; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
+  --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
   color-scheme: dark;
 }
 :root[data-theme="light"] { color-scheme: light; }
@@ -90,6 +90,10 @@ main:has(.fgrid) { max-width: 1500px; }   /* the Family grid uses the width of a
 .day-h .date { min-width: 92px; }
 .badge { font-size: 11.5px; font-weight: 600; padding: 2px 8px; border-radius: 999px; }
 .badge.ph { background: var(--public); color: var(--public-text); }
+.form label[hidden], .form [hidden] { display: none !important; }   /* hidden fields stay hidden whatever the label's display */
+.two.cty.one { grid-template-columns: 1fr; }
+.badge.phx { background: var(--weekbg); color: var(--muted); }   /* another country's holiday (information only) */
+.gi.phx { --c: var(--muted); color: var(--muted); font-style: italic; }
 .badge.off { background: var(--school); color: var(--school-text); }
 .badge.loc { background: var(--weekbg); color: var(--text); font-weight: 600; white-space: nowrap; margin-left: 4px; vertical-align: 1px; }
 .item { display: flex; gap: 8px; align-items: flex-start; padding: 7px 12px; border-top: 1px solid var(--line); cursor: pointer; }

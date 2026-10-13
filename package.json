@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.133.0",
+    "date-holidays": "^3.37.0",
     "postal-mime": "^4.0.5"
   },
   "devDependencies": {

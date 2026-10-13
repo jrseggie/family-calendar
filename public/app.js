@@ -166,9 +166,10 @@ function visible(people) {
 
 function buildDays(from, to) {
   const days = {};
-  for (let d = parse(from); iso(d) <= to; d = addDays(d, 1)) days[iso(d)] = { ph: null, off: [], offs: [], breaks: [], items: [] };
+  for (let d = parse(from); iso(d) <= to; d = addDays(d, 1)) days[iso(d)] = { ph: null, phFlag: "", phx: [], off: [], offs: [], breaks: [], items: [] };
   const { events, recurring, schoolHolidays, publicHolidays } = state.data;
-  for (const h of publicHolidays) if (days[h.date]) days[h.date].ph = h.name;
+  // the calendar's country: ph (shades the day, no school); extra countries: phx (shown for information)
+  for (const h of publicHolidays) if (days[h.date]) h.main === false ? days[h.date].phx.push(h) : Object.assign(days[h.date], { ph: h.name, phFlag: h.flag || "" });
   for (const h of schoolHolidays) {
     if (!visible([h.child])) continue;   // school holidays follow the name filter too
     for (let d = parse(h.start > from ? h.start : from); iso(d) <= h.end && iso(d) <= to; d = addDays(d, 1)) {
@@ -218,7 +219,8 @@ function itemHTML(it, opts = {}) {
 
 function dayHeader(key, info) {
   const badges = [];
-  if (info.ph) badges.push(`<span class="badge ph">${esc(info.ph)}</span>`);
+  if (info.ph) badges.push(`<span class="badge ph">${info.phFlag} ${esc(info.ph)}</span>`);
+  for (const x of info.phx) badges.push(`<span class="badge phx">${x.flag} ${esc(x.name)}</span>`);
   for (const c of KIDS()) if (info.off.includes(c)) badges.push(`<span class="badge off">${esc(c)} off school</span>`);
   return `<div class="day-h"><span class="date">${fmtDay(key)}</span>${badges.join("")}<button class="day-add" data-add="${key}" aria-label="Add on ${fmtDay(key)}">+</button></div>`;
 }
@@ -254,8 +256,11 @@ const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "
 // the wizard's role for someone already in the calendar (the reverse of WIZARD_ROLES in the API)
 const wizardRole = (p) => p.type === "helper" ? "helper" : p.type === "tracked" ? "visitor" : p.child ? (p.boards ? "boarder" : "child") : "adult";
 const WIZARD_ROLE_HELP = "Helper = au pair, nanny, gardener, house-sitter … · Visits the children = e.g. an ex-partner whose plans with the kids you track";
-function wizardForm() {
-  const b = state.data.brand || {}, homes = (state.data.places || []).filter((p) => p.kind === "home");
+async function wizardForm() {
+  const b = state.data.brand || {}, homes = (state.data.places || []).filter((p) => p.kind === "home"), list = await countries();
+  // the country: what's set, else the one this phone / PC's time zone belongs to, else South Africa
+  const guess = (list.find((c) => c.timezones.includes(myTz())) || {}).code;
+  const cf = countryFields(list, { country: state.data.country || guess || "ZA", timezone: b.tz || myTz() });
   const known = state.data.people.filter((p) => p.active !== 0);   // in order, the Family group too (it can be moved)
   // people already in the calendar: name fixed (entries are filed under it - rename under Setup → People), role and school can change
   const personRow = (p = {}) => `<div class="vline wrow" ${p.id ? `data-id="${p.id}"` : ""}><input placeholder="Name" value="${esc(p.name || "")}" data-n
@@ -272,6 +277,7 @@ function wizardForm() {
     <div class="two"><label>Family name<input name="family_name" value="${esc(b.family || "")}" placeholder="e.g. Smith" required></label>
       <label>Calendar name <small class="muted">(optional)</small><input name="site_name" value="${esc(b.site && b.site !== `${b.family} Calendar` ? b.site : "")}"
         placeholder="${esc(b.family ? b.family + " Calendar" : "Smith Calendar")}"></label></div>
+    ${cf.html}
     <div><div class="lbl">Who's in the calendar? <small class="muted">(↑ ↓ = the order of the columns on the calendar${known.length ? "; to remove someone: Setup → People" : ""})</small></div>
       <div id="wpeople">${known.length ? known.map((p) => personRow({ id: p.id, name: p.name, role: p.type === "group" ? "group" : wizardRole(p), school: p.school })).join("")
         : personRow({ role: "adult" }) + personRow({ role: "adult" }) + personRow({ role: "child" })}</div>
@@ -280,11 +286,13 @@ function wizardForm() {
       <div id="whouses">${houseRow(homes[0] || {}, 0)}${houseRow(homes[1] || {}, 1)}</div></div>
     <div class="meta">Children who board sleep at school in term time; helpers only count at a house when an entry says they're staying.
       You can change all of this later under ⚙ Setup.</div>
-    ${state.data.upstream ? `<div class="checks"><label><input type="checkbox" name="share_name"> Let the Family Calendar maker know we're using it
+    ${state.data.upstream ? `<div class="checks"><label><input type="checkbox" name="share_name" ${state.data.needsWizard ? "checked" : ""}> Let the Family Calendar maker know we're using it
       <small class="muted">(our calendar's name, the version and how many logins are used – never entries or names; change it under Setup → This calendar)</small></label></div>` : ""}
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Not now</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
+    cf.wire($("#f"));
+    $("#f").elements.country.onchange = () => cf.wire($("#f"), null, null);
     $("#wadd").onclick = () => $("#wpeople").insertAdjacentHTML("beforeend", personRow());
     $("#wpeople").onclick = (e) => {
       const row = e.target.closest(".wrow");
@@ -297,6 +305,7 @@ function wizardForm() {
       e.preventDefault();
       const f = $("#f");
       const body = { family_name: f.elements.family_name.value, site_name: f.elements.site_name.value, share_name: !!f.elements.share_name?.checked,
+        country: f.elements.country.value, timezone: f.elements.timezone.value, region: f.elements.region.value,
         people: [...f.querySelectorAll(".wrow")].map((r) => ({ id: +r.dataset.id || undefined, name: r.querySelector("[data-n]").value, role: r.querySelector("[data-r]").value, school: r.querySelector("[data-s]").value })),
         houses: [...f.querySelectorAll(".hrow")].map((r) => ({ label: r.querySelector("[data-l]").value, icon: r.querySelector("[data-i]").value, needs: r.querySelector("[data-x]").value })) };
       submit(async () => { const r = await api("POST", "setup/wizard", body);
@@ -370,7 +379,8 @@ function approvalLink() {
 async function decide(approve, reject, edits) {
   try {
     const r = await api("POST", "proposals/decide", { approve, reject, edits });
-    toast(r.emailed?.length ? `Done – summary emailed (${r.emailed.join(", ")})` : `${r.decided} done`);
+    toast(r.failed?.length ? `${r.decided} done · couldn't add: ${r.failed.join("; ")} – still waiting, change or reject it`
+      : r.emailed?.length ? `Done – summary emailed (${r.emailed.join(", ")})` : `${r.decided} done`);
     await refresh();
   } catch (e) { toast(e.message); }
 }
@@ -429,7 +439,7 @@ function renderUpcoming() {
       const warn = dayWarnings(key);   // ⚠ things to sort that day (grid.js)
       if (!items.length && !breakItems.length && !warn) {   // free day: slim row
         body += `<div class="${cls} free" id="d-${key}" data-add="${key}"><div class="free-row"><span class="date">${fmtDay(key)}</span>
-                 ${info.ph ? `<span class="badge ph">${esc(info.ph)}</span>` : ""}<span class="free-txt">${ongoing.length ? "" : "Free"}</span>
+                 ${info.ph ? `<span class="badge ph">${info.phFlag} ${esc(info.ph)}</span>` : ""}${info.phx.map((x) => `<span class="badge phx">${x.flag} ${esc(x.name)}</span>`).join("")}<span class="free-txt">${ongoing.length ? "" : "Free"}</span>
                  <span class="free-add">+</span></div>${stillOn}</div>`;
         continue;
       }
@@ -640,7 +650,7 @@ function eventForm(ev, preset = {}) {
       ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> ✏️ Pencilled in – might not happen</label>`}</div>
     ${ev && CalendarRules.pencilled(state.data, ev) && canEditEvent(ev) ? `<div class="qstay" style="margin:-4px 0 4px">✏️ Pencilled in:
       <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn" id="poff">🗑 Not happening</button></div>` : ""}
-    ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(fmtShort(ev.confirmed_at.slice(0, 10)))}</div>` : ""}
+    ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(localDay(ev.confirmed_at))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
     <label>Notes<textarea name="notes" rows="2">${esc(e.notes || "")}</textarea></label>
     ${!ev && !preset.onSave ? `<div class="two"><label>Repeat<select name="repeat">
@@ -650,7 +660,7 @@ function eventForm(ev, preset = {}) {
       <div class="rdays" hidden>${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) =>
         `<label><input type="checkbox" name="rday" value="${(i + 1) % 7}"> ${d}</label>`).join("")}</div>` : ""}
     ${ev?.series ? `<div class="meta">🔁 Part of a repeat – changes here are for this one only.</div>` : ""}
-    ${ev ? `<div class="meta">${ev.source ? `From: ${esc(ev.source)} · ` : ""}${ev.updated_by ? `Last changed by ${esc(ev.updated_by)} ${esc((ev.updated_at || "").slice(0, 10))}` : `Added by ${esc(ev.created_by || "")}`}</div>` : ""}
+    ${ev ? `<div class="meta">${ev.source ? `From: ${esc(ev.source)} · ` : ""}${ev.updated_by ? `Last changed by ${esc(ev.updated_by)} ${esc(localDay(ev.updated_at))}` : `Added by ${esc(ev.created_by || "")}`}</div>` : ""}
     <div class="err"></div>
     <div class="actions">${ev ? `<button type="button" class="danger" id="del">Delete</button>` : ""}
       ${ev && canAdd() ? `<button type="button" id="dup" title="A new entry with the same details">⧉ Duplicate</button>` : ""}
@@ -879,7 +889,7 @@ function holidayForm(h, preset = {}) {
 function daySheet(key) {
   const info = buildDays(key, key)[key];
   openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h2>
-    <div>${info.ph ? `<span class="badge ph">${esc(info.ph)}</span> ` : ""}${info.off.map((c) => `<span class="badge off">${c} off school</span>`).join(" ")}</div>
+    <div>${info.ph ? `<span class="badge ph">${info.phFlag} ${esc(info.ph)}</span> ` : ""}${info.phx.map((x) => `<span class="badge phx">${x.flag} ${esc(x.name)}</span> `).join("")}${info.off.map((c) => `<span class="badge off">${c} off school</span>`).join(" ")}</div>
     <div class="sheet-list">${info.items.map((it) => itemHTML(it)).join("") || `<p class="muted">Nothing planned.</p>`}</div>
     <div class="actions"><button type="button" id="cancel">Close</button><button class="primary" id="addday">+ Add on this day</button></div></div>`, () => {
     $("#cancel").onclick = closeDialog;
@@ -906,6 +916,7 @@ async function renderSetup() {
   const [people, users, digest, places, settings, inbox] = await Promise.all([api("GET", "setup/people"), api("GET", "setup/users"), api("GET", "setup/digest"),
     api("GET", "setup/places"), api("GET", "setup/settings"), api("GET", "setup/inbox")]);
   state.setup = { people, users, digest, places, settings, inbox };
+  syncAppIcon(people, settings.iconKey).catch(() => { /* the standard icon stays */ });   // the home-screen icon in the family's colours
   // in their order (= the order of the columns on the Month grid); ↑ ↓ move someone
   const pRows = people.map((p, i) => `<div class="row" data-person="${p.id}">
       <span><span class="swatch" style="background:${p.color}"></span><b>${esc(p.name)}</b>
@@ -923,12 +934,11 @@ async function renderSetup() {
   const sb = settings.brand;
   $("#main").innerHTML = `
     <div class="card"><h3>This calendar</h3><div class="row" id="site-settings"><span><b>${esc(sb.site)}</b><br>
-      <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}</small></span><small>Edit</small></div>
+      <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}
+        <br>${flagOf(settings.countries.country)} public holidays${settings.countries.region ? ` (${esc(settings.countries.region)})` : ""}${settings.countries.extras.length
+          ? ` + ${settings.countries.extras.map(flagOf).join(" ")} for information` : ""} · times in ${esc(tzName(sb.tz))}</small></span><small>Edit</small></div>
       <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
         <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>
-      <div class="row" id="usage-row"><span><small class="muted">Let the Family Calendar maker know you use it:
-        <b>${esc(settings.usage.choices[settings.usage.mode])}</b>${settings.usage.sends ? ` – sends once a day: ${esc(usageText(settings.usage.sends))}` : ""}</small></span>
-        <small>Edit</small></div>
       <div class="row"><span><small class="muted">Change the family name, people or houses step by step</small></span>
         <span><button type="button" class="ackbtn" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
     <div class="card"><h3>People in the calendar</h3>${pRows}</div>
@@ -960,7 +970,10 @@ async function renderSetup() {
         (read-only; it updates itself about every hour). The link is private to you – don't share it.</p>
       <button type="button" class="btn-add" id="feed-show" style="margin:0">Show my link</button><div id="feed-box"></div></div>
     <p class="muted" style="font-size:12px">Logins use the person's email address: they sign in
-      with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>${installsCard(settings.installs)}`;
+      with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>
+    <div class="card"><h3>📡 Usage check-in</h3><div class="row" id="usage-row"><span><small class="muted">Let the Family Calendar maker know you use it:
+        <b>${esc(settings.usage.choices[settings.usage.mode])}</b>${settings.usage.sends ? ` – sends once a day: ${esc(usageText(settings.usage.sends))}` : ""}</small></span>
+        <small>Edit</small></div></div>${installsCard(settings.installs)}`;
   $("#add-person").onclick = () => personForm();
   document.querySelectorAll("[data-pmove]").forEach((b) => b.onclick = (e) => {
     e.stopPropagation();
@@ -1123,22 +1136,46 @@ function inboxForm() {
   });
 }
 
-// Setup > Weekly email: which day and hour it goes out, in which time zone
+// countries (public holidays + time zone): the list comes from the API once (lib/holidays.js)
+const flagOf = (cc) => String(cc || "").toUpperCase().replace(/[A-Z]/g, (c) => String.fromCodePoint(127397 + c.charCodeAt(0)));
+const tzName = (tz) => String(tz || "").split("/").pop().replace(/_/g, " ");
+const myTz = () => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } };
+async function countries() { return state.countries ||= await api("GET", "countries"); }
+// Country / state / time zone pick-lists inside a form; wired up by countryFields.wire(form)
+function countryFields(list, cur = {}) {
+  const c = list.find((x) => x.code === cur.country) || list.find((x) => x.code === "ZA");
+  const html = `<div class="two cty"><label>Country<select name="country">${list.map((x) =>
+      `<option value="${x.code}" ${x.code === c.code ? "selected" : ""}>${flagOf(x.code)} ${esc(x.name)}</option>`).join("")}</select></label>
+    <label class="tzl">Time zone<select name="timezone"></select></label></div>
+    <label class="regl" hidden>State / province <small class="muted">(some public holidays differ)</small><select name="region"></select></label>
+    <div class="meta" style="margin-top:-4px">Its public holidays show on the calendar and count as no-school days. Emails, invites and times use its time zone.</div>`;
+  const wire = async (f, region = cur.region, tz = cur.timezone) => {
+    const cc = f.elements.country.value, zones = list.find((x) => x.code === cc)?.timezones || [];
+    const pickTz = zones.includes(tz) ? tz : zones.includes(myTz()) ? myTz() : zones[0];
+    f.elements.timezone.innerHTML = zones.map((z) => `<option value="${esc(z)}" ${z === pickTz ? "selected" : ""}>${esc(tzName(z))}</option>`).join("");
+    f.querySelector(".tzl").hidden = zones.length < 2;
+    f.querySelector(".cty").classList.toggle("one", zones.length < 2);
+    const regions = (await api("GET", `countries/${cc}`)).regions || {};
+    f.elements.region.innerHTML = `<option value="">– the whole country –</option>` + Object.entries(regions).map(([k, v]) =>
+      `<option value="${esc(k)}" ${k === region ? "selected" : ""}>${esc(v)}</option>`).join("");
+    f.querySelector(".regl").hidden = !Object.keys(regions).length;
+  };
+  return { html, wire };
+}
+
+// Setup > Weekly email: which day and hour it goes out (in the calendar's time zone, Setup > This calendar)
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const digestWhen = (s) => {
   const day = /^[0-6]$/.test(String(s.digest_day ?? "")) ? +s.digest_day : 0, hour = s.digest_hour != null && s.digest_hour !== "" ? +s.digest_hour : 18;
-  return `${WEEKDAYS[day]}s ${String(hour).padStart(2, "0")}:00${s.timezone && s.timezone !== "Africa/Johannesburg" ? ` (${s.timezone.split("/").pop().replace(/_/g, " ")} time)` : ""}`;
+  const tz = s.brand?.tz || s.timezone || "Africa/Johannesburg";
+  return `${WEEKDAYS[day]}s ${String(hour).padStart(2, "0")}:00${tz !== myTz() ? ` (${tzName(tz)} time)` : ""}`;
 };
 function digestTimeForm() {
   const s = state.setup.settings, day = s.digest_day != null && s.digest_day !== "" ? +s.digest_day : 0, hour = s.digest_hour != null && s.digest_hour !== "" ? +s.digest_hour : 18;
-  const mine = (() => { try { return Intl.DateTimeFormat().resolvedOptions().timeZone; } catch { return ""; } })();
-  const zones = [...new Set([s.timezone || "Africa/Johannesburg", "Africa/Johannesburg", mine, "Europe/London", "Europe/Amsterdam", "Asia/Dubai",
-    "Australia/Sydney", "Australia/Perth", "Pacific/Auckland", "America/New_York", "America/Chicago", "America/Los_Angeles", "America/Toronto"].filter(Boolean))];
   openDialog(`<form class="form" id="f"><h2>🕖 When the weekly email goes out</h2>
     <div class="two"><label>Day<select name="day">${WEEKDAYS.map((d, i) => `<option value="${i}" ${i === day ? "selected" : ""}>${d}</option>`).join("")}</select></label>
       <label>Time<select name="hour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === hour ? "selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("")}</select></label></div>
-    <label>Time zone<select name="timezone">${zones.map((z) => `<option ${z === (s.timezone || "Africa/Johannesburg") ? "selected" : ""}>${esc(z)}</option>`).join("")}</select></label>
-    <div class="meta">Sent in the evening, it covers the 7 days from the next day (e.g. Sunday 18:00 → Monday to Sunday).
+    <div class="meta">Times are ${esc(tzName(s.brand?.tz || s.timezone))} time – the calendar's time zone (Setup → This calendar → Edit).<br>Sent in the evening, it covers the 7 days from the next day (e.g. Sunday 18:00 → Monday to Sunday).
       Sent in the morning, it covers the 7 days from that day (e.g. Monday 07:00 → Monday to Sunday).</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
@@ -1146,11 +1183,14 @@ function digestTimeForm() {
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const fd = new FormData($("#f"));
-      submit(async () => { const r = await api("PUT", "setup/digest-time", { day: +fd.get("day"), hour: +fd.get("hour"), timezone: fd.get("timezone") });
+      submit(async () => { const r = await api("PUT", "setup/digest-time", { day: +fd.get("day"), hour: +fd.get("hour"), timezone: s.brand?.tz || s.timezone });
         submit.msg = `Weekly email: ${r.label}`; }, () => submit.msg);
     };
   });
 }
+
+// a stored time (UTC, e.g. updated_at) as a date in this phone's / PC's own time zone
+const localDay = (t) => t ? new Date(t.endsWith("Z") || t.includes("+") ? t : t + "Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
 
 // what the daily usage check-in sends, in words
 const usageText = (p) => [p.name ? `the name "${p.name}"` : "a random number", `version ${p.version}`,
@@ -1165,18 +1205,26 @@ function installsCard(list) {
   const live = list.filter((x) => Date.now() - Date.parse(x.last_seen) < 7 * 864e5).length;
   return `<div class="card"><h3>📊 Calendars using Family Calendar <small class="muted">${live} checked in this week · ${list.length} ever</small></h3>
     ${list.length ? list.map((x) => `<div class="row ${Date.now() - Date.parse(x.last_seen) > 7 * 864e5 ? "past" : ""}"><span><b>${x.name ? esc(x.name) : `<span class="muted">Anonymous</span>`}</b>
-      <br><small class="muted">${x.logins ?? "?"} logins · ${x.active_logins ?? "?"} used in 30 days · ${x.changes_30d ?? "?"} changes in 30 days · since ${esc(fmtShort(x.first_seen.slice(0, 10)))}</small></span>
+      <br><small class="muted">${x.logins ?? "?"} logins · ${x.active_logins ?? "?"} used in 30 days · ${x.changes_30d ?? "?"} changes in 30 days · since ${esc(localDay(x.first_seen))}</small></span>
       <small>${esc(x.version)}${cmp(x.version, latest) < 0 ? " ⚠ old" : ""} · ${ago(x.last_seen)}</small></div>`).join("")
       : `<p class="muted pad">No calendar has checked in yet.</p>`}</div>`;
 }
 
-function settingsForm(forUpdate = false) {
-  const s = state.setup.settings, b = s.brand;
+async function settingsForm(forUpdate = false) {
+  const s = state.setup.settings, b = s.brand, list = await countries();
+  const cf = countryFields(list, { country: s.countries.country, region: s.countries.region, timezone: b.tz });
+  let extras = [...s.countries.extras];
+  const extraChips = () => extras.map((cc) => `<span class="pill" style="--c:var(--muted)">${flagOf(cc)} ${esc(list.find((x) => x.code === cc)?.name || cc)}
+    <a href="#" data-xc="${cc}" title="Remove">✕</a></span>`).join(" ");
   openDialog(`<form class="form" id="f"><h2>This calendar</h2>
     <label>Family name<input name="family_name" value="${esc(s.family_name || "")}" placeholder="e.g. Smith"></label>
     <div class="two"><label>Calendar name<input name="site_name" value="${esc(s.site_name || "")}" placeholder="${esc(b.family ? b.family + " Calendar" : "Family Calendar")}"></label>
       <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
+    ${cf.html}
+    <label>Also show another country's public holidays <small class="muted">(for information – they don't change school days)</small>
+      <select name="addextra"><option value="">+ Add a country…</option>${list.map((x) => `<option value="${x.code}">${flagOf(x.code)} ${esc(x.name)}</option>`).join("")}</select></label>
+    <div id="extras">${extraChips()}</div>
     ${state.data.upstream ? `<label>Your GitHub copy <small class="muted">(for updates – the address of the copy Cloudflare made when you installed)</small>
       <input name="repo_url" value="${esc(s.repo_url ? "github.com/" + s.repo_url : "")}" placeholder="github.com/yourname/family-calendar"></label>
       <div class="meta">Once, after filling this in: <a href="#" id="add-updater">add the update job to your GitHub copy</a> (GitHub opens –
@@ -1190,6 +1238,11 @@ function settingsForm(forUpdate = false) {
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
+    const f = $("#f");
+    cf.wire(f);
+    f.elements.country.onchange = () => cf.wire(f, null, null);
+    f.elements.addextra.onchange = () => { const cc = f.elements.addextra.value; if (cc && !extras.includes(cc)) extras.push(cc); f.elements.addextra.value = ""; $("#extras").innerHTML = extraChips(); };
+    $("#extras").onclick = (e) => { const x = e.target.closest("[data-xc]"); if (!x) return; e.preventDefault(); extras = extras.filter((c) => c !== x.dataset.xc); $("#extras").innerHTML = extraChips(); };
     if (forUpdate) { const i = $("#f [name=repo_url]"); i?.focus(); i?.closest("label")?.classList.add("hl"); }
     $("#add-updater")?.addEventListener("click", (e) => {
       e.preventDefault();
@@ -1200,6 +1253,8 @@ function settingsForm(forUpdate = false) {
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const body = Object.fromEntries(new FormData($("#f")));
+      delete body.addextra;
+      body.extra_countries = extras.join(",");
       submit(async () => { await api("PUT", "setup/settings", body); location.reload(); }, "Saved");
     };
   });

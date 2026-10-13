@@ -1,5 +1,24 @@
 # What's new in Family Calendar
 
+## 1.0.14
+- Safer sign-in: changes are only accepted from the calendar's own pages, and new installs set the sign-in cookie so other websites can't use it.
+- Holiday planner: other entries in the holiday (e.g. a school camp) are never renamed; they show as fixed rows.
+- ⚠ sheet: ✅ / 🚫 on a requested stay updates that stay instead of adding a second one.
+- Weekly email and monthly backup: if one address fails, only that one is tried again (nobody gets it twice).
+- Smart inbox: an email it can't read is set aside after 3 tries instead of blocking the inbox.
+- "Approve all": an item that can't be added stays waiting with the reason; the rest go in.
+- Only children with a school (Setup → People) have school days – no "lifts!" warnings for toddlers.
+- Backups restore cleanly (into the same calendar or a fresh install).
+- Dates like "Last changed" show in your phone's / PC's own time zone.
+- Smaller fixes: one ✅ on a confirmed stay, no "OK, noted" button for view-only logins, no ⚠ "two places" for a pencilled-in plan.
+- 🌍 Country: the set-up wizard and Setup → This calendar ask for the country (guessed from your phone / PC). It sets the
+  public holidays (~200 countries, with states / provinces where holidays differ) and the time zone the weekly email, backups,
+  invites and the inbox use. Extra countries' holidays can be shown for information (they don't change school days).
+- New app icon: a house with the calendar as its window, in the family's own colours (drawn when an admin opens Setup);
+  the installed app is called by the calendar name (e.g. "Smith Calendar"), which fits under a desktop icon.
+- Dark mode: weekends are shaded more clearly.
+- Usage check-in: its own small card at the bottom of Setup; in the set-up wizard the "let the maker know" box starts ticked (untick it to stay anonymous).
+
 ## 1.0.13
 - Changes → Recently deleted: names as outlined pills in each person's colour (like the filter row), easier to read.
 - Changes tab: who made each change is shown in their own colour.

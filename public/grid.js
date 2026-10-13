@@ -29,12 +29,12 @@ const stayStatus = (e) => !isHelperStay(e) ? "" : e.status === "Tentative" ? ` <
   : e.status === "Unavailable" ? ` <span class="stay no">🚫 can't stay</span>` : ` <span class="stay ok">✅ confirmed</span>`;
 // ✏️ at the end of a pencilled-in entry (the location icon keeps the front), ✅ for 3 days once it's confirmed
 const pencilMark = (e) => CalendarRules.pencilled(state.data, e) ? ` <span class="pmark" title="Pencilled in – might not happen">✏️</span>`
-  : CalendarRules.justConfirmed(e) ? ` <span class="pmark" title="Confirmed by ${esc(e.confirmed_by || "")}">✅</span>` : "";
+  : CalendarRules.justConfirmed(e) && !isHelperStay(e) ? ` <span class="pmark" title="Confirmed by ${esc(e.confirmed_by || "")}">✅</span>` : "";
 // Setup type "Helper": au pair / nanny / gardener / house-sitter who can stay over with the kids or look after a house
 const helpers = () => CalendarRules.helpers(state.data);
 // the helpers free on `key` (not on 🌴 leave) as a pick-list for the one-tap buttons ("@" in data-quickstay / data-housesit = the picked one)
-function helperPick(key) {
-  const free = CalendarRules.helpersFree(state.data, key);
+function helperPick(key, first = null) {
+  const free = CalendarRules.helpersFree(state.data, key).sort((a, b) => (b === first) - (a === first));
   if (free.length < 2) return free.length ? `<b class="hpick" data-h="${esc(free[0])}">${esc(free[0])}</b>` : "";
   return `<select class="hpick" title="Who">${free.map((h) => `<option>${esc(h)}</option>`).join("")}</select>`;
 }
@@ -124,13 +124,14 @@ function gridMonth(m, days, where, cols, showClashes) {
     const rowCls = [wd === 0 || wd === 6 ? "we" : "", info.ph ? "ph" : "", key === today ? "today" : "", key < today ? "past" : ""].join(" ");
     // Family entries, birthdays and people without a column (e.g. an au pair) go in a strip across the whole day
     const strip = famOn ? info.items.filter((it) => !it.who.some((p) => all.includes(p)) && (it.kind === "birthday" || visible(it.who))) : [];
+    const phx = info.phx.map((x) => `<div class="gi phx">${x.flag} ${esc(x.name)}</div>`).join("");   // another country's holiday (information only)
     const clashes = showClashes ? clashesFor(key, wh, info) : [], maybes = showClashes ? CalendarRules.maybesFor(state.data, key) : [];
     html += `<div class="gd ${rowCls}" id="g-${key}" data-day="${key}" ${clashes.length || maybes.length ? `data-clash="${key}"` : ""}
-      title="${esc(info.ph || "")}" ${strip.length || info.ph ? `style="grid-row: span 2"` : ""}>
+      title="${esc(info.ph || "")}" ${strip.length || info.ph || phx ? `style="grid-row: span 2"` : ""}>
       <b>${n}</b><small>${DOW1[wd]}</small>${clashes.length ? `<span class="warn">⚠</span>` : maybes.length ? `<span class="maybe" title="Only if a pencilled-in plan goes ahead">❔</span>` : ""}</div>`;
-    if (strip.length || info.ph) {
+    if (strip.length || info.ph || phx) {
       html += `<div class="gf ${rowCls}" data-day="${key}">${info.ph ? `<div class="gi across phbar" style="grid-template-columns:repeat(${cols.length},minmax(0,1fr))">${   // like Family: the name under every column
-          Array(cols.length).fill(`<span>🇿🇦 ${esc(info.ph)}</span>`).join("")}</div>` : ""}${strip.map((it) => {
+          Array(cols.length).fill(`<span>${info.phFlag} ${esc(info.ph)}</span>`).join("")}</div>` : ""}${phx}${strip.map((it) => {
         const p = it.who.filter((x) => x !== "Family");
         if (it.kind === "event" && it.who.includes("Family")) return barHTML(it, key, n, null, "", cols.length);   // Family: label in every column
         return barHTML(it, key, n, null, p.length && !it.who.includes("Family") ? p.join(" & ") : "");
@@ -188,12 +189,12 @@ function sortingCard() {
   const when = (r) => r.start === r.end ? fmtDay(r.start) : `${fmtShort(r.start)} – ${fmtShort(r.end)}`;
   const noted = done.length ? `<details class="noted"><summary>👍 Noted (${done.length}) – still marked ⚠ on the calendar</summary>
     ${done.map((r) => `<div class="srow" data-clash="${r.start}"><b>${when(r)}</b><span>${esc(r.msg)} <small class="muted">· noted by ${esc(r.by || "")}</small></span>
-      <button type="button" class="ackbtn" data-unack="${state.sortRuns.indexOf(r)}">Undo</button></div>`).join("")}</details>` : "";
+      ${state.data.me.canEditAll ? `<button type="button" class="ackbtn" data-unack="${state.sortRuns.indexOf(r)}">Undo</button>` : "<span></span>"}</div>`).join("")}</details>` : "";
   if (!runs.length && !nudges.length) return `<div class="sorting ok">✅ Nothing needs sorting in the next 8 weeks${ifList}${noted}</div>`;
   return `<details class="sorting" id="sorting" ${load("sortingOpen") === false ? "" : "open"}>
     <summary>⚠ Needs sorting <span class="warn">${runs.length + nudges.length}</span> <small class="muted">next 8 weeks</small></summary>
     ${nudgeRows}${runs.map((r) => `<div class="srow" data-clash="${r.start}"><b>${when(r)}</b><span>${esc(r.msg)}</span>
-      <button type="button" class="ackbtn" data-ack="${state.sortRuns.indexOf(r)}" title="Hide from this list – the ⚠ stays on the calendar">👍 OK, noted</button></div>`).join("")}
+      ${state.data.me.canEditAll ? `<button type="button" class="ackbtn" data-ack="${state.sortRuns.indexOf(r)}" title="Hide from this list – the ⚠ stays on the calendar">👍 OK, noted</button>` : "<span></span>"}</div>`).join("")}
     ${ifList}${noted}</details>`;
 }
 
@@ -208,9 +209,12 @@ function dayWarnings(key) {
   if (!clashes.length) return maybes.length ? `<div class="dmaybe">${maybes.map((c) => `<div data-clash="${key}">❔ ${esc(c)}</div>`).join("")}</div>` : "";
   const alone = KIDS().filter((k) => homes().includes(wh[k]?.loc) &&
     !Object.keys(wh).some((p) => adults().includes(p) && wh[p].loc === wh[k].loc));   // nobody at all, not even requested
+  const asked = (k) => state.data.events.find((e) => e.status === "Tentative" && e.location && e.start <= key && e.end >= key && whoList(e.who).includes(k)
+    && whoList(e.who).some((p) => helpers().includes(p)))?.who;
+  const pickFor = (k) => helperPick(key, whoList(asked(k) || "").find((p) => helpers().includes(p)));
   const pick = helperPick(key);
   const buttons = canAdd() ? (pick ? alone.map((k) =>
-    `<span class="qstay">${pick} with ${esc(k)}:
+    `<span class="qstay">${pickFor(k)} with ${esc(k)}:
       <button type="button" data-quickstay="@|${esc(k)}|${key}|Tentative">⏳ Requested</button>
       <button type="button" data-quickstay="@|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
       <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button></span>`).join("") : alone.length ? allOnLeave(key) : "")
@@ -243,7 +247,15 @@ function uberForm(kid, key) {
   });
 }
 
+// an existing stay for helper+kid (or the helper house-sitting at h) covering `key`, e.g. the ⏳ requested one
+const existingStay = (helper, kid, key, h = null) => state.data.events.find((e) => e.location && e.start <= key && e.end >= key && e.status !== "Cancelled"
+  && whoList(e.who).includes(helper) && (kid ? whoList(e.who).includes(kid) : e.location === h));
+const setStatus = (e, status, msg) => submit(() => api("PUT", `events/${e.id}`, { ...e, who: whoList(e.who), status, loaded_at: e.updated_at || "" }), msg);
+
 function quickStay(helper, kid, key, status) {
+  const label = { Tentative: "requested", Unavailable: "can't stay" }[status] || "confirmed";
+  const was = existingStay(helper, kid, key);
+  if (was) return setStatus(was, status, `${helper} staying with ${kid}: ${label}`);   // ⏳ requested -> ✅ / 🚫: the same entry
   const end = aloneUntil(kid, key);
   // "Can't" on a school day: show the day again so the 🚕 Uber option is right there
   const next = () => { if (status === "Unavailable" && isSchoolDay(kid, key)) clashSheet(key); };
@@ -340,14 +352,17 @@ const staysOf = (kid, from, to) => state.data.events.filter((e) => e.location &&
 function holidayPlan(h) {
   const kid = h.child, nights = daysIn(h.start, h.end), places = activePlaces();
   const usual = CalendarRules.homeOf(state.data, kid) || places[0]?.key;
-  const mine = (e) => whoList(e.who).length === 1 && whoList(e.who)[0] === kid;   // entries only for this child can be changed here
+  // the planner's own stretches ("<kid> at <place>[ – note]", for this child alone) can be changed here; anything else
+  // (a school camp, a trip with others) shows as a fixed row and is never renamed
+  const mine = (e) => whoList(e.who).length === 1 && whoList(e.who)[0] === kid && !e.series
+    && (e.title === stayTitle(kid, e.location, "") || e.title.startsWith(stayTitle(kid, e.location, "") + " – "));
   const existing = staysOf(kid, h.start, h.end).sort((a, b) => a.start.localeCompare(b.start));
   const others = KIDS().filter((k) => k !== kid && state.data.schoolHolidays.some((x) => x.child === k && x.start <= h.end && x.end >= h.start));
   const can = canAdd();
   const placeSel = (cur) => `<select data-p>${places.map((p) => `<option value="${esc(p.key)}" ${p.key === cur ? "selected" : ""}>${p.icon} ${esc(p.label)}</option>`).join("")}</select>`;
   const row = (r) => r.fixed
     ? `<div class="vline prow fixed" data-fixed="${r.id}"><span>${LOC()[r.location]?.icon || ""} ${esc(r.title)}</span>
-        <small class="muted">${fmtShort(r.start)} – ${fmtShort(r.end)} · with ${esc(whoList(r.who).filter((p) => p !== kid).join(", "))} – change it on the entry</small></div>`
+        <small class="muted">${fmtShort(r.start)} – ${fmtShort(r.end)}${whoList(r.who).length > 1 ? ` · with ${esc(whoList(r.who).filter((p) => p !== kid).join(", "))}` : ""} – change it on the entry</small></div>`
     : `<div class="vline prow" ${r.id ? `data-id="${r.id}"` : ""}>${placeSel(r.location)}
         <label>from<input type="date" data-f value="${r.start}"></label><label>to<input type="date" data-t value="${r.end}"></label>
         <span class="vmove"><label title="Pencilled in – might not happen"><input type="checkbox" data-pen ${r.status === "Tentative" ? "checked" : ""}> ✏️</label>
@@ -394,8 +409,9 @@ function holidayPlan(h) {
       const want = rows().map(read);
       const bad = want.find((r) => !r.start || !r.end || r.end < r.start);
       if (bad) return void ($("#f .err").textContent = "Each stretch needs a from and a to date (to on or after from).");
-      const seen = new Map();
+      const seen = new Map(fixedDays.map((d) => [d, "fixed"]));
       for (const r of want) for (const d of daysIn(r.start, r.end)) {
+        if (seen.get(d) === "fixed") return void ($("#f .err").textContent = `${fmtDay(d)} is already covered by another entry (shown above) – change the stretch or that entry.`);
         if (seen.has(d)) return void ($("#f .err").textContent = `Two stretches both cover ${fmtDay(d)} – change one of them.`);
         seen.set(d, r);
       }
@@ -476,6 +492,8 @@ function emptyUntil(h, key) {
   return end;
 }
 function houseSit(helper, h, key, status) {
+  const was = existingStay(helper, null, key, h);
+  if (was) return setStatus(was, status, `${helper} house-sitting: ${{ Tentative: "requested", Unavailable: "can't" }[status] || "confirmed"}`);
   const end = emptyUntil(h, key), pl = LOC()[h];
   submit(() => api("POST", "events", { title: `${helper} house-sitting`, start: key, end, who: [helper], category: "Household", location: h, status }),
     `${helper} house-sitting ${pl.label} ${fmtShort(key)}${end !== key ? " – " + fmtShort(end) : ""} (${{ Tentative: "requested", Unavailable: "can't" }[status] || "confirmed"})`);
