@@ -27,6 +27,9 @@ const adults = () => CalendarRules.adults(state.data);
 const isHelperStay = (e) => e.location && whoList(e.who).some((p) => helpers().includes(p));
 const stayStatus = (e) => !isHelperStay(e) ? "" : e.status === "Tentative" ? ` <span class="stay req">⏳ requested</span>`
   : e.status === "Unavailable" ? ` <span class="stay no">🚫 can't stay</span>` : ` <span class="stay ok">✅ confirmed</span>`;
+// ✏️ at the end of a pencilled-in entry (the location icon keeps the front), ✅ for 3 days once it's confirmed
+const pencilMark = (e) => CalendarRules.pencilled(state.data, e) ? ` <span class="pmark" title="Pencilled in – might not happen">✏️</span>`
+  : CalendarRules.justConfirmed(e) ? ` <span class="pmark" title="Confirmed by ${esc(e.confirmed_by || "")}">✅</span>` : "";
 // Setup type "Helper": au pair / nanny / gardener / house-sitter who can stay over with the kids or look after a house
 const helpers = () => CalendarRules.helpers(state.data);
 // the helpers free on `key` (not on 🌴 leave) as a pick-list for the one-tap buttons ("@" in data-quickstay / data-housesit = the picked one)
@@ -95,10 +98,11 @@ function barHTML(it, key, n, person, label, repeat = 0) {
   const icon = e.location && LOC()[e.location] && e.status !== "Unavailable" ? `<span class="li">${LOC()[e.location].icon}</span>` : "";
   let title = e.title;
   if (e.location && person) title = title.replace(new RegExp(`^${person}\\s+(at\\s+(the\\s+)?)?`, "i"), "");   // "Emma at Beach House" -> "Beach House"
-  const cls = ["gi", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
+  const pen = CalendarRules.pencilled(state.data, e);
+  const cls = ["gi", pen ? "pencil" : "", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", !pen && ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
                multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : ""].join(" ");
   const who = label ? `<b>${esc(label)}:</b> ` : visit && !title.toLowerCase().startsWith(visitor.toLowerCase()) ? `${esc(visitor)}: ` : "";
-  const text = `${icon}${who}${esc(title)}${stayStatus(e)}`;
+  const text = `${icon}${who}${esc(title)}${stayStatus(e)}${pencilMark(e)}`;
   const body = repeat ? Array(repeat).fill(`<span>${text}</span>`).join("") : text;
   return `<div class="${cls}${repeat ? " across" : ""}" style="--c:${COLORS[visit ? visitor : person || whoList(e.who)[0]]}${repeat ? `;grid-template-columns:repeat(${repeat},minmax(0,1fr))` : ""}" data-ev="${e.id}">${body}</div>`;   // label on every day, so each square makes sense on its own
 }
@@ -120,10 +124,10 @@ function gridMonth(m, days, where, cols, showClashes) {
     const rowCls = [wd === 0 || wd === 6 ? "we" : "", info.ph ? "ph" : "", key === today ? "today" : "", key < today ? "past" : ""].join(" ");
     // Family entries, birthdays and people without a column (e.g. an au pair) go in a strip across the whole day
     const strip = famOn ? info.items.filter((it) => !it.who.some((p) => all.includes(p)) && (it.kind === "birthday" || visible(it.who))) : [];
-    const clashes = showClashes ? clashesFor(key, wh, info) : [];
-    html += `<div class="gd ${rowCls}" id="g-${key}" data-day="${key}" ${clashes.length ? `data-clash="${key}"` : ""}
+    const clashes = showClashes ? clashesFor(key, wh, info) : [], maybes = showClashes ? CalendarRules.maybesFor(state.data, key) : [];
+    html += `<div class="gd ${rowCls}" id="g-${key}" data-day="${key}" ${clashes.length || maybes.length ? `data-clash="${key}"` : ""}
       title="${esc(info.ph || "")}" ${strip.length || info.ph ? `style="grid-row: span 2"` : ""}>
-      <b>${n}</b><small>${DOW1[wd]}</small>${clashes.length ? `<span class="warn">⚠</span>` : ""}</div>`;
+      <b>${n}</b><small>${DOW1[wd]}</small>${clashes.length ? `<span class="warn">⚠</span>` : maybes.length ? `<span class="maybe" title="Only if a pencilled-in plan goes ahead">❔</span>` : ""}</div>`;
     if (strip.length || info.ph) {
       html += `<div class="gf ${rowCls}" data-day="${key}">${info.ph ? `<div class="gi across phbar" style="grid-template-columns:repeat(${cols.length},minmax(0,1fr))">${   // like Family: the name under every column
           Array(cols.length).fill(`<span>🇿🇦 ${esc(info.ph)}</span>`).join("")}</div>` : ""}${strip.map((it) => {
@@ -172,16 +176,25 @@ function sortingCard() {
   if (state.data.me.role === "limited") return "";
   const runs = needsSorting(), done = needsSorting(8, true);
   state.sortRuns = [...runs, ...done];
+  // ✏️ still pencilled in, starting within 2 weeks: on or not?
+  const nudges = CalendarRules.pencilNudges(state.data, todayISO()).filter((e) => visible(whoList(e.who)));
+  const nudgeRows = nudges.map((e) => `<div class="srow"><b>${e.start === e.end ? fmtDay(e.start) : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</b>
+    <span data-ev="${e.id}" style="cursor:pointer">✏️ ${esc(whoList(e.who).join(" & "))}: ${esc(CalendarRules.plainTitle(e.title))} is still pencilled in – on or not?</span>
+    ${canEditEvent(e) ? `<span class="vmove"><button type="button" class="ackbtn" data-pon="${e.id}">✅ It's on</button>
+      <button type="button" class="ackbtn" data-poff="${e.id}">🗑 Not happening</button></span>` : "<span></span>"}</div>`).join("");
+  const ifs = CalendarRules.clashRuns(state.data, todayISO(), iso(addDays(new Date(), 8 * 7)), false, true);
+  const ifList = ifs.length ? `<details class="noted"><summary>❔ If pencilled-in plans go ahead (${ifs.length})</summary>
+    ${ifs.map((r) => `<div class="srow" data-clash="${r.start}"><b>${r.start === r.end ? fmtDay(r.start) : `${fmtShort(r.start)} – ${fmtShort(r.end)}`}</b><span>${esc(r.msg)}</span><span></span></div>`).join("")}</details>` : "";
   const when = (r) => r.start === r.end ? fmtDay(r.start) : `${fmtShort(r.start)} – ${fmtShort(r.end)}`;
   const noted = done.length ? `<details class="noted"><summary>👍 Noted (${done.length}) – still marked ⚠ on the calendar</summary>
     ${done.map((r) => `<div class="srow" data-clash="${r.start}"><b>${when(r)}</b><span>${esc(r.msg)} <small class="muted">· noted by ${esc(r.by || "")}</small></span>
       <button type="button" class="ackbtn" data-unack="${state.sortRuns.indexOf(r)}">Undo</button></div>`).join("")}</details>` : "";
-  if (!runs.length) return `<div class="sorting ok">✅ Nothing needs sorting in the next 8 weeks${noted}</div>`;
+  if (!runs.length && !nudges.length) return `<div class="sorting ok">✅ Nothing needs sorting in the next 8 weeks${ifList}${noted}</div>`;
   return `<details class="sorting" id="sorting" ${load("sortingOpen") === false ? "" : "open"}>
-    <summary>⚠ Needs sorting <span class="warn">${runs.length}</span> <small class="muted">next 8 weeks</small></summary>
-    ${runs.map((r) => `<div class="srow" data-clash="${r.start}"><b>${when(r)}</b><span>${esc(r.msg)}</span>
+    <summary>⚠ Needs sorting <span class="warn">${runs.length + nudges.length}</span> <small class="muted">next 8 weeks</small></summary>
+    ${nudgeRows}${runs.map((r) => `<div class="srow" data-clash="${r.start}"><b>${when(r)}</b><span>${esc(r.msg)}</span>
       <button type="button" class="ackbtn" data-ack="${state.sortRuns.indexOf(r)}" title="Hide from this list – the ⚠ stays on the calendar">👍 OK, noted</button></div>`).join("")}
-    ${noted}</details>`;
+    ${ifList}${noted}</details>`;
 }
 
 // ---------- ⚠ on a day in Upcoming, with one-tap "<helper> requested / confirmed" when a kid is home alone
@@ -191,8 +204,8 @@ function dayWarnings(key) {
   const info = buildDays(key, key)[key];
   state.filter = saved;
   const wh = whereIndex(key, key)[key];
-  const clashes = clashesFor(key, wh, info);
-  if (!clashes.length) return "";
+  const clashes = clashesFor(key, wh, info), maybes = CalendarRules.maybesFor(state.data, key);
+  if (!clashes.length) return maybes.length ? `<div class="dmaybe">${maybes.map((c) => `<div data-clash="${key}">❔ ${esc(c)}</div>`).join("")}</div>` : "";
   const alone = KIDS().filter((k) => homes().includes(wh[k]?.loc) &&
     !Object.keys(wh).some((p) => adults().includes(p) && wh[p].loc === wh[k].loc));   // nobody at all, not even requested
   const pick = helperPick(key);
@@ -203,7 +216,8 @@ function dayWarnings(key) {
       <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button></span>`).join("") : alone.length ? allOnLeave(key) : "")
     + alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay"><button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")
     + houseButtons(key) : "";
-  return `<div class="dwarn">${clashes.map((c) => `<div data-clash="${key}">⚠ ${esc(c)}</div>`).join("")}${buttons}</div>`;
+  return `<div class="dwarn">${clashes.map((c) => `<div data-clash="${key}">⚠ ${esc(c)}</div>`).join("")}${buttons}</div>`
+    + (maybes.length ? `<div class="dmaybe">${maybes.map((c) => `<div data-clash="${key}">❔ ${esc(c)}</div>`).join("")}</div>` : "");
 }
 
 // one tap: "<helper> staying with <child>" for the whole stretch they'd be alone from this day
@@ -400,6 +414,7 @@ function clashSheet(key) {
     .map((p) => `${p.icon} ${p.kind === "school" ? "At school" : p.kind === "friend" ? "At a friend's" : p.kind === "away" ? "Away" : esc(p.label)}: <b>${esc(list(p.key))}</b>`).join("<br>");
   openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h2>
     ${clashes.length ? `<div class="clashes">${clashes.map((c) => `<div>⚠ ${esc(c)}${ackBy(key, c) ? ` <small class="muted">· 👍 noted by ${esc(ackBy(key, c))}</small>` : ""}</div>`).join("")}</div>` : `<p class="muted">No clashes 👍</p>`}
+    ${CalendarRules.maybesFor(state.data, key).map((c) => `<div class="dmaybe">❔ ${esc(c)}</div>`).join("")}
     <div class="meta">${placesTxt}</div>
     ${canAdd() && alone.length ? `<div class="dwarn" style="border-radius:10px;border:0">${helperPick(key) ? alone.map((k) =>
       `<span class="qstay">${helperPick(key)} with ${esc(k)}:
@@ -425,6 +440,8 @@ document.addEventListener("click", (e) => {
   const cell = e.target.closest("[data-cell]");
   const ack = e.target.closest("[data-ack],[data-unack]");
   if (ack) { e.stopPropagation(); return ackRun(ack); }
+  const pon = e.target.closest("[data-pon]"), poff = e.target.closest("[data-poff]");
+  if (pon || poff) { e.stopPropagation(); const ev = state.data.events.find((x) => x.id == (pon || poff).dataset[pon ? "pon" : "poff"]); return pon ? confirmEvent(ev) : deleteEvent(ev); }
   const ub = e.target.closest("[data-uber]");
   if (ub) { e.stopPropagation(); const [k, key] = ub.dataset.uber.split("|"); return uberForm(k, key); }
   const hs = e.target.closest("[data-housesit]"), hn = e.target.closest("[data-housenot]");

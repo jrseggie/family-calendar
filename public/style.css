@@ -244,6 +244,13 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .gi.open + .gi:not(.cont) { margin-top: 8px; }   /* a gap between separate entries in one square */
 .gi:not(.multi) { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 35%, transparent); }   /* single-day entries get an outline */
 .gi.tent { font-style: italic; opacity: .8; }
+/* ✏️ pencilled in: dashed outline, lighter fill */
+.gi.pencil { background: color-mix(in srgb, var(--c) 7%, transparent); border-left-style: dashed; box-shadow: none;
+  outline: 1px dashed color-mix(in srgb, var(--c) 55%, transparent); outline-offset: -1px; }
+.pmark { font-size: .9em; }
+.gd .maybe { display: inline-block; margin-top: 2px; font-size: 11px; opacity: .75; }
+.dmaybe { font-size: 13px; color: var(--muted); padding: 4px 12px; }
+.dmaybe > div { cursor: pointer; }
 /* 🌴 on leave: greyed out and striped */
 .gi.leave { color: var(--muted); border-left-color: color-mix(in srgb, var(--c) 45%, var(--muted));
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 6px, transparent 6px 11px); }

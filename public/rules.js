@@ -71,7 +71,32 @@
     return where;
   }
 
+  // ✏️ pencilled in (might not happen): a Tentative entry - except a helper's requested stay ("asked, not confirmed")
+  const pencilled = (data, e) => e.status === "Tentative" && !(e.location && whoList(e.who).some((p) => helpers(data).includes(p)));
+  const pencilsOn = (data, key) => data.events.filter((e) => on(e, key) && pencilled(data, e));
+  const plainTitle = (t) => String(t || "").replace(/\s*\?+\s*$/, "");
+  // ⚠ things to sort on `key` - pencilled-in entries left out (they only give "If … goes ahead" notes, maybesFor)
   function clashesFor(data, key) {
+    const pen = pencilsOn(data, key);
+    return baseClashes(pen.length ? { ...data, events: data.events.filter((e) => !pen.includes(e)) } : data, key);
+  }
+  // ❔ what WOULD need sorting if a pencilled-in entry goes ahead: "If Beach trip goes ahead: Emma is at the … with no adult there"
+  function maybesFor(data, key) {
+    const pen = pencilsOn(data, key);
+    if (!pen.length) return [];
+    const without = { ...data, events: data.events.filter((e) => !pen.includes(e)) }, now = new Set(baseClashes(without, key)), out = [];
+    for (const e of pen) for (const m of baseClashes({ ...without, events: [...without.events, { ...e, status: "Confirmed" }] }, key)) {
+      if (!now.has(m)) out.push(`If ${plainTitle(e.title)} goes ahead: ${m}`);
+    }
+    return [...new Set(out)];
+  }
+  // pencilled-in entries starting within `days` days of `today`: "still pencilled in – on or not?"
+  const pencilNudges = (data, today, days = 14) => data.events.filter((e) => pencilled(data, e) && e.start >= today && e.start <= addDays(today, days))
+    .sort((a, b) => a.start.localeCompare(b.start));
+  // ✅ confirmed in the last 3 days (shows next to the title, then drops off)
+  const justConfirmed = (e, now = new Date()) => !!e.confirmed_at && e.status !== "Tentative" && now.getTime() - Date.parse(e.confirmed_at) < 3 * 864e5;
+
+  function baseClashes(data, key) {
     const where = whereOn(data, key), grown = adults(data), children = kids(data), LOC = places(data), out = [];
     const at = (house) => Object.keys(where).filter((p) => where[p].loc === house);
     for (const house of homePlaces(data)) {
@@ -134,10 +159,11 @@
   }
   // every ⚠ from..to as runs { msg, start, end, days, by }; the same warning on following days (weekends may sit in
   // between) is one run. acked=false: only warnings nobody marked "OK, noted"; true: only the noted ones.
-  function clashRuns(data, from, to, acked = false) {
+  // maybe = true: the "If … goes ahead" notes (maybesFor) instead
+  function clashRuns(data, from, to, acked = false, maybe = false) {
     const runs = [], open = {};
     for (let key = from; key <= to; key = addDays(key, 1)) {
-      for (const msg of clashesFor(data, key)) {
+      for (const msg of (maybe ? maybesFor : clashesFor)(data, key)) {
         const ack = isAcked(data, key, msg);
         if (!!ack !== acked) continue;
         const r = open[msg];
@@ -188,5 +214,5 @@
   const expiries = (fields) => (fields || []).filter((f) => !f.hide && EXPIRY_LABEL.test(f.k || ""))
     .map((f) => ({ k: f.k, date: expiryDate(f.v) })).filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
-  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked };
+  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle };
 })();

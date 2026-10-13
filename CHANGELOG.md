@@ -1,5 +1,13 @@
 # What's new in Family Calendar
 
+## 1.0.11
+- ✏️ Pencilled-in plans (tick "Pencilled in – might not happen"): ✏️ at the end and a dashed outline on the Month grid, "maybe" in lists
+  and the weekly email. "✅ It's on" / "🗑 Not happening" on the entry; once confirmed it shows ✅ for 3 days (who and when are kept).
+- Pencilled-in plans don't raise ⚠ – they give a lighter "❔ If … goes ahead: …" note instead (on the date, on Upcoming, in the email).
+- Needs sorting nudges anything still pencilled in 2 weeks before it starts: on or not?
+- Weekly email: "✅ Confirmed since last week" and "❔ If pencilled-in plans go ahead".
+- The inbox reader pencils in dates marked TBC / provisional.
+
 ## 1.0.10
 - Usage check-in: once a day the calendar tells the Family Calendar maker it's in use (a random number, the version, how many logins
   are used) – with the calendar's name only if you tick the box in the set-up wizard / choose "Yes" on Setup → This calendar. "Off" sends nothing.

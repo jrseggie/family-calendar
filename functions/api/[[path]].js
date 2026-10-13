@@ -340,8 +340,11 @@ async function events(request, env, u, id) {
     const rec = cleanEvent(body, people);
     if (!canWriteEvent(u, split(rec.who))) deny("You can only use the people you can see");
     Object.assign(rec, { updated_by: u.name, updated_at: now() });
+    // ✏️ -> ✅: note who confirmed it and when (shows ✅ for 3 days, and in the weekly email); pencilled in again: cleared
+    if (before.status === "Tentative" && rec.status === "Confirmed") Object.assign(rec, { confirmed_at: now(), confirmed_by: u.name });
+    if (rec.status === "Tentative" && before.confirmed_at) Object.assign(rec, { confirmed_at: null, confirmed_by: null });
     await update(env, "events", id, rec);
-    await log(env, u, "Edited event", describe(rec) + (describe(before) !== describe(rec) ? `  (was: ${describe(before)})` : ""));
+    await log(env, u, rec.confirmed_at ? "Confirmed event" : "Edited event", describe(rec) + (describe(before) !== describe(rec) ? `  (was: ${describe(before)})` : ""));
     return json({ ok: true });
   }
   return fail(405, "Method not allowed");

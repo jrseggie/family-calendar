@@ -10,7 +10,7 @@ import { buildDigest, weekAfter } from "../mail/src/digest.js";
 
 const R = globalThis.CalendarRules;
 // the test family = how the Smiths are set up on the Setup tab (children, boarder, usual house, places)
-const people = ["Emma", "Leo", "Anna", "Tom", "Nomsa"].map((name, i) => ({ name, type: "household", active: 1, grid_column: name === "Nomsa" ? 0 : 1, family: name === "Nomsa" ? 0 : 1, color: "#123456", sort: i,
+const people = ["Emma", "Leo", "Anna", "Tom", "Nomsa"].map((name, i) => ({ name, type: name === "Nomsa" ? "helper" : "household", active: 1, grid_column: name === "Nomsa" ? 0 : 1, family: name === "Nomsa" ? 0 : 1, color: "#123456", sort: i,
     child: ["Emma", "Leo"].includes(name) ? 1 : 0, boards: name === "Leo" ? 1 : 0, home: name === "Nomsa" ? null : "town" }))
   .concat([{ name: "Family", type: "group", active: 1, grid_column: 0, color: "#495057" }, { name: "Mark", type: "tracked", active: 1, grid_column: 0, color: "#c92a2a" }]);
 let nextId = 1;
@@ -52,6 +52,26 @@ test("rules: Nomsa requested -> 'asked, not confirmed'; confirmed -> no warning;
   assert.deepEqual(R.clashesFor(data([away, stay("Tentative")]), "2026-10-14"), ["Nomsa asked to stay with Emma – not confirmed yet"]);
   assert.deepEqual(R.clashesFor(data([away, stay("Confirmed")]), "2026-10-14"), []);
   assert.match(R.clashesFor(data([away, stay("Unavailable")]), "2026-10-14")[0], /Nomsa can't stay/);
+});
+test("pencilled in: no ⚠ but an 'If … goes ahead' note; nudged 2 weeks before; ✅ for 3 days; the email lists them", () => {
+  const trip = ev("2026-10-14", "2026-10-14", "Anna, Tom", "beach?", { location: "beach", status: "Tentative" });
+  assert.deepEqual(R.clashesFor(data([trip]), "2026-10-14"), []);
+  assert.deepEqual(R.maybesFor(data([trip]), "2026-10-14"), ["If beach goes ahead: Emma is at the Town House with no adult there – it's a school day (lifts!)"]);
+  assert.equal(R.clashesFor(data([{ ...trip, status: "Confirmed" }]), "2026-10-14").length, 1);   // confirmed: a real ⚠
+  assert.deepEqual(R.maybesFor(data([{ ...trip, status: "Confirmed" }]), "2026-10-14"), []);
+  const stay = ev("2026-10-14", "2026-10-14", "Emma, Nomsa", "Nomsa staying with Emma", { location: "town", status: "Tentative" });
+  assert.equal(R.pencilled(data([]), stay), false);   // a helper's requested stay isn't "pencilled in"
+  assert.deepEqual(R.pencilNudges(data([trip]), "2026-10-01").map((e) => e.title), ["beach?"]);   // within 2 weeks
+  assert.deepEqual(R.pencilNudges(data([trip]), "2026-09-20"), []);
+  const done = { ...trip, title: "beach", status: "Confirmed", confirmed_at: "2026-10-10T08:00:00Z", confirmed_by: "Anna" };
+  assert.equal(R.justConfirmed(done, new Date("2026-10-12T08:00:00Z")), true);
+  assert.equal(R.justConfirmed(done, new Date("2026-10-14T08:00:00Z")), false);   // after 3 days the ✅ drops off
+  const mail = buildDigest({ ...data([trip]), recurring: [] }, "2026-10-12", "2026-10-18", "https://example.com", { sentOn: "2026-10-11" });
+  assert.match(mail.text, /beach\? ✏️ \(maybe\)/);
+  assert.match(mail.text, /❔ IF PENCILLED-IN PLANS GO AHEAD/);
+  assert.match(mail.text, /still pencilled in – on or not\?/);
+  const mail2 = buildDigest({ ...data([done]), recurring: [] }, "2026-10-12", "2026-10-18", "https://example.com", { sentOn: "2026-10-11" });
+  assert.match(mail2.text, /✅ CONFIRMED SINCE LAST WEEK\s+- Anna & Tom: beach \(Wed 14 Oct\) – confirmed by Anna/);
 });
 test("rules: an Uber (Transport) entry replaces '(lifts!)'", () => {
   const d = data([ev("2026-10-14", "2026-10-14", "Anna, Tom", "beach", { location: "beach" }),
@@ -285,7 +305,7 @@ test("usage check-in: anonymous by default, the name only when chosen, nothing w
   assert.equal(await usagePayload(env, now), null);
   db.exec("UPDATE settings SET value = 'anonymous' WHERE key = 'usage_share'");
   const sent = [], realFetch = globalThis.fetch;
-  globalThis.fetch = async (url, o) => { sent.push([url, JSON.parse(o.body)]); return new Response(null, { status: 204 }); };
+  globalThis.fetch = async (req) => { sent.push([req.url, await req.json()]); return new Response(null, { status: 204 }); };
   try {
     assert.equal(await sendUsage(env, now), 204);
     assert.equal(await sendUsage(env, new Date("2026-10-12T20:00:00Z")), null);   // not again the same day

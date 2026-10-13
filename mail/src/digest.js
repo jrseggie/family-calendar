@@ -62,6 +62,14 @@ export function buildDigest(data, from, to, site, opts = {}) {
     days.push({ key, ph, breaks, backs, bdays, evs });
   }
   const runs = clashRuns(data, from, to);
+  const sentOn = opts.sentOn || iso(addDays(parse(from), -1));
+  // ✏️ still pencilled in and starting within 2 weeks; ❔ what would need sorting if pencilled-in plans go ahead; ✅ confirmed this week
+  const nudges = clashRules.pencilNudges(data, sentOn).map((e) => `✏️ ${whoList(e.who).join(" & ")}: ${clashRules.plainTitle(e.title)} (${nice(e.start)}) is still pencilled in – on or not?`);
+  const ifs = clashRules.clashRuns(data, from, to, false, true);
+  const since = iso(addDays(parse(sentOn), -7));
+  const confirmed = data.events.filter((e) => e.confirmed_at && e.status !== "Tentative" && e.confirmed_at.slice(0, 10) > since && e.end >= sentOn)
+    .sort((a, b) => a.start.localeCompare(b.start))
+    .map((e) => `${whoList(e.who).join(" & ")}: ${e.title} (${e.start === e.end ? nice(e.start) : short(e.start) + " – " + short(e.end)}) – confirmed by ${e.confirmed_by || "?"}, ${nice(e.confirmed_at.slice(0, 10))}`);
   // 🌴 who's on leave at some point that week
   const leave = data.events.filter((e) => e.category === "Leave" && e.status !== "Cancelled" && e.start <= to && e.end >= from)
     .sort((a, b) => a.start.localeCompare(b.start))
@@ -71,17 +79,20 @@ export function buildDigest(data, from, to, site, opts = {}) {
     const who = whoList(e.who);
     const loc = e.location && LOC[e.location] ? LOC[e.location].icon + " " : "";
     const range = e.end !== e.start ? ` (${e.start < from ? "since " + short(e.start) + ", " : ""}to ${short(e.end)})` : "";
-    return { text: `${e.important ? "⭐ " : ""}${who.join(" & ")}: ${loc}${e.title}${e.status === "Tentative" ? " (not confirmed)" : ""}${range}`,
+    const pen = clashRules.pencilled(data, e);
+    return { text: `${e.important ? "⭐ " : ""}${who.join(" & ")}: ${loc}${e.title}${pen ? " ✏️ (maybe)" : e.status === "Tentative" ? " (not confirmed)" : ""}${range}`,
              html: `<span style="color:${color[who[0]] || "#495057"};font-weight:700">${esc(who.join(" & "))}</span> ${loc}${esc(e.title)}`
-               + `${e.status === "Tentative" ? ' <i style="color:#868e96">(not confirmed)</i>' : ""}<span style="color:#868e96">${esc(range)}</span>`,
+               + `${pen ? ' ✏️ <i style="color:#868e96">(maybe)</i>' : e.status === "Tentative" ? ' <i style="color:#868e96">(not confirmed)</i>' : ""}<span style="color:#868e96">${esc(range)}</span>`,
              important: !!e.important };
   };
 
   // ---- plain text
   let text = `The week ahead: ${short(from)} – ${short(to)}\n\n`;
-  if (runs.length) {
-    text += "⚠ NEEDS SORTING\n" + runs.map((r) => `- ${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}: ${r.msg}`).join("\n") + "\n\n";
+  if (runs.length || nudges.length) {
+    text += "⚠ NEEDS SORTING\n" + [...nudges.map((n) => `- ${n}`), ...runs.map((r) => `- ${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}: ${r.msg}`)].join("\n") + "\n\n";
   }
+  if (confirmed.length) text += "✅ CONFIRMED SINCE LAST WEEK\n" + confirmed.map((c) => `- ${c}`).join("\n") + "\n\n";
+  if (ifs.length) text += "❔ IF PENCILLED-IN PLANS GO AHEAD\n" + ifs.map((r) => `- ${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}: ${r.msg}`).join("\n") + "\n\n";
   if (expiring.length) text += "⏳ RENEW SOON\n" + expiring.map((x) => `- ${x}`).join("\n") + "\n\n";
   if (leave.length) text += "🌴 ON LEAVE\n" + leave.map((l) => `- ${l.who}: ${l.when}`).join("\n") + "\n\n";
   for (const d of days) {
@@ -97,8 +108,11 @@ export function buildDigest(data, from, to, site, opts = {}) {
   // ---- html (Outlook-safe tables, see layout.js)
   const tags = (who) => whoList(who).map((p) => tag(p, color[p] || "#495057")).join(" ");
   const grey = (s) => `<span style="color:#868e96">${esc(s)}</span>`;
-  let body = runs.length ? warnBox("Needs sorting", runs.map((r) =>
-    `<b>${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}</b> · ${esc(r.msg)}`)) : "";
+  let body = runs.length || nudges.length ? warnBox("Needs sorting", [...nudges.map(esc), ...runs.map((r) =>
+    `<b>${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}</b> · ${esc(r.msg)}`)]) : "";
+  if (confirmed.length) body += noteBox("✅ Confirmed since last week", confirmed.map(esc));
+  if (ifs.length) body += noteBox("❔ If pencilled-in plans go ahead", ifs.map((r) =>
+    `<b>${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}</b> · ${esc(r.msg)}`));
   if (expiring.length) body += warnBox("Renew soon", expiring.map(esc));
   if (leave.length) body += noteBox("🌴 On leave", leave.map((l) => `<b>${esc(l.who)}</b> · ${esc(l.when)}`));
   for (const d of days) {
@@ -113,12 +127,12 @@ export function buildDigest(data, from, to, site, opts = {}) {
         const loc = e.location && LOC[e.location] ? LOC[e.location].icon + " " : "";
         const range = e.end !== e.start ? ` (${e.start < from ? "since " + short(e.start) + ", " : ""}to ${short(e.end)})` : "";
         return { who: tags(e.who), important: !!e.important,
-                 text: `${e.important ? "⭐ " : ""}${loc}${esc(e.title)}${e.status === "Tentative" ? " " + grey("(not confirmed)") : e.status === "Unavailable" ? " " + grey("(can't)") : ""}${range ? " " + grey(range.trim()) : ""}` };
+                 text: `${e.important ? "⭐ " : ""}${loc}${esc(e.title)}${clashRules.pencilled(data, e) ? " ✏️ " + grey("(maybe)") : e.status === "Tentative" ? " " + grey("(not confirmed)") : e.status === "Unavailable" ? " " + grey("(can't)") : ""}${range ? " " + grey(range.trim()) : ""}` };
       })];
     body += dayBlock(nice(d.key), wd === 0 || wd === 6, rows);
   }
   const html = page("The week ahead", `${short(from)} – ${short(to)}`, body, `Sent ${opts.when || "every Sunday evening"} by the ${label}.`, site, label);
 
-  const subject = `Week ahead ${short(from)} – ${short(to)}${runs.length ? ` · ⚠ ${runs.length} to sort` : ""}${expiring.length ? ` · ⏳ ${expiring.length} to renew` : ""}`;
+  const subject = `Week ahead ${short(from)} – ${short(to)}${runs.length + nudges.length ? ` · ⚠ ${runs.length + nudges.length} to sort` : ""}${expiring.length ? ` · ⏳ ${expiring.length} to renew` : ""}`;
   return { subject, text, html };
 }

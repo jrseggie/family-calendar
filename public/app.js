@@ -211,7 +211,8 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${esc(e.title)}${typeof isHelperStay === "function" && isHelperStay(e) ? stayStatus(e) : e.status === "Tentative" && !e.title.includes("?") ? " (?)" : ""}${loc}</div>
+          <div class="title">${e.important ? "⭐ " : ""}${esc(e.title)}${typeof isHelperStay === "function" && isHelperStay(e) ? stayStatus(e) : ""}${loc}${
+            CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
 
@@ -422,7 +423,7 @@ function renderUpcoming() {
         <div class="title">🌿 ${esc(b.name)} starts${b.status === "Tentative" ? " (?)" : ""}</div>
         <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span></div>`);
       const stillOn = ongoing.length ? `<div class="still">Still on: ${ongoing.map((it) =>
-        `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
+        `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
       const dow = parse(key).getDay();
       const cls = ["day", isToday ? "today" : "", dow === 0 || dow === 6 ? "weekend" : "", key < today ? "past" : ""].join(" ");
       const warn = dayWarnings(key);   // ⚠ things to sort that day (grid.js)
@@ -632,7 +633,10 @@ function eventForm(ev, preset = {}) {
       <label><input type="radio" name="stay" value="Confirmed" ${!["Tentative", "Unavailable"].includes(e.status) ? "checked" : ""}> ✅ Confirmed</label>
       <label><input type="radio" name="stay" value="Unavailable" ${e.status === "Unavailable" ? "checked" : ""}> 🚫 Can't stay</label></div>` : ""}
     <div class="checks"><label><input type="checkbox" name="important" ${e.important ? "checked" : ""}> ⭐ Important</label>
-      ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> Not confirmed yet</label>`}</div>
+      ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> ✏️ Pencilled in – might not happen</label>`}</div>
+    ${ev && CalendarRules.pencilled(state.data, ev) && canEditEvent(ev) ? `<div class="qstay" style="margin:-4px 0 4px">✏️ Pencilled in:
+      <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn" id="poff">🗑 Not happening</button></div>` : ""}
+    ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(fmtShort(ev.confirmed_at.slice(0, 10)))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
     <label>Notes<textarea name="notes" rows="2">${esc(e.notes || "")}</textarea></label>
     ${!ev && !preset.onSave ? `<div class="two"><label>Repeat<select name="repeat">
@@ -666,6 +670,8 @@ function eventForm(ev, preset = {}) {
     $("#cancel").onclick = closeDialog;
     $("#dup")?.addEventListener("click", () => eventForm(null, { copy: { ...ev, id: undefined, series: undefined } }));
     if (ev) $("#del").onclick = () => deleteEvent(ev);
+    $("#pon")?.addEventListener("click", () => confirmEvent(ev));
+    $("#poff")?.addEventListener("click", () => deleteEvent(ev));
     f.elements.category.addEventListener("change", () => {
       if (f.elements.category.value === "Leave" && !f.elements.title.value.trim()) f.elements.title.value = "🌴 On leave";
       if (f.elements.category.value !== "__holiday") return;
@@ -695,6 +701,12 @@ function eventForm(ev, preset = {}) {
     if (!ev) f.elements.title.focus();
     else if (!canEditEvent(ev)) lockForm("Details");
   });
+}
+
+// ✅ It's on: a pencilled-in entry becomes a normal one (the API notes who and when; a "?" at the end of the title goes)
+function confirmEvent(ev) {
+  submit(() => api("PUT", `events/${ev.id}`, { ...ev, who: whoList(ev.who), status: "Confirmed", title: CalendarRules.plainTitle(ev.title) }),
+    `✅ ${CalendarRules.plainTitle(ev.title)} is on`);
 }
 
 // save an edit; if someone else saved the entry since it was opened, ask before overwriting their change
