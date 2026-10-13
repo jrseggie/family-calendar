@@ -270,8 +270,10 @@ function cellSheet(key, person) {
     <div class="actions"><button type="button" id="cancel">Close</button>
       ${canAdd() && KIDS().includes(person) && CalendarRules.helpersFree(state.data, key).length ? `<button type="button" id="helperstay">🏠 ${
         helpers().length === 1 ? esc(helpers()[0]) : "Helper"} staying with ${esc(person)}</button>` : ""}
-      ${canAdd() && isPerson ? `<button type="button" id="stay">🏠 Where are they staying?</button>` : ""}
+      ${canAdd() && isPerson && !holidayOn(person, key) ? `<button type="button" id="stay">🏠 Where are they staying?</button>` : ""}
+      ${holidayOn(person, key) ? `<button type="button" class="go" id="plan">🗓 Plan the holiday</button>` : ""}
       ${canAdd() ? `<button class="primary" id="addp">+ Add for ${esc(person)}</button>` : ""}</div></div>`, () => {
+    $("#plan")?.addEventListener("click", () => holidayPlan(holidayOn(person, key)));
     $("#cancel").onclick = closeDialog;
     $("#addp")?.addEventListener("click", () => eventForm(null, { date: key, who: person }));
     $("#stay")?.addEventListener("click", () => stayForm(person, key));
@@ -319,13 +321,123 @@ function helperForm(helper, kid, from, to) {
   });
 }
 
+
+// ---------- 🗓 Plan the holiday: where a child sleeps through a school holiday, as stretches ("Town House 27 Nov – 12 Dec,
+// Beach House 13 Dec – 3 Jan …"). Each stretch is a normal entry with a location, so the grid, ⚠ rules and emails just work.
+// "Same for <other child>" copies the stretches to them - only on days they're also on holiday and have nothing set yet.
+const daysIn = (a, b) => { const out = []; for (let d = parse(a); iso(d) <= b; d = addDays(d, 1)) out.push(iso(d)); return out; };
+const runsOf = (days) => days.reduce((r, d) => { const last = r[r.length - 1];
+  if (last && iso(addDays(parse(last[1]), 1)) === d) last[1] = d; else r.push([d, d]); return r; }, []);
+const stayTitle = (person, loc, note) => {
+  const pl = LOC()[loc] || {};
+  const where = { away: `${person} away`, school: `${person} at school (boarding)`, friend: `${person} at a friend's house` }[pl.kind] || `${person} at ${pl.label}`;
+  return where + (note ? ` – ${note}` : "");
+};
+// where `kid` sleeps on these days from entries (not counting the usual place)
+const staysOf = (kid, from, to) => state.data.events.filter((e) => e.location && !["Cancelled", "Unavailable"].includes(e.status)
+  && e.start <= to && e.end >= from && CalendarRules.expandWho(state.data, e.who).includes(kid));
+
+function holidayPlan(h) {
+  const kid = h.child, nights = daysIn(h.start, h.end), places = activePlaces();
+  const usual = CalendarRules.homeOf(state.data, kid) || places[0]?.key;
+  const mine = (e) => whoList(e.who).length === 1 && whoList(e.who)[0] === kid;   // entries only for this child can be changed here
+  const existing = staysOf(kid, h.start, h.end).sort((a, b) => a.start.localeCompare(b.start));
+  const others = KIDS().filter((k) => k !== kid && state.data.schoolHolidays.some((x) => x.child === k && x.start <= h.end && x.end >= h.start));
+  const can = canAdd();
+  const placeSel = (cur) => `<select data-p>${places.map((p) => `<option value="${esc(p.key)}" ${p.key === cur ? "selected" : ""}>${p.icon} ${esc(p.label)}</option>`).join("")}</select>`;
+  const row = (r) => r.fixed
+    ? `<div class="vline prow fixed" data-fixed="${r.id}"><span>${LOC()[r.location]?.icon || ""} ${esc(r.title)}</span>
+        <small class="muted">${fmtShort(r.start)} – ${fmtShort(r.end)} · with ${esc(whoList(r.who).filter((p) => p !== kid).join(", "))} – change it on the entry</small></div>`
+    : `<div class="vline prow" ${r.id ? `data-id="${r.id}"` : ""}>${placeSel(r.location)}
+        <label>from<input type="date" data-f value="${r.start}"></label><label>to<input type="date" data-t value="${r.end}"></label>
+        <span class="vmove"><label title="Pencilled in – might not happen"><input type="checkbox" data-pen ${r.status === "Tentative" ? "checked" : ""}> ✏️</label>
+          <button type="button" class="ackbtn" data-x title="Remove">✕</button></span>
+        <input data-n placeholder="Note (optional), e.g. with Granny" value="${esc(r.note || "")}"></div>`;
+  const noteOf = (e) => { const t = stayTitle(kid, e.location, ""); return e.title.startsWith(t + " – ") ? e.title.slice(t.length + 3) : ""; };
+  const start = existing.length ? existing.map((e) => ({ ...e, fixed: !mine(e), note: noteOf(e) }))
+    : [{ location: usual, start: h.start, end: h.end, status: "Confirmed" }];
+  openDialog(`<form class="form" id="f"><h2>🗓 ${esc(kid)} · ${esc(h.name)}</h2>
+    <div class="meta">${fmtDay(h.start)} – ${fmtDay(h.end)} (${nights.length} night${nights.length === 1 ? "" : "s"}) · back at school ${fmtDay(iso(addDays(parse(h.end), 1)))}</div>
+    <div class="lbl">Where ${esc(kid)} sleeps</div>
+    <div id="prows">${start.map(row).join("")}</div>
+    ${can ? `<button type="button" class="ackbtn" id="padd" style="margin-top:6px">+ Add a stretch</button>` : ""}
+    <div class="meta" id="pcover"></div>
+    ${can && others.length ? `<div class="checks">${others.map((k) => `<label><input type="checkbox" name="same" value="${esc(k)}"> Same for ${esc(k)}
+      <small class="muted">(the days ${esc(k)}'s also on holiday and has nothing planned)</small></label>`).join("")}</div>` : ""}
+    <div class="err"></div>
+    <div class="actions">${state.data.me.canEditAll ? `<button type="button" id="hdates">✏️ Holiday dates</button>` : ""}
+      <button type="button" id="cancel">Cancel</button>${can ? `<button class="primary">Save</button>` : ""}</div></form>`, () => {
+    const f = $("#f"), rows = () => [...f.querySelectorAll(".prow:not(.fixed)")];
+    const read = (r) => ({ id: +r.dataset.id || 0, location: r.querySelector("[data-p]").value, start: r.querySelector("[data-f]").value,
+      end: r.querySelector("[data-t]").value, status: r.querySelector("[data-pen]").checked ? "Tentative" : "Confirmed", note: r.querySelector("[data-n]").value.trim() });
+    const fixedDays = existing.filter((e) => !mine(e)).flatMap((e) => daysIn(e.start < h.start ? h.start : e.start, e.end > h.end ? h.end : e.end));
+    const covered = () => new Set([...fixedDays, ...rows().map(read).filter((r) => r.start && r.end && r.start <= r.end).flatMap((r) => daysIn(r.start, r.end))]);
+    const cover = () => {
+      const c = covered(), gaps = runsOf(nights.filter((d) => !c.has(d))), n = nights.filter((d) => c.has(d)).length;
+      $("#pcover").innerHTML = gaps.length ? `<b>${n} of ${nights.length} nights planned</b> · ❓ not planned: ${gaps.map(([a, b]) => a === b ? fmtShort(a) : `${fmtShort(a)} – ${fmtShort(b)}`).join(", ")}`
+        : `✅ <b>All ${nights.length} nights planned</b>`;
+    };
+    cover();
+    f.addEventListener("input", cover); f.addEventListener("change", cover);
+    $("#prows").onclick = (e) => { if (e.target.closest("[data-x]")) { e.target.closest(".prow").remove(); cover(); } };
+    // + Add a stretch: from the first night not planned yet, to the end of that gap
+    $("#padd")?.addEventListener("click", () => {
+      const c = covered(), gap = runsOf(nights.filter((d) => !c.has(d)))[0] || [h.end, h.end];
+      $("#prows").insertAdjacentHTML("beforeend", row({ location: usual, start: gap[0], end: gap[1], status: "Confirmed" }));
+      cover();
+    });
+    $("#hdates")?.addEventListener("click", () => holidayForm(h));
+    $("#cancel").onclick = closeDialog;
+    if (!can) return lockForm("Holiday plan");
+    f.onsubmit = (x) => {
+      x.preventDefault();
+      const want = rows().map(read);
+      const bad = want.find((r) => !r.start || !r.end || r.end < r.start);
+      if (bad) return void ($("#f .err").textContent = "Each stretch needs a from and a to date (to on or after from).");
+      const seen = new Map();
+      for (const r of want) for (const d of daysIn(r.start, r.end)) {
+        if (seen.has(d)) return void ($("#f .err").textContent = `Two stretches both cover ${fmtDay(d)} – change one of them.`);
+        seen.set(d, r);
+      }
+      const body = (r, who) => ({ title: stayTitle(who, r.location, r.note), start: r.start, end: r.end, who: [who], category: "Travel", location: r.location, status: r.status });
+      submit(async () => {
+        const keep = new Set(want.filter((r) => r.id).map((r) => r.id));
+        for (const e of existing.filter((e) => mine(e) && !keep.has(e.id))) await api("DELETE", `events/${e.id}`);
+        for (const r of want) {
+          const before = existing.find((e) => e.id === r.id), b = body(r, kid);
+          if (!r.id) await api("POST", "events", b);
+          else if (["title", "start", "end", "location", "status"].some((k) => b[k] !== before[k])) await api("PUT", `events/${r.id}`, { ...before, ...b, loaded_at: before.updated_at || "" });
+        }
+        // Same for <other child>: their own holiday days that have nothing planned yet
+        let copied = 0;
+        for (const k of new FormData(f).getAll("same")) {
+          const hol = new Set(state.data.schoolHolidays.filter((x) => x.child === k).flatMap((x) => daysIn(x.start, x.end)));
+          const taken = new Set(staysOf(k, h.start, h.end).flatMap((e) => daysIn(e.start, e.end)));
+          for (const r of want) for (const [a, b] of runsOf(daysIn(r.start, r.end).filter((d) => hol.has(d) && !taken.has(d)))) {
+            await api("POST", "events", body({ ...r, start: a, end: b }, k)); copied++;
+          }
+        }
+        submit.msg = `Saved ${kid}'s ${h.name}${copied ? ` (+ ${copied} for ${new FormData(f).getAll("same").join(" & ")})` : ""}`;
+      }, () => submit.msg);
+    };
+  });
+}
+// the school holiday `kid` is on on `key` (to open the planner from a square or a ⚠)
+const holidayOn = (kid, key) => state.data.schoolHolidays.find((x) => x.child === kid && x.start <= key && x.end >= key);
+
 // quick "where are they staying from … to …" - creates a normal entry with a location
 function stayForm(person, key) {
+  // "To" starts at the end of the run of ❓ days from here (or the same day)
+  let until = key;
+  if (whereIndex(key, key)[key][person]?.loc === "unknown") {
+    const idx = whereIndex(key, iso(addDays(parse(key), 60)));
+    for (let d = addDays(parse(key), 1); idx[iso(d)]?.[person]?.loc === "unknown"; d = addDays(d, 1)) until = iso(d);
+  }
   openDialog(`<form class="form" id="f"><h2>Where is ${esc(person)} staying?</h2>
     <div class="seg seg-loc">${activePlaces().map((v, i) =>
       `<label><input type="radio" name="loc" value="${esc(v.key)}" ${i === 0 ? "checked" : ""}> ${v.icon} ${esc(v.label)}</label>`).join("")}</div>
     <div class="two"><label>From<input type="date" name="start" value="${key}" required></label>
-      <label>To<input type="date" name="end" value="${key}" required></label></div>
+      <label>To<input type="date" name="end" value="${until}" required></label></div>
     <label>Note (optional)<input name="note" placeholder="e.g. at Emma's / with Granny Chris"></label>
     <div class="checks"><label><input type="checkbox" name="tentative"> Not confirmed yet (e.g. requested)</label></div>
     <div class="err"></div>
@@ -425,6 +537,8 @@ function clashSheet(key) {
       ${alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay">${esc(k)} to school:
         <button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")}</div>` : ""}
     ${canAdd() && CalendarRules.houseNeeds(state.data, key).length ? `<div class="dwarn" style="border-radius:10px;border:0">${houseButtons(key)}</div>` : ""}
+    ${KIDS().filter((k) => wh[k]?.loc === "unknown" && holidayOn(k, key)).map((k) =>
+      `<div class="qstay"><button type="button" class="go" data-plan="${esc(k)}|${key}">🗓 Plan ${esc(k)}'s ${esc(holidayOn(k, key).name)}</button></div>`).join("")}
     <div class="actions"><button type="button" id="cancel">Close</button>
       <button class="primary" id="seeday">See the day</button></div></div>`, () => {
     $("#cancel").onclick = closeDialog;
@@ -440,6 +554,8 @@ document.addEventListener("click", (e) => {
   const cell = e.target.closest("[data-cell]");
   const ack = e.target.closest("[data-ack],[data-unack]");
   if (ack) { e.stopPropagation(); return ackRun(ack); }
+  const plan = e.target.closest("[data-plan]");
+  if (plan) { e.stopPropagation(); const [k, key] = plan.dataset.plan.split("|"); return holidayPlan(holidayOn(k, key)); }
   const pon = e.target.closest("[data-pon]"), poff = e.target.closest("[data-poff]");
   if (pon || poff) { e.stopPropagation(); const ev = state.data.events.find((x) => x.id == (pon || poff).dataset[pon ? "pon" : "poff"]); return pon ? confirmEvent(ev) : deleteEvent(ev); }
   const ub = e.target.closest("[data-uber]");

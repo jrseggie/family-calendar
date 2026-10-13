@@ -1,5 +1,10 @@
 # What's new in Family Calendar
 
+## 1.0.12
+- 🗓 Plan the holiday: tap a child's 🌿 holiday (or a ❓ day) and set where they sleep as stretches – "Town House 27 Nov – 12 Dec,
+  Beach House 13 Dec – 3 Jan …" – with a count of nights still not planned. "Same for <other child>" copies it to the days they're also on holiday.
+- "Where are they staying?": "To" starts at the end of the days still not planned (not the same day).
+
 ## 1.0.11
 - ✏️ Pencilled-in plans (tick "Pencilled in – might not happen"): ✏️ at the end and a dashed outline on the Month grid, "maybe" in lists
   and the weekly email. "✅ It's on" / "🗑 Not happening" on the entry; once confirmed it shows ✅ for 3 days (who and when are kept).

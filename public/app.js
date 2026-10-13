@@ -1303,7 +1303,7 @@ document.addEventListener("click", (e) => {
   }
   else if (d.ev) eventForm(state.data.events.find((x) => x.id == d.ev));
   else if (d.rec) recurringForm(state.data.recurring.find((x) => x.id == d.rec));
-  else if (d.sh) holidayForm(state.data.schoolHolidays.find((x) => x.id == d.sh));
+  else if (d.sh) { const h = state.data.schoolHolidays.find((x) => x.id == d.sh); state.view === "school" ? holidayForm(h) : holidayPlan(h); }
   else if (d.day) daySheet(d.day);
   else if (d.add) canAdd() && eventForm(null, { date: d.add });
   else if (d.person) personForm(state.setup.people.find((x) => x.id == d.person));

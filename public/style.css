@@ -414,6 +414,12 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .ackbtn:disabled { opacity: .35; cursor: default; }
 .vline.wrow input.fixed { font-weight: 600; background: transparent; border-color: transparent; }   /* someone already in the calendar */
 .vline.hrow { grid-template-columns: minmax(0, 1.2fr) 4em minmax(0, 1.4fr); }   /* house · icon · needs someone */
+/* 🗓 Plan the holiday: place · from · to · ✏️ ✕, note underneath */
+.vline.prow { grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr) minmax(0, 1fr) auto; align-items: end; padding: 8px 0; border-bottom: 1px dashed var(--line); }
+.vline.prow label { font-size: 12px; color: var(--muted); }
+.vline.prow [data-n] { grid-column: 1 / -1; }
+.vline.prow.fixed { grid-template-columns: 1fr; }
+@media (max-width: 520px) { .vline.prow { grid-template-columns: 1fr 1fr; } .vline.prow [data-p] { grid-column: 1 / -1; } }
 .vmove { display: flex; gap: 3px; }
 .vmove .ackbtn { padding: 3px 8px; }
 .vline:first-child [data-vup], .vline:last-child [data-vdown] { opacity: .3; pointer-events: none; }
