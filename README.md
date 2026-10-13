@@ -45,6 +45,12 @@ then the link under it, **add the update job** – GitHub opens (sign in if it s
 Can't wait for the night? When Setup says a new version is out, the green **⬆️ Update** button opens GitHub: click **Run workflow**.
 Your calendar and settings are kept; changes you made to the code yourself are replaced by the new version.
 
+## Usage check-in
+Once a day your calendar tells the Family Calendar maker it's in use: a random number, the version, how many logins it has and
+used in the last 30 days, and how many changes were made. Your calendar's **name** goes with it only if you tick the box in the
+set-up wizard (or choose "Yes" on **⚙ Setup → This calendar**). Never entries, people, email addresses or the web address.
+Turn it off there any time ("Off – send nothing").
+
 ## What's new
 
 See [CHANGELOG.md](CHANGELOG.md).

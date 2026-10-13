@@ -279,6 +279,8 @@ function wizardForm() {
       <div id="whouses">${houseRow(homes[0] || {}, 0)}${houseRow(homes[1] || {}, 1)}</div></div>
     <div class="meta">Children who board sleep at school in term time; helpers only count at a house when an entry says they're staying.
       You can change all of this later under ⚙ Setup.</div>
+    ${state.data.upstream ? `<div class="checks"><label><input type="checkbox" name="share_name"> Let the Family Calendar maker know we're using it
+      <small class="muted">(our calendar's name, the version and how many logins are used – never entries or names; change it under Setup → This calendar)</small></label></div>` : ""}
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Not now</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
@@ -293,7 +295,7 @@ function wizardForm() {
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const f = $("#f");
-      const body = { family_name: f.elements.family_name.value, site_name: f.elements.site_name.value,
+      const body = { family_name: f.elements.family_name.value, site_name: f.elements.site_name.value, share_name: !!f.elements.share_name?.checked,
         people: [...f.querySelectorAll(".wrow")].map((r) => ({ id: +r.dataset.id || undefined, name: r.querySelector("[data-n]").value, role: r.querySelector("[data-r]").value, school: r.querySelector("[data-s]").value })),
         houses: [...f.querySelectorAll(".hrow")].map((r) => ({ label: r.querySelector("[data-l]").value, icon: r.querySelector("[data-i]").value, needs: r.querySelector("[data-x]").value })) };
       submit(async () => { const r = await api("POST", "setup/wizard", body);
@@ -908,6 +910,9 @@ async function renderSetup() {
       <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}</small></span><small>Edit</small></div>
       <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
         <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>
+      <div class="row" id="usage-row"><span><small class="muted">Let the Family Calendar maker know you use it:
+        <b>${esc(settings.usage.choices[settings.usage.mode])}</b>${settings.usage.sends ? ` – sends once a day: ${esc(usageText(settings.usage.sends))}` : ""}</small></span>
+        <small>Edit</small></div>
       <div class="row"><span><small class="muted">Change the family name, people or houses step by step</small></span>
         <span><button type="button" class="ackbtn" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
     <div class="card"><h3>People in the calendar</h3>${pRows}</div>
@@ -939,7 +944,7 @@ async function renderSetup() {
         (read-only; it updates itself about every hour). The link is private to you – don't share it.</p>
       <button type="button" class="btn-add" id="feed-show" style="margin:0">Show my link</button><div id="feed-box"></div></div>
     <p class="muted" style="font-size:12px">Logins use the person's email address: they sign in
-      with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>`;
+      with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>${installsCard(settings.installs)}`;
   $("#add-person").onclick = () => personForm();
   document.querySelectorAll("[data-pmove]").forEach((b) => b.onclick = (e) => {
     e.stopPropagation();
@@ -949,6 +954,7 @@ async function renderSetup() {
   });
   $("#add-place").onclick = () => placeForm();
   $("#site-settings").onclick = () => settingsForm();
+  $("#usage-row").onclick = () => settingsForm();
   $("#inbox-settings").onclick = () => inboxForm();
   checkForUpdate();
   document.querySelectorAll("[data-place]").forEach((el) => el.onclick = () => placeForm(state.setup.places.find((p) => p.key === el.dataset.place)));
@@ -1130,6 +1136,24 @@ function digestTimeForm() {
   });
 }
 
+// what the daily usage check-in sends, in words
+const usageText = (p) => [p.name ? `the name "${p.name}"` : "a random number", `version ${p.version}`,
+  `${p.logins ?? "?"} logins (${p.active_logins ?? "?"} used in the last 30 days)`, `${p.changes_30d ?? "?"} changes in 30 days`].join(", ");
+
+// the maker's own calendar only (the stats/ worker's table): every calendar that checked in
+function installsCard(list) {
+  if (!list) return "";
+  const ago = (t) => { const d = Math.floor((Date.now() - Date.parse(t)) / 864e5); return d < 1 ? "today" : d === 1 ? "yesterday" : `${d} days ago`; };
+  const cmp = (a, b) => a.split(".").map(Number).reduce((d, x, i) => d || x - (b.split(".").map(Number)[i] || 0), 0);
+  const latest = list.map((x) => x.version).sort(cmp).pop() || "";
+  const live = list.filter((x) => Date.now() - Date.parse(x.last_seen) < 7 * 864e5).length;
+  return `<div class="card"><h3>📊 Calendars using Family Calendar <small class="muted">${live} checked in this week · ${list.length} ever</small></h3>
+    ${list.length ? list.map((x) => `<div class="row ${Date.now() - Date.parse(x.last_seen) > 7 * 864e5 ? "past" : ""}"><span><b>${x.name ? esc(x.name) : `<span class="muted">Anonymous</span>`}</b>
+      <br><small class="muted">${x.logins ?? "?"} logins · ${x.active_logins ?? "?"} used in 30 days · ${x.changes_30d ?? "?"} changes in 30 days · since ${esc(fmtShort(x.first_seen.slice(0, 10)))}</small></span>
+      <small>${esc(x.version)}${cmp(x.version, latest) < 0 ? " ⚠ old" : ""} · ${ago(x.last_seen)}</small></div>`).join("")
+      : `<p class="muted pad">No calendar has checked in yet.</p>`}</div>`;
+}
+
 function settingsForm(forUpdate = false) {
   const s = state.setup.settings, b = s.brand;
   openDialog(`<form class="form" id="f"><h2>This calendar</h2>
@@ -1143,6 +1167,10 @@ function settingsForm(forUpdate = false) {
         sign in to GitHub first if it says "404" – then click <b>Commit changes</b>). From then on new versions install themselves overnight.</div>` : ""}
     <div class="meta">The name shows at the top of the site, on the emails, invites and the phone calendar. The web address is used in
       emails and invites, and the inbox address is inbox@ that domain.</div>
+    <label>Let the Family Calendar maker know you use it<select name="usage_share">${Object.entries(s.usage.choices).map(([k, v]) =>
+      `<option value="${k}" ${k === s.usage.mode ? "selected" : ""}>${esc(v)}</option>`).join("")}</select></label>
+    <div class="meta">Once a day: a random number, the version, how many logins you have and used in the last 30 days, and how many changes
+      were made – plus the calendar's name only if you choose "Yes". Never entries, people, email addresses or the web address.</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;

@@ -266,6 +266,36 @@ test("leave: a helper on 🌴 leave isn't free, doesn't count at a house, and a 
   assert.match(mail.html, /On leave/);
 });
 
+// ---------- usage check-in (lib/usage.js): what goes out in each setting
+import { usagePayload, sendUsage } from "../lib/usage.js";
+test("usage check-in: anonymous by default, the name only when chosen, nothing when off; once a day", async () => {
+  const db = freshDb();
+  db.exec("DELETE FROM users; DELETE FROM settings; DELETE FROM change_log;");
+  db.exec("INSERT INTO settings (key, value) VALUES ('family_name', 'Mokoena')");
+  db.exec("INSERT INTO users (email, name, role, active, last_seen) VALUES ('a@example.com', 'A', 'admin', 1, '2026-10-10'), ('b@example.com', 'B', 'editor', 1, '2026-08-01'), ('c@example.com', 'C', 'viewer', 0, NULL)");
+  db.exec("INSERT INTO change_log (at, user, action, details) VALUES ('2026-10-01T10:00:00Z', 'A', 'Added', 'x'), ('2026-07-01T10:00:00Z', 'A', 'Added', 'old')");
+  const env = { DB: d1Like(db) }, now = new Date("2026-10-12T10:00:00Z");
+  const anon = await usagePayload(env, now);
+  assert.match(anon.id, /^[0-9a-f-]{36}$/);
+  assert.deepEqual({ ...anon, id: "x" }, { id: "x", version: VERSION_NOW, logins: 2, active_logins: 1, changes_30d: 1 });
+  assert.equal((await usagePayload(env, now)).id, anon.id);   // the same random number every day
+  db.exec("INSERT INTO settings (key, value) VALUES ('usage_share', 'named')");
+  assert.equal((await usagePayload(env, now)).name, "Mokoena Calendar");
+  db.exec("UPDATE settings SET value = 'off' WHERE key = 'usage_share'");
+  assert.equal(await usagePayload(env, now), null);
+  db.exec("UPDATE settings SET value = 'anonymous' WHERE key = 'usage_share'");
+  const sent = [], realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, o) => { sent.push([url, JSON.parse(o.body)]); return new Response(null, { status: 204 }); };
+  try {
+    assert.equal(await sendUsage(env, now), 204);
+    assert.equal(await sendUsage(env, new Date("2026-10-12T20:00:00Z")), null);   // not again the same day
+    assert.equal(await sendUsage(env, new Date("2026-10-13T10:00:00Z")), 204);
+  } finally { globalThis.fetch = realFetch; }
+  assert.equal(sent.length, 2);
+  assert.match(sent[0][0], /\/ping$/);
+  assert.equal(sent[0][1].name, undefined);
+});
+import { VERSION as VERSION_NOW } from "../lib/version.js";
 // ---------- names and addresses from the settings (Setup > This calendar)
 import { brand } from "../lib/settings.js";
 test("settings: names from the family name; Smith feed IDs unchanged; a new family has nothing of ours", () => {

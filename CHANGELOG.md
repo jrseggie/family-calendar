@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.10
+- Usage check-in: once a day the calendar tells the Family Calendar maker it's in use (a random number, the version, how many logins
+  are used) – with the calendar's name only if you tick the box in the set-up wizard / choose "Yes" on Setup → This calendar. "Off" sends nothing.
+
 ## 1.0.9
 - Change the order of people (= the columns on the Month grid) with ↑ ↓ – on Setup → People or in the set-up wizard (the Family group too).
 - Set-up wizard: shorter role names (Child (boards), Helper, Visits the children) so they fit.

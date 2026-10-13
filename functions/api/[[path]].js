@@ -15,6 +15,7 @@ import { dumpDatabase } from "../../lib/backup.js";
 import { syncEmailAddresses, canSyncEmail } from "../../lib/email-sync.js";
 import { inboxConfig, sealKey, testKey, INBOX_MODELS } from "../../lib/inbox.js";
 import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
+import { USAGE_SHARE, usageMode, usagePayload } from "../../lib/usage.js";
 import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
 
@@ -96,6 +97,9 @@ async function currentUser(request, env) {
     u = { id: 0, email: accessEmail, name: accessEmail.split("@")[0], role: "admin", active: 1 };
   }
   if (!u || !u.active) return null;
+  // the day this login last opened the calendar (at most one write a day; for the usage check-in, lib/usage.js)
+  const today = new Date().toISOString().slice(0, 10);
+  if (u.id && "last_seen" in u && (u.last_seen || "") < today) await env.DB.prepare("UPDATE users SET last_seen = ? WHERE id = ?").bind(today, u.id).run().catch(() => {});
   return { ...u, seeList: split(u.see) };
 }
 
@@ -375,13 +379,17 @@ const whoHas = "',' || replace(who,', ',',') || ',' LIKE ?";
 // Setup > "This calendar": the family's name and web address (lib/settings.js). uid_prefix is never changed here.
 async function setupSettings(request, env, u) {
   const cur = await loadSettings(env.DB);
-  if (request.method === "GET") return json({ ...Object.fromEntries(SETTING_KEYS.map((k) => [k, cur[k]])), brand: brand(cur, new URL(request.url).origin), emailSync: canSyncEmail(env) });
+  if (request.method === "GET") return json({ ...Object.fromEntries(SETTING_KEYS.map((k) => [k, cur[k]])), brand: brand(cur, new URL(request.url).origin), emailSync: canSyncEmail(env),
+    usage: { mode: usageMode(cur), choices: USAGE_SHARE, sends: await usagePayload(env).catch(() => null) },
+    // the maker's own calendar only (it has the STATS binding): every calendar's latest check-in (stats/ worker)
+    installs: env.STATS ? (await env.STATS.prepare("SELECT name, version, logins, active_logins, changes_30d, first_seen, last_seen FROM installs ORDER BY last_seen DESC").all().catch(() => ({ results: [] }))).results : null });
   if (request.method !== "PUT") return fail(405, "Method not allowed");
   const b = await request.json(), clean = (v, n) => String(v ?? "").trim().slice(0, n);
   const rec = { family_name: clean(b.family_name, 40), site_name: clean(b.site_name, 40), short_name: clean(b.short_name, 14), site_url: clean(b.site_url, 100).replace(/\/+$/, ""),
     repo_url: clean(b.repo_url, 120).replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, "") };   // "owner/name" of the family's GitHub copy
   if (rec.repo_url && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(rec.repo_url)) invalid("GitHub copy should look like github.com/yourname/family-calendar");
   if (rec.site_url && !/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}$/i.test(rec.site_url)) invalid("Web address should look like https://ourfamily.com");
+  if (USAGE_SHARE[b.usage_share]) rec.usage_share = b.usage_share;   // Setup > "Let the Family Calendar maker know you use it"
   const stmts = Object.entries(rec).map(([k, v]) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v || null));
   if (!cur.uid_prefix) stmts.push(env.DB.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES ('uid_prefix', ?)").bind(crypto.randomUUID().slice(0, 8)));
   await env.DB.batch(stmts);
@@ -418,6 +426,7 @@ async function setupWizard(request, env, u) {
   const people = await loadPeople(env), stmts = [], added = [];
   const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v);
   stmts.push(put("family_name", family), put("site_name", clean(b.site_name, 40) || null));
+  if (b.share_name) stmts.push(put("usage_share", "named"));   // the wizard's tick box: "let the Family Calendar maker know we use it"
   if (b.short_name !== undefined) stmts.push(put("short_name", clean(b.short_name, 14) || null));
   if (!(await loadSettings(env.DB)).uid_prefix) stmts.push(put("uid_prefix", crypto.randomUUID().slice(0, 8)));
 

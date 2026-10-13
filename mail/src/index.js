@@ -14,6 +14,7 @@ import { brand, loadSettings } from "../../lib/settings.js";
 import { dumpDatabase, gzip } from "../../lib/backup.js";
 import { syncEmailAddresses } from "../../lib/email-sync.js";
 import { processInbox } from "../../lib/inbox.js";
+import { sendUsage } from "../../lib/usage.js";
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
@@ -43,6 +44,8 @@ export default {
       await processInbox(env).then((r) => r && console.log("inbox:", r))
         .catch((e) => { console.log("inbox error:", String(e)); return markHealthy(env, "inbox_error", String(e.message || e).slice(0, 500)); });
       await sendOutbox(env);
+      // once a day: "this calendar is in use" to the Family Calendar maker (Setup > This calendar; lib/usage.js)
+      await sendUsage(env, new Date(event.scheduledTime)).catch((e) => console.log("usage check-in:", String(e)));
       if (new Date(event.scheduledTime).getUTCMinutes() < 10) await hourly(env, new Date(event.scheduledTime));
     })());
   },
