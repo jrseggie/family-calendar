@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.15
+- New installs: signing in lasts 6 months before the email code is asked again (was 30 days).
+
 ## 1.0.14
 - Safer sign-in: changes are only accepted from the calendar's own pages, and new installs set the sign-in cookie so other websites can't use it.
 - Holiday planner: other entries in the holiday (e.g. a school camp) are never renamed; they show as fixed rows.
