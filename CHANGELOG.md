@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.16
+- iPhone home-screen app: the title bar sits below the blurred clock / battery area, so it's easy to read.
+
 ## 1.0.15
 - New installs: signing in lasts 6 months before the email code is asked again (was 30 days).
 

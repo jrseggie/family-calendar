@@ -47,6 +47,8 @@ button, input, select, textarea { font: inherit; color: inherit; }
 .top { display: flex; align-items: center; justify-content: space-between;
   background: var(--brand); color: var(--brand-text); padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
 .top h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
+/* home-screen app (iPhone): the clock / battery area is blurred - keep the title and buttons below it */
+@media (display-mode: standalone) { .top { padding-top: calc(env(safe-area-inset-top) + 24px); padding-bottom: 12px; } }
 .me { font-size: 13px; opacity: .85; }
 
 .tabs { display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--line);
