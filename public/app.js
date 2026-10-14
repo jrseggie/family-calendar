@@ -155,6 +155,9 @@ function canEditEvent(ev) {
 function filterSet() {
   const f = new Set(state.filter);
   if (f.has("Family")) CalendarRules.familyMembers(state.data).forEach((p) => f.add(p));
+  // only tracked people picked (e.g. a co-parent): their children's calendars too
+  const tr = CalendarRules.tracked(state.data);
+  if (f.size && [...f].every((p) => tr.includes(p))) [...f].forEach((t) => CalendarRules.sharedKids(state.data, t).forEach((k) => f.add(k)));
   return f;
 }
 // an entry for "Family" (and birthdays) counts for every family member; picking only a tracked person shows only their entries
@@ -565,10 +568,13 @@ function byName(n) {
   return n && COLORS[n] ? `<b class="byname" style="--c:${COLORS[n]}">${esc(n)}</b>` : esc(n || "");
 }
 
+// the tracked person picked on their own in the filter (e.g. a co-parent) -> "🖨️ Print for …"
+const printFor = () => state.filter.size === 1 && CalendarRules.tracked(state.data).find((p) => state.filter.has(p)) || null;
 function renderFilters() {
   const people = names();
   $("#filters").innerHTML = `<button class="chip ${state.filter.size ? "" : "on"}" data-f="">Everyone</button>` +
-    people.map((p) => `<button class="chip ${state.filter.has(p) ? "on" : ""}" style="--c:${COLORS[p]}" data-f="${p}">${p}</button>`).join("");
+    people.map((p) => `<button class="chip ${state.filter.has(p) ? "on" : ""}" style="--c:${COLORS[p]}" data-f="${p}">${p}</button>`).join("") +
+    (printFor() && state.data.me.role !== "limited" ? `<button class="chip printbtn" data-print="${esc(printFor())}">🖨️ Print for ${esc(printFor())}</button>` : "");
   $("#filters").style.display = ["upcoming", "month"].includes(state.view) ? "" : "none";
 }
 
@@ -580,9 +586,73 @@ function render() {
   const stay = state.lastView === state.view;   // re-render after a save/filter: keep scroll position
   state.lastView = state.view;
   fabFor(state.view);
+  document.body.classList.toggle("printing", state.view === "print");
   if (state.view === "month") return renderMonth(stay);
+  if (state.view === "print") return renderPrint();
   if (state.view !== "info") state.vault = null;   // don't keep the details in memory once you leave the page
   ({ upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
+}
+
+// ---------- 🖨️ the printout for a tracked person (e.g. a co-parent or their lawyer): filter on them -> "Print for …".
+// Only the children they share, and only what's theirs to know (rules.js sharedDays / shareMode decide). What's on this page
+// is exactly what prints; the small "Automatic / Show / Not available / Leave out" pickers (admins / editors) don't print.
+const SHARE_PICK = [["", "Automatic"], ["show", "Show the title"], ["busy", "Not available"], ["hide", "Leave it out"]];
+function renderPrint() {
+  const today = todayISO(), endOfMonth = (d, n) => iso(new Date(d.getFullYear(), d.getMonth() + n + 1, 0));
+  const p = state.print = { from: today, to: endOfMonth(new Date(), 3), ...state.print };
+  if (!CalendarRules.tracked(state.data).includes(p.person)) { state.view = "month"; return render(); }
+  const { kids, days } = CalendarRules.sharedDays(state.data, p.person, p.from, p.to), edit = state.data.me.canEditAll;
+  const lines = (c) => [...(c.bday ? ["🎂 Birthday"] : []), ...c.items.filter((it) => !it.dupe && it.mode !== "hide").map((it) => it.text)];
+  // consecutive days that read the same become one row ("Mon 14 Dec – Tue 5 Jan")
+  // (its pickers = every entry in it)
+  const sig = (d) => JSON.stringify([d.ph, d.cells.map((c) => [lines(c), lines(c).length > (c.bday ? 1 : 0) ? "" : c.base])]);
+  const runs = [];
+  for (const d of days) {
+    const last = runs[runs.length - 1], s = sig(d);
+    if (!last || last.sig !== s) { runs.push({ ...d, from: d.key, to: d.key, sig: s }); continue; }
+    last.to = d.key;
+    d.cells.forEach((c, i) => c.items.forEach((it) => { if (!last.cells[i].items.some((x) => x.ev.id === it.ev.id)) last.cells[i].items.push({ ...it, dupe: it.mode !== "hide" }); }));
+  }
+  const when = (r) => r.from === r.to ? fmtDay(r.from) : `${fmtDay(r.from)} – ${fmtDay(r.to)}${r.to.slice(0, 4) !== r.from.slice(0, 4) ? " " + r.to.slice(0, 4) : ""}`;
+  const cell = (c) => {
+    const shown = lines(c);
+    const picks = edit ? c.items.filter((it, i, a) => a.findIndex((x) => x.ev.id === it.ev.id) === i).map((it) => `<div class="spick noprint ${it.mode === "hide" ? "off" : ""}">
+      <span title="${esc(it.ev.title)}">${esc(it.ev.title)}</span><select data-share="${it.ev.id}">${SHARE_PICK.map(([v, t]) =>
+        `<option value="${v}" ${(it.ev.share || "") === v ? "selected" : ""}>${v ? t : `Automatic (${{ show: "the title", label: it.auto === "label" ? CalendarRules.shareMode(state.data, { ...it.ev, share: null }, p.person, kids).text : "", busy: "Not available", hide: "left out" }[it.auto]})`}</option>`).join("")}</select></div>`).join("") : "";
+    const plans = shown.length > (c.bday ? 1 : 0);   // nothing on but a birthday: still "School" etc. under it
+    return `<td>${shown.map((t) => `<div>${esc(t)}</div>`).join("")}${plans ? "" : `<div class="muted">${esc(c.base)}</div>`}${picks}</td>`;
+  };
+  let month = "";
+  const rows = runs.map((r) => {
+    const m = r.from.slice(0, 7), head = m !== month ? `<tr class="pmonth"><th colspan="${kids.length + 1}">${MONTHS[+m.slice(5) - 1]} ${m.slice(0, 4)}</th></tr>` : "";
+    month = m;
+    return `${head}<tr><th>${when(r)}${r.ph ? `<div class="pph">${esc(r.ph)}</div>` : ""}</th>${r.cells.map(cell).join("")}</tr>`;
+  }).join("");
+  const names = kids.length > 1 ? `${kids.slice(0, -1).join(", ")} and ${kids[kids.length - 1]}` : kids[0] || "";
+  $("#main").innerHTML = `<div class="pctl noprint">
+      <button type="button" data-view="month">← Back</button>
+      <label>From <input type="date" id="pfrom" value="${p.from}"></label><label>To <input type="date" id="pto" value="${p.to}"></label>
+      <button type="button" class="primary" id="pgo">🖨️ Print / Save as PDF</button>
+      <div class="meta">Only ${esc(names)}, and only what ${esc(p.person)} needs: their own plans in full, school and exams, the children's own
+        activities – anything else is "Not available". Where anyone sleeps is never shown.${edit ? " Change a line with its picker (it's remembered for next time); the pickers don't print." : ""}
+        In the print window choose <b>Save as PDF</b>.</div></div>
+    <article class="sheet"><h1>${esc(names)} – schedule</h1>
+      <p class="psub">${fmtLong(p.from)} – ${fmtLong(p.to)} · prepared ${fmtLong(today)}</p>
+      <table class="ptab"><thead><tr><th>Date</th>${kids.map((k) => `<th>${esc(k)}</th>`).join("")}</tr></thead><tbody>${rows}</tbody></table>
+      <p class="pnote">"Not available" = the child already has other plans that day. Plans that aren't confirmed yet are marked "(not confirmed)".</p>
+    </article>`;
+  const go = () => { p.from = $("#pfrom").value || today; p.to = $("#pto").value >= p.from ? $("#pto").value : p.from; renderPrint(); };
+  $("#pfrom").onchange = go; $("#pto").onchange = go;
+  $("#pgo").onclick = () => {   // the PDF's file name = the page title
+    const was = document.title; document.title = `${names} – schedule ${p.from} to ${p.to}`;
+    addEventListener("afterprint", () => { document.title = was; }, { once: true });
+    window.print();
+  };
+  $("#main").querySelectorAll("[data-share]").forEach((s) => s.onchange = async () => {
+    const ev = state.data.events.find((x) => x.id == s.dataset.share);
+    try { await api("PUT", `events/${ev.id}`, { share: s.value || null }); ev.share = s.value || null; renderPrint(); toast("Saved"); }
+    catch (x) { toast(x.message); }
+  });
 }
 
 // ---------- light / dark
@@ -653,6 +723,8 @@ function eventForm(ev, preset = {}) {
     ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(localDay(ev.confirmed_at))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
     <label>Notes<textarea name="notes" rows="2">${esc(e.notes || "")}</textarea></label>
+    ${CalendarRules.tracked(state.data).length && state.data.me.canEditAll ? `<label>In the printout for ${esc(CalendarRules.tracked(state.data).join(" / "))}<select name="share">
+      ${SHARE_PICK.map(([v, t]) => `<option value="${v}" ${(e.share || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
     ${!ev && !preset.onSave ? `<div class="two"><label>Repeat<select name="repeat">
         <option value="">Doesn't repeat</option><option value="week">Every week</option>
         <option value="2weeks">Every 2 weeks</option><option value="month">Every month</option></select></label>
@@ -707,6 +779,7 @@ function eventForm(ev, preset = {}) {
                      who: [...who], category: fd.get("category"), notes: fd.get("notes"), location: fd.get("location") || null,
                      important: fd.get("important") === "on", status: fd.get("stay") || (fd.get("tentative") === "on" ? "Tentative" : "Confirmed"),
                      source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null };
+      if (f.elements.share) body.share = fd.get("share") || null;
       if (preset.onSave) return preset.onSave(body);
       if (fd.get("repeat")) body.repeat = { every: fd.get("repeat"), until: fd.get("until"), days: fd.getAll("rday").map(Number) };
       if (!ev) return submit(async () => { const r = await api("POST", "events", body); submit.msg = r.count > 1 ? `Added ${r.count} entries` : "Added"; }, () => submit.msg);
@@ -1352,10 +1425,11 @@ async function viewAsPicker() {
 
 // ---------- events (delegated)
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-view],[data-f],[data-ev],[data-rec],[data-sh],[data-day],[data-add],[data-person],[data-user]");
+  const t = e.target.closest("[data-view],[data-f],[data-print],[data-ev],[data-rec],[data-sh],[data-day],[data-add],[data-person],[data-user]");
   if (!t || !state.data) return;
   const d = t.dataset;
-  if (d.view) { state.view = d.view; window.scrollTo(0, 0); render(); }
+  if (d.print) { state.print = { ...(state.print || {}), person: d.print }; state.view = "print"; window.scrollTo(0, 0); render(); }
+  else if (d.view) { state.view = d.view; window.scrollTo(0, 0); render(); }
   else if (d.f !== undefined) {
     if (!d.f) state.filter.clear(); else state.filter.has(d.f) ? state.filter.delete(d.f) : state.filter.add(d.f);
     save("filter", [...state.filter]); render();

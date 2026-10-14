@@ -1,5 +1,11 @@
 # What's new in Family Calendar
 
+## 1.0.17
+- 🖨️ Print for a co-parent: tap a "tracked" person (e.g. an ex-partner) in the filter row to see their children's calendars, then
+  "Print for …" makes a clean schedule (Save as PDF) with only what they need: their own plans in full, school and exams, the
+  children's own activities - everything else just says "Not available", and where anyone sleeps is never shown. On days the
+  children are with them, the children's own entries show in full. Each line can be changed before printing.
+
 ## 1.0.16
 - iPhone home-screen app: the title bar sits below the blurred clock / battery area, so it's easy to read.
 

@@ -97,6 +97,65 @@
   // pencilled-in entries starting within `days` days of `today`: "still pencilled in – on or not?"
   const pencilNudges = (data, today, days = 14) => data.events.filter((e) => pencilled(data, e) && e.start >= today && e.start <= addDays(today, days))
     .sort((a, b) => a.start.localeCompare(b.start));
+  // ---- 🖨️ the schedule printed for a "tracked" person (e.g. a co-parent, or their lawyer): only the children they share and
+  // only what's theirs to know. Never in it: where anyone sleeps, the ⚠ rules, other people's plans and their details.
+  // events.share per entry: "show" (the title) | "busy" ("Not available") | "hide" (left off) | null = automatic (shareMode).
+  const SHARE_SAYS = { School: "School", Exam: "Exams", Study: "Exams" };
+  // the children in the tracked person's entries (all the children if none yet)
+  const sharedKids = (data, person) => {
+    const theirs = kids(data).filter((k) => data.events.some((e) => { const w = expandWho(data, e.who); return w.includes(person) && w.includes(k); }));
+    return theirs.length ? theirs : kids(data);
+  };
+  // the title mentions the person by name (a whole word, any case)
+  const names = (title, person) => String(title || "").toLowerCase().split(/[^\p{L}\p{N}'-]+/u).includes(String(person).toLowerCase());
+  // what the printout shows for entry `e`: { mode: show | label | busy | hide, auto: the automatic mode, text }
+  //   automatic: their own plans in full (pencilled in = "(not confirmed)"), also the child's entries that name them
+  //   ("… – Mark meets her there"); School / Exam / Study = "School" / "Exams";
+  //   the child's own Social / Activity (nobody but the shared children on it) = the title; anything else = "Not available";
+  //   left off: cancelled, a helper's stay (= where they sleep), lifts (Transport), leave, "nobody needed at the house"
+  function shareMode(data, e, person, kidList) {
+    const who = expandWho(data, e.who), theirs = who.includes(person), pen = e.status === "Tentative";
+    let auto = "busy";
+    if (["Cancelled", "Unavailable"].includes(e.status) || e.house_off || ["Transport", "Leave"].includes(e.category) ||
+        (e.location && who.some((p) => helpers(data).includes(p)))) auto = "hide";
+    else if (theirs || names(e.title, person)) auto = "show";
+    else if (pen) auto = "busy";
+    else if (SHARE_SAYS[e.category]) auto = "label";
+    else if (["Social", "Activity"].includes(e.category) && who.every((p) => kidList.includes(p))) auto = "show";
+    const mode = ["show", "busy", "hide"].includes(e.share) ? e.share : auto;
+    const text = mode === "show" ? plainTitle(e.title) + (theirs && pen ? " (not confirmed)" : "") : mode === "label" ? SHARE_SAYS[e.category] : mode === "busy" ? "Not available" : "";
+    return { mode, auto, text };
+  }
+  // the days from..to: { kids, days: [{ key, ph, cells: [{ items: [{ ev, mode, auto, text }], bday, base }] }] }
+  //   base (when nothing else is on): "School holiday" / "At school (boarding)" in term / "School" on a school day
+  function sharedDays(data, person, from, to) {
+    const kidList = sharedKids(data, person), days = [];
+    for (let key = from; key <= to; key = addDays(key, 1)) {
+      const md = key.slice(5);
+      const cells = kidList.map((k) => {
+        const items = [], seen = new Set();
+        const todays = data.events.filter((e) => on(e, key) && expandWho(data, e.who).includes(k));
+        // a day the child is with them (a confirmed plan of theirs): the child's own entries in full - they need to know
+        const withThem = todays.some((e) => expandWho(data, e.who).includes(person) && e.status === "Confirmed");
+        for (const e of todays) {
+          const s = shareMode(data, e, person, kidList);
+          if (withThem && !e.share && ["busy", "label"].includes(s.auto) && expandWho(data, e.who).every((p) => p === person || kidList.includes(p)))
+            Object.assign(s, { mode: "show", auto: "show", text: plainTitle(e.title) + (e.status === "Tentative" ? " (not confirmed)" : "") });
+          if (s.mode === "hide" && e.share !== "hide") continue;   // automatic "left off" isn't listed; one set by hand is (so it can be undone)
+          const dupe = s.mode !== "hide" && seen.has(s.text);   // one "Not available" / "Exams" per day
+          if (s.mode !== "hide") seen.add(s.text);
+          items.push({ ev: e, ...s, dupe });
+        }
+        const bday = (data.recurring || []).some((r) => (r.type || "Birthday") === "Birthday" && r.name === k && `${String(r.month).padStart(2, "0")}-${String(r.day).padStart(2, "0")}` === md);
+        const hol = holidayOf(data, k, key);
+        const base = hol ? "School holiday" : personOf(data, k).boards ? "At school (boarding)" : isSchoolDay(data, k, key) ? "School" : "";
+        return { items, bday, base };
+      });
+      days.push({ key, ph: publicHoliday(data, key), cells });
+    }
+    return { kids: kidList, days };
+  }
+
   // ✅ confirmed in the last 3 days (shows next to the title, then drops off)
   const justConfirmed = (e, now = new Date()) => !!e.confirmed_at && e.status !== "Tentative" && now.getTime() - Date.parse(e.confirmed_at) < 3 * 864e5;
 
@@ -218,5 +277,5 @@
   const expiries = (fields) => (fields || []).filter((f) => !f.hide && EXPIRY_LABEL.test(f.k || ""))
     .map((f) => ({ k: f.k, date: expiryDate(f.v) })).filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
-  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle };
+  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle, sharedKids, shareMode, sharedDays };
 })();

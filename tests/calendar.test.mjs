@@ -609,3 +609,43 @@ test("weekly email timing: default Sunday 18:00 SA; Monday 07:00 covers this wee
   assert.equal(digestSchedule({ timezone: "Not/AZone", digest_hour: "25" }).tz, "Africa/Johannesburg");
   assert.equal(digestSchedule({ digest_hour: "25" }).hour, 18);
 });
+
+// ---------- 🖨️ the printout for a tracked person (rules.js sharedDays / shareMode)
+test("printout: only the shared children, and only what the tracked person needs", () => {
+  const visit = ev("2026-11-06", "2026-11-08", "Emma, Mark", "Emma with Mark");
+  const maybe = ev("2026-11-09", "2026-11-09", "Emma, Mark", "Emma with Mark (Mon or Tue)", { status: "Tentative" });
+  const trip = ev("2026-11-10", "2026-11-11", "Family", "Beach weekend", { category: "Travel", location: "beach" });
+  const exam = ev("2026-11-12", "2026-11-12", "Emma", "Exam: Maths P1 3h", { category: "Exam" });
+  const party = ev("2026-11-13", "2026-11-13", "Emma", "Emma to Zoe's party", { category: "Social" });
+  const outing = ev("2026-11-14", "2026-11-14", "Emma, Anna", "Shopping with Anna", { category: "Social" });
+  const stay = ev("2026-11-15", "2026-11-15", "Emma, Nomsa", "Nomsa staying with Emma", { location: "town" });
+  const pencil = ev("2026-11-16", "2026-11-16", "Emma", "Sleepover", { category: "Social", status: "Tentative" });
+  const hidden = ev("2026-11-17", "2026-11-17", "Emma", "Dentist", { category: "Medical", share: "hide" });
+  const adults = ev("2026-11-13", "2026-11-13", "Anna, Tom", "Dinner out");
+  const d = { ...data([visit, maybe, trip, exam, party, outing, stay, pencil, hidden, adults]),
+    recurring: [{ id: 1, name: "Emma", day: 13, month: 11, born: 2012, type: "Birthday" }, { id: 2, name: "Anna", day: 14, month: 11, type: "Birthday" }] };
+  assert.deepEqual(R.sharedKids(d, "Mark"), ["Emma"]);   // Leo is never in Mark's entries
+  const { kids, days } = R.sharedDays(d, "Mark", "2026-11-06", "2026-11-17");
+  assert.deepEqual(kids, ["Emma"]);
+  const on = (k) => days.find((x) => x.key === k).cells[0];
+  const shown = (k) => on(k).items.filter((it) => it.mode !== "hide" && !it.dupe).map((it) => it.text);
+  assert.deepEqual(shown("2026-11-07"), ["Emma with Mark"]);
+  assert.deepEqual(shown("2026-11-09"), ["Emma with Mark (Mon or Tue) (not confirmed)"]);
+  assert.deepEqual(shown("2026-11-10"), ["Not available"]);   // a family trip: no title, no place
+  assert.deepEqual(shown("2026-11-12"), ["Exams"]);
+  assert.deepEqual(shown("2026-11-13"), ["Emma to Zoe's party"]);   // only the child: the title; the adults' dinner isn't hers
+  assert.equal(on("2026-11-13").bday, true);
+  assert.deepEqual(shown("2026-11-14"), ["Not available"]);   // someone else from the family on it
+  assert.equal(on("2026-11-14").bday, false);                   // other people's birthdays stay off
+  assert.deepEqual(on("2026-11-15").items, []);                 // a helper's stay = where she sleeps: left off
+  assert.deepEqual(shown("2026-11-16"), ["Not available"]);   // pencilled in (not Mark's)
+  assert.deepEqual(shown("2026-11-17"), []);                    // set to "leave it out" by hand
+  assert.equal(on("2026-11-17").items[0].mode, "hide");         // …still listed, so it can be undone on the print page
+  assert.equal(R.shareMode(d, { ...trip, share: "show" }, "Mark", kids).text, "Beach weekend");
+  // a day she's with Mark: her own entries in full
+  const trials = ev("2026-11-07", "2026-11-07", "Emma", "Hockey trials 08:00");
+  const d2 = { ...d, events: [...d.events, trials] };
+  assert.deepEqual(R.sharedDays(d2, "Mark", "2026-11-07", "2026-11-07").days[0].cells[0].items.map((it) => it.text), ["Emma with Mark", "Hockey trials 08:00"]);
+  assert.deepEqual(R.sharedDays({ ...d2, events: [trials] }, "Mark", "2026-11-07", "2026-11-07").days[0].cells[0].items.map((it) => it.text), ["Not available"]);
+  assert.ok(!JSON.stringify(days).includes("Beach House"));
+});

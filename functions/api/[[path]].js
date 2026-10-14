@@ -158,6 +158,7 @@ function cleanEvent(b, people) {
     house_off: PLACE_KEY.test(b.house_off || "") ? b.house_off : null,   // "nobody needed at this house" on these days
     notes: String(b.notes || "").trim() || null,
     source: String(b.source || "").trim() || null,
+    share: ["show", "busy", "hide"].includes(b.share) ? b.share : null,   // 🖨️ the printout for a tracked person (null = automatic)
   };
 }
 
@@ -335,6 +336,14 @@ async function events(request, env, u, id) {
   }
   if (request.method === "PUT") {
     const body = await request.json();
+    // 🖨️ just the printout setting (from the print page)
+    if (Object.keys(body).length === 1 && "share" in body) {
+      const share = ["show", "busy", "hide"].includes(body.share) ? body.share : null;
+      await env.DB.prepare("UPDATE events SET share=? WHERE id=?").bind(share, id).run();
+      await log(env, u, "Printout setting", `${describe(before)} – ${{ show: "show the title", busy: "\"Not available\"", hide: "left off" }[share] || "automatic"}`);
+      return json({ ok: true });
+    }
+    if (!("share" in body)) body.share = before.share;   // a save that doesn't know about it keeps it
     // someone else saved this entry after it was opened here: say so instead of silently overwriting
     if (!body.force && "loaded_at" in body && (before.updated_at || "") !== (body.loaded_at || "")) {
       return json({ error: `${before.updated_by || "Someone"} changed this entry while you had it open.`, conflict: { by: before.updated_by, at: before.updated_at } }, 409);

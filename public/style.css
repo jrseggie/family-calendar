@@ -155,6 +155,35 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .form label.hl { outline: 2px solid #2f9e44; outline-offset: 4px; border-radius: 6px; }
 .actions .danger { color: #c92a2a; margin-right: auto; }
 .meta { font-size: 12px; color: var(--muted); }
+/* 🖨️ the printout for a tracked person (app.js renderPrint): always black on white, like the paper */
+.chip.printbtn { border-style: dashed; }
+.pctl { display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; padding: 12px 16px; max-width: 900px; margin: 0 auto; }
+.pctl label { font-size: 13px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+.pctl .meta { flex-basis: 100%; }
+.sheet { color-scheme: light; max-width: 900px; margin: 0 auto 80px; padding: 24px; background: #fff; color: #111; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,.15); }
+.sheet h1 { font-size: 22px; margin: 0 0 4px; }
+.sheet .psub { margin: 0 0 16px; color: #555; font-size: 13px; }
+.ptab { width: 100%; border-collapse: collapse; font-size: 13px; table-layout: fixed; }
+.ptab th, .ptab td { border-bottom: 1px solid #ddd; padding: 5px 8px; text-align: left; vertical-align: top; }
+.ptab thead th { border-bottom: 2px solid #333; }
+.ptab tbody th { font-weight: 600; width: 30%; }
+.ptab .pmonth th { background: #eef1f6; font-size: 14px; padding-top: 10px; border-bottom: 1px solid #bbb; }
+.ptab .pph { font-weight: 400; font-size: 12px; color: #a23; }
+.ptab .muted { color: #888; }
+.spick { display: flex; gap: 6px; align-items: center; margin-top: 4px; font-size: 11px; color: #666; }
+.spick span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.spick.off span { text-decoration: line-through; }
+.spick select { font-size: 11px; padding: 1px 2px; max-width: 50%; }
+.sheet .pnote { font-size: 12px; color: #555; margin-top: 14px; }
+@media (max-width: 600px) { .sheet { padding: 12px; border-radius: 0; } .ptab { font-size: 12px; } .ptab tbody th { width: 30%; } }
+@media print {
+  body.printing .bar, body.printing .fab, body.printing .toast, .noprint { display: none !important; }
+  body.printing { background: #fff !important; }
+  body.printing .sheet { box-shadow: none; padding: 0; margin: 0; max-width: none; }
+  .ptab tr { break-inside: avoid; }
+  .ptab thead { display: table-header-group; }
+  @page { margin: 14mm; }
+}
 .err { color: #c92a2a; font-size: 13px; min-height: 1em; }
 .sheet-list .item { border-radius: 8px; border: 1px solid var(--line); margin-top: 6px; }
 
