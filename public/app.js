@@ -4,9 +4,11 @@ const colorMap = {};
 const COLORS = new Proxy(colorMap, { get: (t, k) => t[k] || "#868e96" });
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
 
+// optional extra tabs (public/extras.js - empty in the public release): { view: { label, ok(data), render() } }
+const EXTRA_VIEWS = globalThis.EXTRA_VIEWS || {};
 // opening the site starts on Month; a refresh (F5) in the same tab stays on the tab you were on
 function lastTab() {
-  try { return ["month", "upcoming", "birthdays", "school", "log", "info", "setup"].find((v) => v === sessionStorage.getItem("cal.view")) || "month"; }
+  try { return ["month", "upcoming", "birthdays", "school", "log", "info", "setup", ...Object.keys(EXTRA_VIEWS)].find((v) => v === sessionStorage.getItem("cal.view")) || "month"; }
   catch { return "month"; }
 }
 const state = {
@@ -134,6 +136,10 @@ async function refresh() {
   if (me.demo) $("#viewas").onclick = viewAsPicker;
   // only show what this login is allowed to use
   const tabOk = { birthdays: me.seeBirthdays, school: me.seeSchool, log: me.seeLog, info: me.isAdmin, setup: me.isAdmin };
+  for (const [k, x] of Object.entries(EXTRA_VIEWS)) {
+    tabOk[k] = !!x.ok(state.data);
+    if (!document.querySelector(`#tabs [data-view="${k}"]`)) $("#tabs [data-view=setup]").insertAdjacentHTML("beforebegin", `<button data-view="${k}" hidden>${x.label}</button>`);
+  }
   document.querySelectorAll("#tabs button").forEach((b) => { b.hidden = tabOk[b.dataset.view] === false; });
   if (tabOk[state.view] === false) state.view = "month";
   for (const f of [...state.filter]) if (!names().includes(f)) state.filter.delete(f);
@@ -589,6 +595,7 @@ function render() {
   document.body.classList.toggle("printing", state.view === "print");
   if (state.view === "month") return renderMonth(stay);
   if (state.view === "print") return renderPrint();
+  if (EXTRA_VIEWS[state.view]) return EXTRA_VIEWS[state.view].render();
   if (state.view !== "info") state.vault = null;   // don't keep the details in memory once you leave the page
   ({ upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
 }

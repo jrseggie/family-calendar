@@ -19,6 +19,7 @@ import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
 import { USAGE_SHARE, usageMode, usagePayload } from "../../lib/usage.js";
 import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
+import { extraApi } from "../../src/extras.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
 const ROLES = ["admin", "editor", "viewer", "limited"];
@@ -969,6 +970,7 @@ export async function onRequest({ request, env, params }) {
     const u = await currentUser(request, env);
     if (!u && setupMode(env)) return json({ error: "Enter the setup password you chose when installing", setup: true }, 401);
     if (!u) return fail(403, "Your email hasn't been given access to this calendar yet – ask whoever runs this calendar.");
+    if (Object.hasOwn(extraApi, parts[0])) return await extraApi[parts[0]]({ request, env, u, parts, json, deny, invalid });
     if (parts[0] === "countries" && request.method === "GET") {   // Setup / wizard: countries, their time zones and states
       if (parts[1]) return json({ regions: regionsOf(String(parts[1]).toUpperCase()) });
       return json(countryList());

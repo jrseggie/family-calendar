@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.18
+- iPhone home-screen app: forms open below the blurred clock / battery area, and date boxes no longer overlap the box next to them.
+- Printout for a co-parent: school days just say "School" (boarders too); weekends are blank unless an entry says otherwise.
+
 ## 1.0.17
 - 🖨️ Print for a co-parent: tap a "tracked" person (e.g. an ex-partner) in the filter row to see their children's calendars, then
   "Print for …" makes a clean schedule (Save as PDF) with only what they need: their own plans in full, school and exams, the

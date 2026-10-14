@@ -48,7 +48,9 @@ button, input, select, textarea { font: inherit; color: inherit; }
   background: var(--brand); color: var(--brand-text); padding: 10px 16px; padding-top: max(10px, env(safe-area-inset-top)); }
 .top h1 { font-size: 18px; margin: 0; letter-spacing: .2px; }
 /* home-screen app (iPhone): the clock / battery area is blurred - keep the title and buttons below it */
-@media (display-mode: standalone) { .top { padding-top: calc(env(safe-area-inset-top) + 24px); padding-bottom: 12px; } }
+@media (display-mode: standalone) { .top { padding-top: calc(env(safe-area-inset-top) + 24px); padding-bottom: 12px; }
+  /* forms start below the blurred clock / battery area too */
+  dialog { margin-top: calc(env(safe-area-inset-top) + 16px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px); } }
 .me { font-size: 13px; opacity: .85; }
 
 .tabs { display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--line);
@@ -137,6 +139,9 @@ dialog::backdrop { background: rgba(0,0,0,.4); }
 .form input, .form select, .form textarea { font-size: 16px; color: var(--text); padding: 9px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); width: 100%; }
 .form .two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
 .form input, .form select { min-width: 0; }   /* date boxes otherwise push the dialog wider than a phone */
+/* iPhone: a date box keeps its own width unless it's a plain box - it then spilled over the box next to it */
+.form input[type=date] { -webkit-appearance: none; appearance: none; display: block; min-height: 42px; text-align: left; }
+.form input[type=date]::-webkit-date-and-time-value { text-align: left; }
 dialog { overflow-x: hidden; }
 .form .three { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
 .form .whos { display: flex; flex-wrap: wrap; gap: 6px; }

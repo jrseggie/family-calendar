@@ -127,7 +127,7 @@
     return { mode, auto, text };
   }
   // the days from..to: { kids, days: [{ key, ph, cells: [{ items: [{ ev, mode, auto, text }], bday, base }] }] }
-  //   base (when nothing else is on): "School holiday" / "At school (boarding)" in term / "School" on a school day
+  //   base (when nothing else is on): "School holiday" / "School" on a school day (boarders too - never where they sleep)
   function sharedDays(data, person, from, to) {
     const kidList = sharedKids(data, person), days = [];
     for (let key = from; key <= to; key = addDays(key, 1)) {
@@ -148,7 +148,7 @@
         }
         const bday = (data.recurring || []).some((r) => (r.type || "Birthday") === "Birthday" && r.name === k && `${String(r.month).padStart(2, "0")}-${String(r.day).padStart(2, "0")}` === md);
         const hol = holidayOf(data, k, key);
-        const base = hol ? "School holiday" : personOf(data, k).boards ? "At school (boarding)" : isSchoolDay(data, k, key) ? "School" : "";
+        const base = hol ? "School holiday" : isSchoolDay(data, k, key) ? "School" : "";   // weekends: nothing unless an entry says (a boarder may be out)
         return { items, bday, base };
       });
       days.push({ key, ph: publicHoliday(data, key), cells });

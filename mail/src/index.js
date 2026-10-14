@@ -15,6 +15,7 @@ import { dumpDatabase, gzip } from "../../lib/backup.js";
 import { syncEmailAddresses } from "../../lib/email-sync.js";
 import { processInbox } from "../../lib/inbox.js";
 import { sendUsage } from "../../lib/usage.js";
+import { extraEmail } from "../../src/extras.js";   // optional extra addresses (none in the public release)
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
@@ -51,7 +52,9 @@ export default {
     })());
   },
 
-  async email(message, env) {
+  async email(message, env, ctx) {
+    const box = String(message.to || "").toLowerCase().split("@")[0];
+    if (Object.hasOwn(extraEmail, box)) return extraEmail[box](message, env, ctx);
     const from = String(message.from || "").toLowerCase();
     // family logins and the weekly-email addresses (e.g. a work address) may send things in
     const allowed = (await env.DB.prepare("SELECT lower(email) AS e FROM users WHERE active = 1 UNION SELECT lower(email) FROM digest_recipients WHERE active = 1")
