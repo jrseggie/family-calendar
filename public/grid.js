@@ -97,11 +97,11 @@ function barHTML(it, key, n, person, label, repeat = 0) {
   const visitor = visitorOf(e), visit = !!visitor && person !== visitor;   // striped: a visitor's plan shown in a child's column
   const icon = e.location && LOC()[e.location] && e.status !== "Unavailable" ? `<span class="li">${LOC()[e.location].icon}</span>` : "";
   let title = e.title;
-  if (e.location && person) title = title.replace(new RegExp(`^${person}\\s+(at\\s+(the\\s+)?)?`, "i"), "");   // "Emma at Beach House" -> "Beach House"
+  if (e.location && person) title = title.replace(new RegExp(`^${person}\\s+at\\s+(the\\s+)?`, "i"), "");   // "Emma at Beach House" -> "Beach House" (not "Emma with Mark")
   const pen = CalendarRules.pencilled(state.data, e);
   const cls = ["gi", pen ? "pencil" : "", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", !pen && ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
                multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : ""].join(" ");
-  const who = label ? `<b>${esc(label)}:</b> ` : visit && !title.toLowerCase().startsWith(visitor.toLowerCase()) ? `${esc(visitor)}: ` : "";
+  const who = label ? `<b>${esc(label)}:</b> ` : visit && !new RegExp(`\\b${visitor}\\b`, "i").test(title) ? `${esc(visitor)}: ` : "";   // "Mark: dinner", not "Mark: Emma with Mark"
   const text = `${icon}${who}${esc(title)}${stayStatus(e)}${pencilMark(e)}`;
   const body = repeat ? Array(repeat).fill(`<span>${text}</span>`).join("") : text;
   return `<div class="${cls}${repeat ? " across" : ""}" style="--c:${COLORS[visit ? visitor : person || whoList(e.who)[0]]}${repeat ? `;grid-template-columns:repeat(${repeat},minmax(0,1fr))` : ""}" data-ev="${e.id}">${body}</div>`;   // label on every day, so each square makes sense on its own

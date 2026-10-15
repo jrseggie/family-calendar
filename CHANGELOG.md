@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.20
+- Family grid: an entry like "Emma with Mark" shows as it's written (it used to become "Mark: with Mark"); only "Emma at …" is shortened in Emma's column.
+
 ## 1.0.19
 - 📴 Works without signal: the phone / PC app keeps a copy of the calendar and shows it when there's no connection (with a bar saying
   when it was saved). New entries made offline are kept on the device (⏳) and sent the next time the app is open with a connection.
