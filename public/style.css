@@ -473,3 +473,13 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .vsec h3 { display: flex; justify-content: space-between; align-items: center; cursor: pointer; user-select: none; }
 .vfold { font-size: 12px; font-weight: 600; color: var(--muted); border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; background: var(--card); }
 .vsec.folded .vitem { display: none; }
+
+/* offline (sw.js / app.js): the bar under the tabs */
+.offbar { background: #fff3bf; color: #5c4400; font-size: 13px; padding: 6px 12px; text-align: center; }
+.offbar button { margin-left: 8px; border-radius: 999px; padding: 2px 10px; }
+[data-theme=dark] .offbar { background: #3d3410; color: #ffe08a; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .offbar { background: #3d3410; color: #ffe08a; } }
+/* pull to refresh in the phone app (app.js) */
+.ptr { position: fixed; left: 50%; top: calc(env(safe-area-inset-top) + 4px); transform: translate(-50%, -60px); z-index: 50; background: var(--card); color: var(--text);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 14px; font-size: 13px; box-shadow: 0 4px 14px rgba(0,0,0,.18); opacity: 0; transition: opacity .15s; pointer-events: none; }
+.ptr.on { opacity: 1; }

@@ -1,5 +1,11 @@
 # What's new in Family Calendar
 
+## 1.0.19
+- 📴 Works without signal: the phone / PC app keeps a copy of the calendar and shows it when there's no connection (with a bar saying
+  when it was saved). New entries made offline are kept on the device (⏳) and sent the next time the app is open with a connection.
+  Changing or deleting entries needs a connection. The 🔒 Info page is never kept on the device.
+- Phone app: pull down at the top to refresh, and the calendar refreshes itself when you come back to the app after a minute away.
+
 ## 1.0.18
 - iPhone home-screen app: forms open below the blurred clock / battery area, and date boxes no longer overlap the box next to them.
 - Printout for a co-parent: school days just say "School" (boarders too); weekends are blank unless an entry says otherwise.

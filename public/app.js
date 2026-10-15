@@ -49,8 +49,9 @@ async function api(method, path, body) {
   if (as) headers["X-Demo-User"] = as;
   let code = null; try { code = sessionStorage.getItem("setupCode"); } catch { /* private mode */ }
   if (code) headers["X-Setup-Code"] = code;        // a new install before sign-in is switched on
-  const r = await fetch("/api/" + path, { method, headers,
-                                          body: body ? JSON.stringify(body) : undefined });
+  let r;
+  try { r = await fetch("/api/" + path, { method, headers, body: body ? JSON.stringify(body) : undefined }); }
+  catch { throw Object.assign(new Error(navigator.onLine ? "Couldn't reach the calendar – check the connection" : "You're offline – this needs a connection"), { offline: true }); }
   const data = await r.json().catch(() => ({}));
   if (r.status === 401 && data.setup) { setupLogin(!!code); throw new Error("setup"); }
   if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
@@ -125,6 +126,7 @@ function applyBrand(b) {
 
 async function refresh() {
   state.data = await api("GET", "all");
+  offlineBar(); showQueued();
   applyBrand(state.data.brand);
   for (const k of Object.keys(colorMap)) delete colorMap[k];
   for (const p of state.data.people) colorMap[p.name] = p.color;
@@ -789,7 +791,11 @@ function eventForm(ev, preset = {}) {
       if (f.elements.share) body.share = fd.get("share") || null;
       if (preset.onSave) return preset.onSave(body);
       if (fd.get("repeat")) body.repeat = { every: fd.get("repeat"), until: fd.get("until"), days: fd.getAll("rday").map(Number) };
-      if (!ev) return submit(async () => { const r = await api("POST", "events", body); submit.msg = r.count > 1 ? `Added ${r.count} entries` : "Added"; }, () => submit.msg);
+      if (!ev && (!navigator.onLine || state.data._offline)) return queueAdd(body);
+      if (!ev) return submit(async () => {
+        try { const r = await api("POST", "events", body); submit.msg = r.count > 1 ? `Added ${r.count} entries` : "Added"; }
+        catch (x) { if (!x.offline) throw x; queueAdd(body, true); submit.msg = "Kept on this phone – it'll be sent when you're back online"; }
+      }, () => submit.msg);
       saveEdit(ev, { ...body, loaded_at: ev.updated_at || "" });
     };
     if (!ev) f.elements.title.focus();
@@ -1441,6 +1447,7 @@ document.addEventListener("click", (e) => {
     if (!d.f) state.filter.clear(); else state.filter.has(d.f) ? state.filter.delete(d.f) : state.filter.add(d.f);
     save("filter", [...state.filter]); render();
   }
+  else if (d.ev && +d.ev < 0) queuedOpen(+d.ev);
   else if (d.ev) eventForm(state.data.events.find((x) => x.id == d.ev));
   else if (d.rec) recurringForm(state.data.recurring.find((x) => x.id == d.rec));
   else if (d.sh) { const h = state.data.schoolHolidays.find((x) => x.id == d.sh); state.view === "school" ? holidayForm(h) : holidayPlan(h); }
@@ -1651,4 +1658,83 @@ document.addEventListener("click", (e) => {
 $("#search").onclick = () => state.data && searchSheet();
 
 // "setup" = a new install showing its setup-password box (api() drew it) - leave that on screen
-refresh().then(approvalLink).catch((e) => { if (e.message !== "setup") $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });
+refresh().then(approvalLink).then(() => { if (!state.data._offline) sendQueued(); }).catch((e) => { if (e.message !== "setup") $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });
+
+// ---------- offline (the phone / PC app): sw.js keeps the site and the last calendar data on the device. Offline, the
+// calendar shows that copy with a bar saying so; new entries are kept on the device (localStorage "cal.queue") with ⏳ and
+// sent the next time the app is open with a connection. Changing or deleting existing entries needs a connection.
+const queue = () => load("queue") || [];
+function offlineBar() {
+  let bar = $("#offbar");
+  if (!bar) { $("#bar").insertAdjacentHTML("beforeend", `<div id="offbar" class="offbar" hidden></div>`); bar = $("#offbar"); }
+  const off = state.data?._offline, n = queue().length;
+  bar.hidden = !off && !n;
+  if (bar.hidden) return;
+  const when = typeof off === "string" ? new Date(off).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  bar.innerHTML = off ? `📴 Offline – showing your copy${when ? ` from ${esc(when)}` : ""}. New entries are kept on this phone and sent when you're back online${n ? ` · ⏳ ${n} waiting to send` : ""}.`
+    : `⏳ ${n} new entr${n === 1 ? "y" : "ies"} waiting to send… <button type="button" id="offsend">Send now</button>`;
+  $("#offsend")?.addEventListener("click", sendQueued);
+}
+function showQueued() {   // the waiting entries on the calendar, marked ⏳ (negative ids = not on the server yet)
+  if (!state.data) return;
+  state.data.events = state.data.events.filter((e) => !e._queued).concat(queue().map((q, i) => ({ ...q.body, id: -(i + 1), who: q.body.who.join(", "),
+    end: q.body.end || q.body.start, title: `⏳ ${q.body.title}`, important: q.body.important ? 1 : 0, _queued: true })));
+}
+function queueAdd(body, fromSubmit = false) {
+  save("queue", [...queue(), { body, at: new Date().toISOString() }]);
+  showQueued(); offlineBar();
+  if (!fromSubmit) { closeDialog(); toast("Kept on this phone – it'll be sent when you're back online"); render(); }
+}
+function queuedOpen(id) {
+  const q = queue()[-id - 1]; if (!q) return;
+  if (confirm(`"${q.body.title}" is waiting to be sent to the calendar (made offline ${new Date(q.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}).\n\nRemove it from this phone instead?`)) {
+    save("queue", queue().filter((_, i) => i !== -id - 1)); showQueued(); offlineBar(); render();
+  }
+}
+let sending = false;
+async function sendQueued() {
+  if (sending || !queue().length || !navigator.onLine) return;
+  sending = true;
+  let sent = 0;
+  try {
+    for (const q of queue()) {
+      try { await api("POST", "events", q.body); sent++; }
+      catch (x) { if (x.offline) break; toast(`Couldn't add "${q.body.title}": ${x.message}`); }   // refused (e.g. no longer allowed): dropped, said once
+      save("queue", queue().slice(1));
+    }
+  } finally { sending = false; }
+  if (sent) toast(`Sent ${sent} entr${sent === 1 ? "y" : "ies"} made offline`);
+  await refresh().catch(() => {});
+}
+addEventListener("online", () => { refresh().then(sendQueued).catch(() => {}); });
+if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").catch(() => { /* no offline copy - the site still works */ });
+
+// ---------- fresh data in the phone / PC app (no browser refresh button there)
+// back in the app after more than a minute away: the latest calendar (not while a form is open)
+let lastLoad = Date.now();
+const _refresh = refresh;
+refresh = async (...a) => { const r = await _refresh(...a); lastLoad = Date.now(); return r; };
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible" && Date.now() - lastLoad > 60e3 && !$("#dlg").open && state.data) refresh().then(sendQueued).catch(() => {});
+});
+// pull down at the top of the page to reload (the home-screen app on a phone has no pull-to-refresh of its own)
+(() => {
+  const app = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+  if (!app || !("ontouchstart" in window)) return;
+  document.body.insertAdjacentHTML("beforeend", `<div id="ptr" class="ptr" aria-hidden="true">↓ Pull to refresh</div>`);
+  const ptr = $("#ptr"), FULL = 80;
+  let y0 = null, dy = 0;
+  addEventListener("touchstart", (e) => { y0 = window.scrollY <= 0 && !$("#dlg").open && e.touches.length === 1 ? e.touches[0].clientY : null; dy = 0; }, { passive: true });
+  addEventListener("touchmove", (e) => {
+    if (y0 === null) return;
+    dy = e.touches[0].clientY - y0;
+    if (dy <= 0 || window.scrollY > 0) { ptr.style.transform = ""; ptr.classList.remove("on"); return; }
+    ptr.classList.add("on"); ptr.style.transform = `translate(-50%, ${Math.min(dy, FULL + 20) - 40}px)`;
+    ptr.textContent = dy > FULL ? "↑ Let go to refresh" : "↓ Pull to refresh";
+  }, { passive: true });
+  addEventListener("touchend", () => {
+    if (y0 !== null && dy > FULL && window.scrollY <= 0) { ptr.textContent = "↻ Refreshing…"; ptr.style.transform = `translate(-50%, ${FULL - 30}px)`; location.reload(); }
+    else { ptr.style.transform = ""; ptr.classList.remove("on"); }
+    y0 = null; dy = 0;
+  });
+})();
