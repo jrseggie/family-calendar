@@ -1,5 +1,5 @@
 // mail worker (the calendar's emails; names and addresses from the settings table - lib/settings.js)
-//  - scheduled (Sundays 18:00 SAST): emails "the week ahead" to the addresses on Setup > Weekly email
+//  - scheduled (Sundays 18:00 SAST): emails "the week ahead" to the addresses on Settings > Weekly email
 //  - scheduled (every 10 min): sends anything queued in the outbox table (e.g. "added from the inbox" summaries)
 //  - email: messages to inbox@<domain> from a family login or weekly-email address are stored in the database for Claude
 //    to pick up (tools/fetch_inbox.py); anything from other senders is rejected.
@@ -15,7 +15,8 @@ import { dumpDatabase, gzip } from "../../lib/backup.js";
 import { syncEmailAddresses } from "../../lib/email-sync.js";
 import { processInbox } from "../../lib/inbox.js";
 import { sendUsage } from "../../lib/usage.js";
-import { extraEmail } from "../../src/extras.js";   // optional extra addresses (none in the public release)
+import { extraEmail } from "../../src/extras.js";
+import { syncRequests, makerNews } from "../../lib/requests.js";   // optional extra addresses (none in the public release)
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
@@ -39,14 +40,14 @@ export default {
     ctx.waitUntil(markHealthy(env, "jobs", event.cron));
     if (event.cron !== "*/10 * * * *") return;   // only the 10-minute job does anything (an old Sunday-only trigger is ignored)
     ctx.waitUntil((async () => {
-      // the weekly email: on the day and hour chosen on Setup > Weekly email (in the family's time zone), once
+      // the weekly email: on the day and hour chosen on Settings > Weekly email (in the family's time zone), once
       const t = new Date(event.scheduledTime), step = (name, p) => p.catch((e) => console.log(`${name}:`, String(e)));   // one failing step never stops the others
       await step("weekly email", maybeDigest(env, t));
       await step("outbox", sendOutbox(env));
-      // once a day: "this calendar is in use" to the Family Calendar maker (Setup > This calendar; lib/usage.js)
+      // once a day: "this calendar is in use" to the Family Calendar maker (Settings > This calendar; lib/usage.js)
       await step("usage check-in", sendUsage(env, t));
       if (t.getUTCMinutes() < 10) await step("hourly", hourly(env, t));
-      // smart inbox last (the slowest step; only when switched on in Setup): one new email -> proposals + approval email in the outbox
+      // smart inbox last (the slowest step; only when switched on in Settings): one new email -> proposals + approval email in the outbox
       await processInbox(env).then((r) => r && console.log("inbox:", r))
         .catch((e) => { console.log("inbox error:", String(e)); return markHealthy(env, "inbox_error", String(e.message || e).slice(0, 500)); });
     })());
@@ -81,8 +82,23 @@ export default {
   },
 };
 
+// the maker's own calendar: an email for every new request from any family (lib/requests.js)
+async function makerMail(env) {
+  const rows = await makerNews(env);
+  if (!rows.length) return;
+  const to = env.ALERT_TO ? [env.ALERT_TO] : (await recipients(env)).slice(0, 1);
+  const line = (r) => `${r.kind === "bug" ? "🐞" : "💡"} ${r.title} – from ${r.name || "a calendar"} (v${r.version || "?"})${r.details ? `\n   ${r.details.slice(0, 600)}` : ""}`;
+  const text = `${rows.length} new request${rows.length === 1 ? "" : "s"} for Family Calendar:\n\n${rows.map(line).join("\n\n")}\n\nAnswer them on the 💡 Requests tab (All families), or ask Claude to "check the requests".`;
+  const html = `<div style="font-family:Segoe UI,Arial,sans-serif;font-size:14px;color:#1d2330"><p><b>${rows.length} new request${rows.length === 1 ? "" : "s"} for Family Calendar</b></p>${rows.map((r) =>
+    `<p><b>${r.kind === "bug" ? "🐞" : "💡"} ${esc(r.title)}</b> <span style="color:#6b7280">– from ${esc(r.name || "a calendar")} (v${esc(r.version || "?")})</span><br><span style="white-space:pre-wrap">${esc((r.details || "").slice(0, 1500))}</span></p>`).join("")}
+    <p style="color:#6b7280">Answer them on the 💡 Requests tab (All families), or ask Claude to "check the requests".</p></div>`;
+  if (to.length) await sendTo(env, to, `💡 ${rows.length} new Family Calendar request${rows.length === 1 ? "" : "s"}`, text, html);
+}
+
 async function hourly(env, now = new Date()) {
   await purge(env);
+  await syncRequests(env, now).catch((e) => console.log("requests:", String(e)));   // 💡 send new ones to the maker, fetch the maker's answers
+  await makerMail(env).catch((e) => console.log("maker mail:", String(e)));
   await syncEmailAddresses(env).catch((e) => markHealthy(env, "email_sync_error", String(e.message || e).slice(0, 500)));   // only if the Cloudflare key is set
   await monthlyBackup(env, now).catch((e) => console.log("backup email:", String(e)));
   const alert = await healthCheck(env);
@@ -106,10 +122,10 @@ async function monthlyBackup(env, now = new Date()) {
   const b = brand(await loadSettings(env.DB), env.SITE), day = here.date;
   const file = { name: `calendar-backup-${day}.sql.gz`, type: "application/gzip", bytes: await gzip(await dumpDatabase(env.DB, now)) };
   const text = `A full backup of the ${b.full}, ${day} (attached). Keep the email - you won't normally need it.\n` +
-    `Cloudflare also keeps 30 days of restore points. Admins can download a fresh backup any time on the Setup tab.\n\n${b.url}\n`;
+    `Cloudflare also keeps 30 days of restore points. Admins can download a fresh backup any time on the Settings tab.\n\n${b.url}\n`;
   const html = page("Monthly backup", day, `<p>A full backup of the calendar is attached (<b>${esc(file.name)}</b>). Just keep this email –
     you won't normally need it. 🔒 Info items are in it scrambled, exactly as stored.</p><p style="color:#495057">Cloudflare also keeps 30 days
-    of restore points, and admins can download a fresh backup any time on the ⚙ Setup tab.</p>`, "Sent on the 1st of every month to the calendar's admins.", b.url, b.full);
+    of restore points, and admins can download a fresh backup any time on the ⚙ Settings tab.</p>`, "Sent on the 1st of every month to the calendar's admins.", b.url, b.full);
   const r = await sendOnce(env, "backup_email", month, to, `🗄️ ${b.site} backup – ${day}`, text, html, file);
   if (r.all) await markHealthy(env, "backup_email", `${file.name}, ${file.bytes.length} bytes: ${r.result}`);
 }
@@ -118,9 +134,9 @@ const recipients = async (env) => env.ONLY_TO ? [env.ONLY_TO]
   : (await env.DB.prepare("SELECT email FROM digest_recipients WHERE active = 1 AND verified = 1").all()).results.map((r) => r.email);
 
 async function sendTo(env, emails, subject, text, html, ics = null, file = null) {
-  // sender: FROM if set, else calendar@<the calendar's domain> (Setup > This calendar > web address)
-  const b = brand(await loadSettings(env.DB), env.SITE), results = [], name = b.site, from = env.FROM || b.from;   // name e.g. "Smith Calendar"
-  if (!from) return "FAILED: no web address set yet (Setup > This calendar), so there's no address to send from";
+  // sender: FROM if set, else calendar@<the calendar's domain> (Settings > This calendar > web address)
+  const b = brand(await loadSettings(env.DB), env.SITE), results = [], name = b.site, from = env.FROM || b.from;   // name e.g. "Smith Family"
+  if (!from) return "FAILED: no web address set yet (Settings > This calendar), so there's no address to send from";
   for (const email of emails) {
     try {
       await env.MAILER.send(new EmailMessage(from, email, mime(from, email, subject, text, html, ics, name, file)));

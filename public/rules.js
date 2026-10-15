@@ -3,10 +3,10 @@
 // Everything works on a data object { events, people, places, schoolHolidays, publicHolidays: [{date, name, flag?, main?}], acks? }
 // and ISO day keys ("2026-10-14"); dates are handled in UTC so the browser and the worker agree.
 // Nothing here knows the family: who the children are, who boards, where people usually sleep and which places
-// are houses all come from the Setup tab (people.child / boards / home, the places table).
+// are houses all come from the Settings tab (people.child / boards / home, the places table).
 (function () {
   // a new family's starting places (also used when the database has none yet); they rename them in the setup wizard
-  // or on Setup > Places. The keys never change, so renaming keeps every entry pointing at the right place.
+  // or on Settings > Places. The keys never change, so renaming keeps every entry pointing at the right place.
   const DEFAULT_PLACES = [
     { key: "home", label: "Primary house", short: "Home", icon: "🏠", kind: "home" },
     { key: "home2", label: "Secondary house", short: "House 2", icon: "🏡", kind: "home" },
@@ -20,7 +20,7 @@
   const homePlaces = (data) => placeList(data).filter((p) => p.kind === "home").map((p) => p.key);
   const schoolPlace = (data) => placeList(data).find((p) => p.kind === "school")?.key || "school";
   const whoList = (w) => String(w || "").split(",").map((x) => x.trim()).filter(Boolean);
-  // people ticked "Part of the family" on Setup; "Family" in an entry's Who means all of them
+  // people ticked "Part of the family" on Settings; "Family" in an entry's Who means all of them
   const familyMembers = (data) => data.people.filter((p) => p.family && p.active !== 0).map((p) => p.name);
   const expandWho = (data, w) => [...new Set(whoList(w).flatMap((p) => p === "Family" ? ["Family", ...familyMembers(data)] : [p]))];
   const parse = (s) => new Date(s + "T00:00:00Z");
@@ -44,7 +44,7 @@
   const holidayOf = (data, child, key) => data.schoolHolidays.find((h) => h.child === child && on(h, key));
   const publicHoliday = (data, key) => data.publicHolidays.find((h) => h.date === key && h.main !== false)?.name || null;   // extra countries: information only
 
-  // a "Study" entry (exam study day at home) also means no school run. Only children with a school (Setup > People) have
+  // a "Study" entry (exam study day at home) also means no school run. Only children with a school (Settings > People) have
   // school days - a toddler is never "at home on a school day"
   function isSchoolDay(data, child, key) {
     if (!String(personOf(data, child).school || "").trim()) return false;
@@ -178,7 +178,7 @@
         }
       }
     }
-    // houses that need someone sleeping there (Setup > Places "needs", e.g. the dogs) - unless marked "not required"
+    // houses that need someone sleeping there (Settings > Places "needs", e.g. the dogs) - unless marked "not required"
     for (const pl of placeList(data).filter((x) => x.kind === "home" && x.needs && x.active !== 0)) {
       if (data.events.some((e) => e.house_off === pl.key && e.status !== "Cancelled" && on(e, key))) continue;
       const there = at(pl.key);

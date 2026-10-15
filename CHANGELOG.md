@@ -1,5 +1,16 @@
 # What's new in Family Calendar
 
+## 1.0.21
+- On a computer: rest the mouse on an entry to see its details and notes without opening it.
+- 💡 Requests tab: anyone with a login can suggest an idea or report a bug (with a screenshot if they like) and comment on others.
+  Each one also goes to the Family Calendar maker, who decides what's built for everyone; the answer (Planned, Done, …) shows on the tab.
+  Admins get an email for each new request.
+- New menu: the site is now "<your family name> Family" with sections along the top – 📅 Calendar (with Month, Upcoming, Birthdays,
+  School and Changes underneath), 🔒 Info, then ⚙ Settings (was "Setup") and 💡 Requests on the right. On a phone the sections
+  are a bar along the bottom of the screen. (If you set your own site name on ⚙ Settings → This calendar, it's kept.)
+- 🔒 Info: the sections start folded each time you open the page – tap one to open it (a person or type filter shows its matches open).
+- Phone: short pages fill the screen, so the bar at the bottom stays at the bottom.
+
 ## 1.0.20
 - Family grid: an entry like "Emma with Mark" shows as it's written (it used to become "Mark: with Mark"); only "Emma at …" is shortened in Emma's column.
 

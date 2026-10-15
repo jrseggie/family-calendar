@@ -31,7 +31,7 @@ Each family runs its own copy in its own free Cloudflare account – nobody else
 6. **Save the recovery key** it shows you (download or print). It unlocks the 🔒 Info page if the calendar ever has to be
    reinstalled.
 7. Sign in with the code Cloudflare emails you. On **⚙ Setup → This calendar → Edit**, fill in **Your GitHub copy** (the address
-   of the copy Cloudflare made, e.g. `github.com/yourname/family-calendar`) – Setup then has the links you need for updates.
+   of the copy Cloudflare made, e.g. `github.com/yourname/family-calendar`) – Settings then has the links you need for updates.
 
 That's it. Add the rest of the family's logins on the ⚙ Setup tab.
 Everything else is optional – see [docs/HELP.md](docs/HELP.md): adding your own web address and the emails, the smart inbox,
@@ -42,7 +42,7 @@ backups, updates.
 Once set up, new versions **install themselves overnight**. Set-up (once): **⚙ Setup → This calendar → Edit → Your GitHub copy**,
 then the link under it, **add the update job** – GitHub opens (sign in if it shows "404") – click **Commit changes**.
 (Cloudflare's install doesn't copy the update job over, so this one step is by hand.)
-Can't wait for the night? When Setup says a new version is out, the green **⬆️ Update** button opens GitHub: click **Run workflow**.
+Can't wait for the night? When Settings says a new version is out, the green **⬆️ Update** button opens GitHub: click **Run workflow**.
 Your calendar and settings are kept; changes you made to the code yourself are replaced by the new version.
 
 ## Usage check-in
@@ -50,6 +50,13 @@ Once a day your calendar tells the Family Calendar maker it's in use: a random n
 used in the last 30 days, and how many changes were made. Your calendar's **name** goes with it only if you tick the box in the
 set-up wizard (or choose "Yes" on **⚙ Setup → This calendar**). Never entries, people, email addresses or the web address.
 Turn it off there any time ("Off – send nothing").
+
+## 💡 Requests (ideas and bugs)
+Anyone with a login can suggest an idea or report a bug on the **💡 Requests** tab. Each request's title, details, the page it was
+on and the browser type are sent to the Family Calendar maker (with the random number and version above, and your calendar's name
+only if you chose "Yes" for the check-in), so the maker can decide what to build – for every family. Who logged it and any
+screenshot stay on your calendar. The maker's answer (Planned, Done, …) shows on the tab within a few hours. Your admins get an
+email for each new request. This happens only when someone sends a request – even with the check-in turned off.
 
 ## Credits
 Public holidays come from [date-holidays](https://github.com/commenthol/date-holidays) (ISC licence; holiday data CC BY 3.0).

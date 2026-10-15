@@ -1,7 +1,7 @@
 // Family grid: days down the side, a column per person (like the original Excel), Family entries in a strip
 // across the day, location icons on the entries and ⚠ on the date when something clashes. Loaded after app.js and uses its helpers.
 
-// the ⚠ rules live in rules.js (shared with the Sunday email and the tests); places and children come from Setup
+// the ⚠ rules live in rules.js (shared with the Sunday email and the tests); places and children come from Settings
 const LOC = () => CalendarRules.places(state.data);
 const KIDS = () => CalendarRules.kids(state.data);
 const activePlaces = () => CalendarRules.placeList(state.data).filter((p) => p.active !== 0);
@@ -470,7 +470,7 @@ function stayForm(person, key) {
   });
 }
 
-// ---------- houses that need someone (Setup > Places "needs", e.g. the dogs): house-sitting or "not required"
+// ---------- houses that need someone (Settings > Places "needs", e.g. the dogs): house-sitting or "not required"
 function houseButtons(key) {
   return CalendarRules.houseNeeds(state.data, key).map((h) => {
     const pl = LOC()[h];

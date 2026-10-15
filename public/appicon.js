@@ -28,7 +28,7 @@ async function appIconPng(svg, size) {
   return cv.toDataURL("image/png").split(",")[1];
 }
 
-// admins, on Setup: redraw and store the icons if the people's colours changed since last time
+// admins, on Settings: redraw and store the icons if the people's colours changed since last time
 async function syncAppIcon(people, storedKey) {
   const colors = people.filter((p) => p.active !== 0 && p.grid_column !== 0 && p.type !== "group").map((p) => p.color).filter(Boolean);
   const key = colors.join(",") || "default";

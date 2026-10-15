@@ -19,12 +19,13 @@ import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
 import { USAGE_SHARE, usageMode, usagePayload } from "../../lib/usage.js";
 import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
-import { extraApi } from "../../src/extras.js";   // optional extra pages (empty in the public release)
+import { extraApi } from "../../src/extras.js";
+import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
 const ROLES = ["admin", "editor", "viewer", "limited"];
 const PERSON_TYPES = ["household", "helper", "tracked", "group"];
-const PLACE_KEY = /^[a-z0-9_-]{1,30}$/;   // events.location = a key from the places table (Setup > Places)
+const PLACE_KEY = /^[a-z0-9_-]{1,30}$/;   // events.location = a key from the places table (Settings > Places)
 const PLACE_KINDS = ["home", "school", "friend", "away"];
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 const EMAIL = /^[^\s@,]+@[^\s@,]+\.[^\s@,]+$/;
@@ -176,7 +177,7 @@ function cleanRecurring(b) {
 function cleanHoliday(b, people) {
   const name = String(b.name || "").trim();
   const child = people.find((p) => p.child && p.name === b.child);
-  if (!child) invalid("Pick one of the children (tick \"Child\" for them on the Setup tab)");
+  if (!child) invalid("Pick one of the children (tick \"Child\" for them on the Settings tab)");
   if (!name) invalid("Name is required");
   if (!DATE.test(b.start || "") || !DATE.test(b.end || "")) invalid("From and To dates are required");
   if (b.end < b.start) invalid("To date is before From date");
@@ -391,7 +392,7 @@ async function simpleTable(request, env, u, id, table, clean, label) {
 const renameIn = (list, from, to) => split(list).map((p) => (p === from ? to : p)).join(", ");
 const whoHas = "',' || replace(who,', ',',') || ',' LIKE ?";
 
-// Setup > "This calendar": the family's name and web address (lib/settings.js). uid_prefix is never changed here.
+// Settings > "This calendar": the family's name and web address (lib/settings.js). uid_prefix is never changed here.
 async function setupSettings(request, env, u) {
   const cur = await loadSettings(env.DB);
   if (request.method === "GET") return json({ ...Object.fromEntries(SETTING_KEYS.map((k) => [k, cur[k]])), brand: brand(cur, new URL(request.url).origin), emailSync: canSyncEmail(env),
@@ -406,7 +407,7 @@ async function setupSettings(request, env, u) {
     repo_url: clean(b.repo_url, 120).replace(/^(https?:\/\/)?(www\.)?github\.com\//i, "").replace(/\.git$|\/+$/g, "") };   // "owner/name" of the family's GitHub copy
   if (rec.repo_url && !/^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(rec.repo_url)) invalid("GitHub copy should look like github.com/yourname/family-calendar");
   if (rec.site_url && !/^https:\/\/[a-z0-9.-]+\.[a-z]{2,}$/i.test(rec.site_url)) invalid("Web address should look like https://ourfamily.com");
-  if (USAGE_SHARE[b.usage_share]) rec.usage_share = b.usage_share;   // Setup > "Let the Family Calendar maker know you use it"
+  if (USAGE_SHARE[b.usage_share]) rec.usage_share = b.usage_share;   // Settings > "Let the Family Calendar maker know you use it"
   if (b.country !== undefined) {   // the calendar's country (public holidays) + its time zone, state/province and extra countries
     const cc = String(b.country || "").toUpperCase();
     if (!validCountry(cc)) invalid("Pick a country");
@@ -427,9 +428,9 @@ async function setupSettings(request, env, u) {
   return json({ ok: true });
 }
 
-// Setup wizard (a new family's first visit, or Setup > "Set-up wizard" later): the family's name, its people and their roles,
+// Setup wizard (a new family's first visit, or Settings > "Set-up wizard" later): the family's name, its people and their roles,
 // and its houses - all in one go. It only ever ADDS people / places (existing ones are left as they are) and renames the houses.
-const WIZARD_ROLES = {   // role -> how the person is set up (see Setup > People for each setting)
+const WIZARD_ROLES = {   // role -> how the person is set up (see Settings > People for each setting)
   adult:   { type: "household", child: 0, boards: 0, family: 1, grid_column: 1, home: "house" },
   child:   { type: "household", child: 1, boards: 0, family: 1, grid_column: 1, home: "house" },
   boarder: { type: "household", child: 1, boards: 1, family: 1, grid_column: 1, home: "house" },
@@ -517,7 +518,7 @@ async function setupWizard(request, env, u) {
   return json({ ok: true, added, changed });
 }
 
-// Setup > "📥 Smart inbox" (lib/inbox.js): the Anthropic key (stored scrambled, never sent back), model, notes, on/off
+// Settings > "📥 Smart inbox" (lib/inbox.js): the Anthropic key (stored scrambled, never sent back), model, notes, on/off
 async function setupInbox(request, env, u) {
   const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, v);
   if (request.method === "GET") {
@@ -545,7 +546,7 @@ async function setupInbox(request, env, u) {
   return json({ ok: true });
 }
 
-// places where people sleep (Setup > Places); the key is stored on entries, so it never changes once made
+// places where people sleep (Settings > Places); the key is stored on entries, so it never changes once made
 const loadPlaces = async (env) => (await env.DB.prepare("SELECT * FROM places ORDER BY sort, key").all()).results;
 async function setupPlaces(request, env, u, key) {
   if (request.method === "GET") return json(await loadPlaces(env));
@@ -703,7 +704,7 @@ async function invite(request, env, u, id) {
   const minutes = Math.min(Math.max(parseInt(b.minutes, 10) || 60, 15), 24 * 60);
   const alarm = ALARMS[b.alarm] === undefined ? (time ? ALARMS.hour1 : ALARMS.evening) : ALARMS[b.alarm];
 
-  // times are in the calendar's time zone (Setup > This calendar)
+  // times are in the calendar's time zone (Settings > This calendar)
   let when, dtLines;
   if (time) {
     const tz = brand(await loadSettings(env.DB)).tz, start = new Date(`${e.start}T${time}:00${offsetIn(tz, e.start)}`), end = new Date(start.getTime() + minutes * 60000);
@@ -948,6 +949,51 @@ async function myFeed(request, env, u, reset) {
   return json({ url: `${origin}/feed/${token}.ics` });
 }
 
+// ---------- 💡 requests: anyone with a login can log an idea / a bug, see the list and comment; everything is also sent to the
+// Family Calendar maker (lib/requests.js), whose status and reply come back. The maker's own calendar (env.STATS) answers them.
+async function requestsApi(request, env, u, parts) {
+  const db = env.DB, at = now(), rid = /^\d+$/.test(parts[1] || "") ? +parts[1] : null;
+  if (request.method === "GET" && !parts[1]) {
+    const [list, comments] = await Promise.all([
+      db.prepare("SELECT id, kind, title, details, page, device, created_by, created_at, sent_at, maker_status, maker_note, maker_at, screenshot IS NOT NULL AS has_shot FROM requests ORDER BY id DESC").all().then((r) => r.results),
+      db.prepare("SELECT * FROM request_comments ORDER BY id").all().then((r) => r.results)]);
+    return json({ statuses: REQUEST_STATUS, list, comments, maker: isAdmin(u) ? await makerList(env) : null });
+  }
+  if (request.method === "GET" && rid && parts[2] === "shot") {
+    const r = await db.prepare("SELECT screenshot, screenshot_type FROM requests WHERE id = ?").bind(rid).first();
+    if (!r?.screenshot) return fail(404, "Not found");
+    return new Response(new Uint8Array(r.screenshot), { headers: { "content-type": r.screenshot_type || "image/jpeg", "cache-control": "private, max-age=3600" } });
+  }
+  if (request.method === "POST" && !parts[1]) {
+    const b = await request.json(), title = String(b.title || "").trim().slice(0, 200), details = String(b.details || "").trim().slice(0, 6000);
+    if (!title) invalid("Give it a short title");
+    let shot = null;
+    if (b.screenshot) { shot = Uint8Array.from(atob(String(b.screenshot)), (c) => c.charCodeAt(0)); if (shot.length > 900000) invalid("The screenshot is too big"); }
+    const r = await db.prepare("INSERT INTO requests (kind, title, details, page, device, screenshot, screenshot_type, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?) RETURNING id")
+      .bind(b.kind === "bug" ? "bug" : "idea", title, details || null, String(b.page || "").slice(0, 60) || null, String(b.device || "").slice(0, 200) || null,
+        shot, shot ? "image/jpeg" : null, u.name, at).first();
+    await log(env, u, b.kind === "bug" ? "Reported a bug" : "Logged an idea", title);
+    await queueAdminEmail(env, { kind: b.kind, title, details }, u.name).catch(() => {});
+    await sendRequests(env).catch(() => {});   // to the maker now (else the hourly job tries again)
+    return json({ ok: true, id: r.id }, 201);
+  }
+  if (request.method === "POST" && rid && parts[2] === "comments") {
+    const text = String((await request.json()).text || "").trim().slice(0, 3000);
+    if (!text) invalid("Write something");
+    await db.prepare("INSERT INTO request_comments (request_id, by, at, text) VALUES (?,?,?,?)").bind(rid, u.name, at, text).run();
+    return json({ ok: true }, 201);
+  }
+  // the maker answers any family's request (the maker's own calendar only)
+  if (request.method === "PUT" && parts[1] === "maker" && /^\d+$/.test(parts[2] || "")) {
+    if (!isAdmin(u) || !env.STATS) deny();
+    const b = await request.json();
+    try { await makerUpdate(env, +parts[2], b.status, b.note); } catch (e) { invalid(e.message); }
+    await log(env, u, "Answered a request", `#${parts[2]} – ${REQUEST_STATUS[b.status]}`);
+    return json({ ok: true });
+  }
+  return fail(404, "Not found");
+}
+
 // ---------- router
 // a change (POST/PUT/DELETE) must come from the calendar's own pages: a web page elsewhere can't make a signed-in
 // browser change things (browsers send Origin / Sec-Fetch-Site on these requests)
@@ -989,6 +1035,7 @@ export async function onRequest({ request, env, params }) {
     if (parts[0] === "events" && request.method !== "GET") return await events(request, env, u, id);
     if (parts[0] === "deleted" && request.method === "GET") return await recentlyDeleted(env, u);
     if (parts[0] === "vault") return await vault(request, env, u, id);
+    if (parts[0] === "requests") return await requestsApi(request, env, u, parts);
     if (parts[0] === "me" && parts[1] === "feed") return await myFeed(request, env, u, request.method === "POST" && parts[2] === "reset");
     if (parts[0] === "invite" && request.method === "POST" && id) return await invite(request, env, u, id);
     if (parts[0] === "proposals" && parts[1] === "decide" && request.method === "POST") return await decideProposals(request, env, u);
@@ -1011,7 +1058,7 @@ export async function onRequest({ request, env, params }) {
         await env.DB.batch(stmts);
         return json({ ok: true });
       }
-      if (parts[1] === "people-order" && request.method === "PUT") {   // Setup > People ↑ ↓ (= the Month grid's column order)
+      if (parts[1] === "people-order" && request.method === "PUT") {   // Settings > People ↑ ↓ (= the Month grid's column order)
         const ids = (await request.json()).ids, people = await loadPeople(env);
         if (!Array.isArray(ids) || !ids.every((id) => people.some((p) => p.id === id))) invalid("Unknown person");
         const rest = people.filter((p) => !ids.includes(p.id)).map((p) => p.id);
@@ -1019,7 +1066,7 @@ export async function onRequest({ request, env, params }) {
         await log(env, u, "People order", [...ids, ...rest].map((id) => people.find((p) => p.id === id).name).join(", "));
         return json({ ok: true });
       }
-      if (parts[1] === "digest-time" && request.method === "PUT") {   // Setup > Weekly email > day and time
+      if (parts[1] === "digest-time" && request.method === "PUT") {   // Settings > Weekly email > day and time
         const b = await request.json(), s = digestSchedule({ digest_day: b.day, digest_hour: b.hour, timezone: b.timezone });
         if (String(b.timezone || "") && s.tz !== b.timezone) invalid("Unknown time zone");
         const put = (k, v) => env.DB.prepare("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value").bind(k, String(v));
@@ -1042,11 +1089,11 @@ export async function onRequest({ request, env, params }) {
           return json({ ok: true, ...r });
         } catch (e) { invalid(String(e.message || e)); }
       }
-      if (parts[1] === "email-sync" && request.method === "POST") {   // Setup > Weekly email > "Check confirmations now"
+      if (parts[1] === "email-sync" && request.method === "POST") {   // Settings > Weekly email > "Check confirmations now"
         if (!canSyncEmail(env)) invalid("The calendar has no Cloudflare key for this yet");
         try { return json({ changes: await syncEmailAddresses(env) }); } catch (e) { invalid(String(e.message || e)); }
       }
-      if (parts[1] === "backup" && request.method === "GET") {   // Setup > "Download a backup"
+      if (parts[1] === "backup" && request.method === "GET") {   // Settings > "Download a backup"
         const sql = await dumpDatabase(env.DB), day = todayIn(brand(await loadSettings(env.DB)).tz);
         await log(env, u, "Downloaded a backup", `${Math.round(sql.length / 1024)} KB`);
         return new Response(sql, { headers: { "content-type": "application/sql; charset=utf-8", "cache-control": "no-store",

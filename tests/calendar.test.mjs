@@ -9,7 +9,7 @@ import { repeatDates } from "../lib/repeat.js";
 import { buildDigest, weekAfter } from "../mail/src/digest.js";
 
 const R = globalThis.CalendarRules;
-// the test family = how the Smiths are set up on the Setup tab (children, boarder, usual house, places)
+// the test family = how the Smiths are set up on the Settings tab (children, boarder, usual house, places)
 const people = ["Emma", "Leo", "Anna", "Tom", "Nomsa"].map((name, i) => ({ name, type: name === "Nomsa" ? "helper" : "household", active: 1, grid_column: name === "Nomsa" ? 0 : 1, family: name === "Nomsa" ? 0 : 1, color: "#123456", sort: i,
     child: ["Emma", "Leo"].includes(name) ? 1 : 0, boards: name === "Leo" ? 1 : 0, school: ["Emma", "Leo"].includes(name) ? "Town School" : null, home: name === "Nomsa" ? null : "town" }))
   .concat([{ name: "Family", type: "group", active: 1, grid_column: 0, color: "#495057" }, { name: "Mark", type: "tracked", active: 1, grid_column: 0, color: "#c92a2a" }]);
@@ -307,7 +307,7 @@ test("usage check-in: anonymous by default, the name only when chosen, nothing w
   assert.deepEqual({ ...anon, id: "x" }, { id: "x", version: VERSION_NOW, logins: 2, active_logins: 1, changes_30d: 1 });
   assert.equal((await usagePayload(env, now)).id, anon.id);   // the same random number every day
   db.exec("INSERT INTO settings (key, value) VALUES ('usage_share', 'named')");
-  assert.equal((await usagePayload(env, now)).name, "Mokoena Calendar");
+  assert.equal((await usagePayload(env, now)).name, "Mokoena Family");
   db.exec("UPDATE settings SET value = 'off' WHERE key = 'usage_share'");
   assert.equal(await usagePayload(env, now), null);
   db.exec("UPDATE settings SET value = 'anonymous' WHERE key = 'usage_share'");
@@ -342,16 +342,16 @@ test("review fixes: no school day without a school; a firm plan wins over a penc
   assert.doesNotMatch(await call({ Origin: "http://localhost", "Sec-Fetch-Site": "same-origin" }), blocked);   // the calendar's own page
 });
 
-// ---------- names and addresses from the settings (Setup > This calendar)
+// ---------- names and addresses from the settings (Settings > This calendar)
 import { brand } from "../lib/settings.js";
 test("settings: names from the family name; Smith feed IDs unchanged; a new family has nothing of ours", () => {
-  const s = brand({ family_name: "Smith", site_name: "Smith Calendar", short_name: "Smiths", site_url: "https://example.com", uid_prefix: "smith" });
-  assert.deepEqual([s.site, s.full, s.short, s.feed, s.inbox, s.from], ["Smith Calendar", "Smith Family Calendar", "Smiths", "Smith Family", "inbox@example.com", "calendar@example.com"]);
+  const s = brand({ family_name: "Smith", site_name: "Smith Family", short_name: "Smiths", site_url: "https://example.com", uid_prefix: "smith" });
+  assert.deepEqual([s.site, s.full, s.short, s.feed, s.inbox, s.from], ["Smith Family", "Smith Family Calendar", "Smiths", "Smith Family", "inbox@example.com", "calendar@example.com"]);
   const ics = feedCalendar({ places, events: [ev("2026-10-16", "2026-10-16", "Tom", "Haircut", { id: 7 })], recurring: [], schoolHolidays: [] }, new Date("2026-10-09T10:00:00Z"), s);
   assert.match(ics, /UID:smith-feed-7@example\.com/);
   assert.match(ics, /X-WR-CALNAME:Smith Family/);
   const n = brand({ family_name: "Smith" }, "https://smith.example.com");
-  assert.deepEqual([n.site, n.short, n.url, n.inbox], ["Smith Calendar", "Smiths", "https://smith.example.com", "inbox@smith.example.com"]);
+  assert.deepEqual([n.site, n.short, n.url, n.inbox], ["Smith Family", "Smiths", "https://smith.example.com", "inbox@smith.example.com"]);
   assert.equal(brand({}).site, "Family Calendar");
 });
 
@@ -509,7 +509,7 @@ test("set-up wizard: a new family's people, roles, houses and name; then the ⚠
   assert.deepEqual(res.added, ["Thandi", "Sipho", "Lerato", "Kagiso", "Nomsa", "Dad"]);
   const [, d] = await call("GET", "all");
   assert.equal(d.needsWizard, false);
-  assert.deepEqual([d.brand.site, d.brand.short, d.brand.full], ["Mokoena Calendar", "Mokoenas", "Mokoena Family Calendar"]);
+  assert.deepEqual([d.brand.site, d.brand.short, d.brand.full], ["Mokoena Family", "Mokoenas", "Mokoena Family Calendar"]);
   const data = { ...d, schoolHolidays: [], publicHolidays: [] };
   assert.deepEqual(R.kids(data), ["Lerato", "Kagiso"]);
   assert.deepEqual(R.helpers(data), ["Nomsa"]);
@@ -588,7 +588,7 @@ test("new install: setup password guards everything; Switch on sign-in sets up A
   } finally { globalThis.fetch = realFetch; }
 });
 
-// ---------- weekly email: day, hour and time zone from Setup
+// ---------- weekly email: day, hour and time zone from Settings
 import { digestSchedule, digestDue, digestRange } from "../lib/digest-schedule.js";
 test("weekly email timing: default Sunday 18:00 SA; Monday 07:00 covers this week; once per day; other time zones", () => {
   const sa = digestSchedule({});

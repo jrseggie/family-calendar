@@ -1,5 +1,5 @@
 // Family calendar - front end (no build step, plain JS)
-// person colours come from the Setup > People list (grey for anyone unknown/hidden)
+// person colours come from the Settings > People list (grey for anyone unknown/hidden)
 const colorMap = {};
 const COLORS = new Proxy(colorMap, { get: (t, k) => t[k] || "#868e96" });
 const MONTHS = ["January","February","March","April","May","June","July","August","September","October","November","December"];
@@ -8,7 +8,7 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const EXTRA_VIEWS = globalThis.EXTRA_VIEWS || {};
 // opening the site starts on Month; a refresh (F5) in the same tab stays on the tab you were on
 function lastTab() {
-  try { return ["month", "upcoming", "birthdays", "school", "log", "info", "setup", ...Object.keys(EXTRA_VIEWS)].find((v) => v === sessionStorage.getItem("cal.view")) || "month"; }
+  try { return ["month", "upcoming", "birthdays", "school", "log", "info", "requests", "setup", ...Object.keys(EXTRA_VIEWS)].find((v) => v === sessionStorage.getItem("cal.view")) || "month"; }
   catch { return "month"; }
 }
 const state = {
@@ -108,13 +108,13 @@ function recoveryScreen(r, email) {
       calendar ever has to be reinstalled. It is shown only now.<pre style="white-space:pre-wrap;word-break:break-all;user-select:all">${esc(r.vaultKey)}</pre>
       <a class="btn" download="calendar-recovery-key.txt" href="data:text/plain;charset=utf-8,${encodeURIComponent(text)}">⬇️ Download</a>
       <button type="button" onclick="window.print()">🖨️ Print</button></div>` : ""}
-    <p>Next: the calendar will reload and Cloudflare will send a code to <b>${esc(email)}</b> to sign in. Add the rest of the family's logins on ⚙ Setup.</p>
+    <p>Next: the calendar will reload and Cloudflare will send a code to <b>${esc(email)}</b> to sign in. Add the rest of the family's logins on ⚙ Settings.</p>
     <div class="actions"><button class="primary" id="signin">Sign in now</button></div></div>`, () => {
     $("#signin").onclick = () => { try { sessionStorage.removeItem("setupCode"); } catch { /* */ } setTimeout(() => location.reload(), 1500); };
   });
 }
 
-// the calendar's name (Setup > This calendar) in the header, tab title, phone home-screen name and the little icon
+// the calendar's name (Settings > This calendar) in the header, tab title, phone home-screen name and the little icon
 function applyBrand(b) {
   if (!b) return;
   document.title = b.site;
@@ -138,11 +138,11 @@ async function refresh() {
   if (me.demo) $("#viewas").onclick = viewAsPicker;
   // only show what this login is allowed to use
   const tabOk = { birthdays: me.seeBirthdays, school: me.seeSchool, log: me.seeLog, info: me.isAdmin, setup: me.isAdmin };
-  for (const [k, x] of Object.entries(EXTRA_VIEWS)) {
-    tabOk[k] = !!x.ok(state.data);
-    if (!document.querySelector(`#tabs [data-view="${k}"]`)) $("#tabs [data-view=setup]").insertAdjacentHTML("beforebegin", `<button data-view="${k}" hidden>${x.label}</button>`);
-  }
+  for (const [k, x] of Object.entries(EXTRA_VIEWS)) tabOk[k] = !!x.ok(state.data);
   document.querySelectorAll("#tabs button").forEach((b) => { b.hidden = tabOk[b.dataset.view] === false; });
+  state.sections = SECTIONS().filter((s) => tabOk[s.key] !== false);
+  $("#sections").innerHTML = state.sections.map((s) => `${s.right ? `<span class="sp"></span>` : ""}<button data-sec="${s.key}"><i>${s.icon}</i><span>${esc(s.label)}</span><em>${esc(s.short || s.label)}</em></button>`).join("");
+  document.body.classList.toggle("nosections", state.sections.length < 2);
   if (tabOk[state.view] === false) state.view = "month";
   for (const f of [...state.filter]) if (!names().includes(f)) state.filter.delete(f);
   render();
@@ -255,7 +255,7 @@ function welcomeCard() {
   if (!state.data.needsWizard) return "";
   return `<div class="card pad"><h3 style="margin-top:0">👋 Welcome – set up your calendar</h3>
     <p class="muted">Tell the calendar who's in your family, what you call your house and who needs looking after. It takes about two minutes
-      and you can change everything later on the ⚙ Setup tab.</p><button class="go" onclick="wizardForm()">👋 Start</button></div>`;
+      and you can change everything later on the ⚙ Settings tab.</p><button class="go" onclick="wizardForm()">👋 Start</button></div>`;
 }
 
 // ---------- set-up wizard: family name, people + roles, houses (POST setup/wizard; only adds, never removes)
@@ -273,9 +273,9 @@ async function wizardForm() {
   const guess = (list.find((c) => c.timezones.includes(myTz())) || {}).code;
   const cf = countryFields(list, { country: state.data.country || guess || "ZA", timezone: b.tz || myTz() });
   const known = state.data.people.filter((p) => p.active !== 0);   // in order, the Family group too (it can be moved)
-  // people already in the calendar: name fixed (entries are filed under it - rename under Setup → People), role and school can change
+  // people already in the calendar: name fixed (entries are filed under it - rename under Settings → People), role and school can change
   const personRow = (p = {}) => `<div class="vline wrow" ${p.id ? `data-id="${p.id}"` : ""}><input placeholder="Name" value="${esc(p.name || "")}" data-n
-      ${p.id ? `readonly title="Rename under Setup → People" class="fixed"` : ""}>
+      ${p.id ? `readonly title="Rename under Settings → People" class="fixed"` : ""}>
     ${p.role === "group" ? `<span class="muted" style="align-self:center;font-size:13px">everyone in the family</span><input type="hidden" data-r value="group">`
       : `<select data-r title="${esc(WIZARD_ROLE_HELP)}">${Object.entries(WIZARD_ROLE_LABELS).map(([k, v]) => `<option value="${k}" ${p.role === k ? "selected" : ""}>${v}</option>`).join("")}</select>`}
     <input placeholder="School" data-s value="${esc(p.school || "")}" ${["child", "boarder"].includes(p.role) ? "" : `style="visibility:hidden"`}><span class="vmove">
@@ -286,19 +286,19 @@ async function wizardForm() {
     <input placeholder="Someone must sleep here because of… (e.g. the dogs)" value="${esc(h.needs || "")}" data-x></div>`;
   openDialog(`<form class="form" id="f" autocomplete="off"><h2>👋 Set up your calendar</h2>
     <div class="two"><label>Family name<input name="family_name" value="${esc(b.family || "")}" placeholder="e.g. Smith" required></label>
-      <label>Calendar name <small class="muted">(optional)</small><input name="site_name" value="${esc(b.site && b.site !== `${b.family} Calendar` ? b.site : "")}"
-        placeholder="${esc(b.family ? b.family + " Calendar" : "Smith Calendar")}"></label></div>
+      <label>Site name <small class="muted">(optional)</small><input name="site_name" value="${esc(b.site && b.site !== `${b.family} Family` ? b.site : "")}"
+        placeholder="${esc(b.family ? b.family + " Family" : "Smith Family")}"></label></div>
     ${cf.html}
-    <div><div class="lbl">Who's in the calendar? <small class="muted">(↑ ↓ = the order of the columns on the calendar${known.length ? "; to remove someone: Setup → People" : ""})</small></div>
+    <div><div class="lbl">Who's in the calendar? <small class="muted">(↑ ↓ = the order of the columns on the calendar${known.length ? "; to remove someone: Settings → People" : ""})</small></div>
       <div id="wpeople">${known.length ? known.map((p) => personRow({ id: p.id, name: p.name, role: p.type === "group" ? "group" : wizardRole(p), school: p.school })).join("")
         : personRow({ role: "adult" }) + personRow({ role: "adult" }) + personRow({ role: "child" })}</div>
       <button type="button" class="ackbtn" id="wadd" style="margin-top:6px">+ Add a person</button></div>
     <div><div class="lbl">Your houses <small class="muted">(a child at a house needs an adult there)</small></div>
       <div id="whouses">${houseRow(homes[0] || {}, 0)}${houseRow(homes[1] || {}, 1)}</div></div>
     <div class="meta">Children who board sleep at school in term time; helpers only count at a house when an entry says they're staying.
-      You can change all of this later under ⚙ Setup.</div>
+      You can change all of this later under ⚙ Settings.</div>
     ${state.data.upstream ? `<div class="checks"><label><input type="checkbox" name="share_name" ${state.data.needsWizard ? "checked" : ""}> Let the Family Calendar maker know we're using it
-      <small class="muted">(our calendar's name, the version and how many logins are used – never entries or names; change it under Setup → This calendar)</small></label></div>` : ""}
+      <small class="muted">(our calendar's name, the version and how many logins are used – never entries or names; change it under Settings → This calendar)</small></label></div>` : ""}
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Not now</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
@@ -554,7 +554,7 @@ function renderSchool() {
     const school = state.data.people.find((p) => p.name === child)?.school || "";
     return `<div class="card"><h3><span class="p" style="--c:${COLORS[child]}">${esc(child)}</span> ${esc(school)}</h3>${rows || `<p class="muted pad">None yet.</p>`}</div>`;
   };
-  $("#main").innerHTML = `${state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : ""}${KIDS().map(card).join("") || `<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Setup tab.</p></div>`}
+  $("#main").innerHTML = `${state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : ""}${KIDS().map(card).join("") || `<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`}
     <p class="muted" style="font-size:12px">The dates are the days at home: from the day school closes to the last day before going back.</p>`;
   $("#add-sh")?.addEventListener("click", () => holidayForm());
 }
@@ -576,6 +576,19 @@ function byName(n) {
   return n && COLORS[n] ? `<b class="byname" style="--c:${COLORS[n]}">${esc(n)}</b>` : esc(n || "");
 }
 
+// ---------- the site's sections (dark top bar on a computer, a bar along the bottom on a phone): 📅 Calendar has its own
+// tabs underneath (Month … Changes); add-on modules (EXTRA_VIEWS) come next, then 🔒 Info; ⚙ Settings and 💡 Requests sit at the far right.
+const CAL_VIEWS = ["month", "upcoming", "birthdays", "school", "log", "print"];
+const SECTIONS = () => [
+  { key: "calendar", icon: "📅", label: "Calendar" },
+  ...Object.entries(EXTRA_VIEWS).map(([k, x]) => { const m = x.label.match(/^(\p{Extended_Pictographic}\uFE0F?)\s*(.*)$/u);
+    return { key: k, icon: m ? m[1] : "•", label: m ? m[2] : x.label, short: x.short }; }),
+  { key: "info", icon: "🔒", label: "Info" },
+  { key: "setup", icon: "⚙️", label: "Settings", right: true },
+  { key: "requests", icon: "💡", label: "Requests" },
+];
+const sectionOf = (view) => CAL_VIEWS.includes(view) ? "calendar" : view;
+
 // the tracked person picked on their own in the filter (e.g. a co-parent) -> "🖨️ Print for …"
 const printFor = () => state.filter.size === 1 && CalendarRules.tracked(state.data).find((p) => state.filter.has(p)) || null;
 function renderFilters() {
@@ -589,6 +602,13 @@ function renderFilters() {
 function render() {
   try { sessionStorage.setItem("cal.view", state.view); } catch {}   // F5 / refresh comes back to this tab
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === state.view));
+  const sec = sectionOf(state.view);
+  document.querySelectorAll("#sections button").forEach((b) => b.classList.toggle("active", b.dataset.sec === sec));
+  $("#tabs").hidden = sec !== "calendar";
+  $("#today").hidden = sec !== "calendar";
+  if (sec === "calendar" && state.view !== "print") state.calView = state.view;
+  document.title = sec === "calendar" || !state.data?.brand ? state.data?.brand?.site || document.title
+    : `${state.sections?.find((s) => s.key === sec)?.label || ""} – ${state.data.brand.site}`;
   renderFilters();
   setBarH();
   const stay = state.lastView === state.view;   // re-render after a save/filter: keep scroll position
@@ -599,7 +619,7 @@ function render() {
   if (state.view === "print") return renderPrint();
   if (EXTRA_VIEWS[state.view]) return EXTRA_VIEWS[state.view].render();
   if (state.view !== "info") state.vault = null;   // don't keep the details in memory once you leave the page
-  ({ upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
+  ({ requests: renderRequests, upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
 }
 
 // ---------- 🖨️ the printout for a tracked person (e.g. a co-parent or their lawyer): filter on them -> "Print for …".
@@ -876,7 +896,7 @@ function inviteForm(ev) {
     <div class="meta"><b>${esc(ev.title)}</b><br>${range}</div>
     <label>Send to</label><div class="checks">${state.data.inviteTo.map((r) =>
       `<label><input type="checkbox" name="to" value="${esc(r.email)}" ${mine(r) ? "checked" : ""}> ${esc(r.name)}${mine(r) ? " (me)" : ""} <small class="muted">${esc(r.email)}</small></label>`).join("")}</div>
-    <div class="meta" style="margin-top:-6px">Each person's invite address is set on ⚙ Setup → their login.</div>
+    <div class="meta" style="margin-top:-6px">Each person's invite address is set on ⚙ Settings → their login.</div>
     <div class="two"><label>Time (optional)<input type="time" name="time" ${ev.end !== ev.start ? "disabled" : ""}></label>
       <label>Length<select name="minutes"><option value="30">30 min</option><option value="60" selected>1 hour</option>
         <option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label></div>
@@ -991,8 +1011,8 @@ const TYPE_INFO = {
   group: ["Group", "a shared column such as Family"],
 };
 const ROLE_INFO = {
-  admin: ["Admin", "sees and edits everything, and can use Setup"],
-  editor: ["Editor", "sees and edits everything, no Setup"],
+  admin: ["Admin", "sees and edits everything, and can use Settings"],
+  editor: ["Editor", "sees and edits everything, no Settings"],
   viewer: ["Viewer", "sees everything, can't change anything"],
   limited: ["Limited", "only sees the people you pick"],
 };
@@ -1153,7 +1173,7 @@ function personForm(p) {
   });
 }
 
-// short line under a person on Setup: "Child · boards · usually Home · Hilton College"
+// short line under a person on Settings: "Child · boards · usually Home · Hilton College"
 function personNote(p) {
   const pl = state.setup.places.find((x) => x.key === p.home);
   return [p.child ? "Child" : "", p.child && p.boards ? "boards" : "", pl ? `usually ${pl.label}` : "", p.child ? p.school || "" : ""].filter(Boolean).join(" · ");
@@ -1249,7 +1269,7 @@ function countryFields(list, cur = {}) {
   return { html, wire };
 }
 
-// Setup > Weekly email: which day and hour it goes out (in the calendar's time zone, Setup > This calendar)
+// Settings > Weekly email: which day and hour it goes out (in the calendar's time zone, Settings > This calendar)
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 const digestWhen = (s) => {
   const day = /^[0-6]$/.test(String(s.digest_day ?? "")) ? +s.digest_day : 0, hour = s.digest_hour != null && s.digest_hour !== "" ? +s.digest_hour : 18;
@@ -1261,7 +1281,7 @@ function digestTimeForm() {
   openDialog(`<form class="form" id="f"><h2>🕖 When the weekly email goes out</h2>
     <div class="two"><label>Day<select name="day">${WEEKDAYS.map((d, i) => `<option value="${i}" ${i === day ? "selected" : ""}>${d}</option>`).join("")}</select></label>
       <label>Time<select name="hour">${Array.from({ length: 24 }, (_, h) => `<option value="${h}" ${h === hour ? "selected" : ""}>${String(h).padStart(2, "0")}:00</option>`).join("")}</select></label></div>
-    <div class="meta">Times are ${esc(tzName(s.brand?.tz || s.timezone))} time – the calendar's time zone (Setup → This calendar → Edit).<br>Sent in the evening, it covers the 7 days from the next day (e.g. Sunday 18:00 → Monday to Sunday).
+    <div class="meta">Times are ${esc(tzName(s.brand?.tz || s.timezone))} time – the calendar's time zone (Settings → This calendar → Edit).<br>Sent in the evening, it covers the 7 days from the next day (e.g. Sunday 18:00 → Monday to Sunday).
       Sent in the morning, it covers the 7 days from that day (e.g. Monday 07:00 → Monday to Sunday).</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
@@ -1304,7 +1324,7 @@ async function settingsForm(forUpdate = false) {
     <a href="#" data-xc="${cc}" title="Remove">✕</a></span>`).join(" ");
   openDialog(`<form class="form" id="f"><h2>This calendar</h2>
     <label>Family name<input name="family_name" value="${esc(s.family_name || "")}" placeholder="e.g. Smith"></label>
-    <div class="two"><label>Calendar name<input name="site_name" value="${esc(s.site_name || "")}" placeholder="${esc(b.family ? b.family + " Calendar" : "Family Calendar")}"></label>
+    <div class="two"><label>Site name<input name="site_name" value="${esc(s.site_name || "")}" placeholder="${esc(b.family ? b.family + " Family" : "Family Calendar")}"></label>
       <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
     ${cf.html}
@@ -1438,10 +1458,11 @@ async function viewAsPicker() {
 
 // ---------- events (delegated)
 document.addEventListener("click", (e) => {
-  const t = e.target.closest("[data-view],[data-f],[data-print],[data-ev],[data-rec],[data-sh],[data-day],[data-add],[data-person],[data-user]");
+  const t = e.target.closest("[data-sec],[data-view],[data-f],[data-print],[data-ev],[data-rec],[data-sh],[data-day],[data-add],[data-person],[data-user]");
   if (!t || !state.data) return;
   const d = t.dataset;
-  if (d.print) { state.print = { ...(state.print || {}), person: d.print }; state.view = "print"; window.scrollTo(0, 0); render(); }
+  if (d.sec) { state.view = d.sec === "calendar" ? state.calView || "month" : d.sec; window.scrollTo(0, 0); render(); }
+  else if (d.print) { state.print = { ...(state.print || {}), person: d.print }; state.view = "print"; window.scrollTo(0, 0); render(); }
   else if (d.view) { state.view = d.view; window.scrollTo(0, 0); render(); }
   else if (d.f !== undefined) {
     if (!d.f) state.filter.clear(); else state.filter.has(d.f) ? state.filter.delete(d.f) : state.filter.add(d.f);
@@ -1463,6 +1484,7 @@ const FAB = {
   birthdays: ["Add birthday or anniversary", () => state.data.me.canEditAll, () => recurringForm()],
   school: ["Add school holiday", () => state.data.me.canEditAll, () => holidayForm()],
   info: ["Add to Info", () => state.data.me.isAdmin, () => vaultForm()],
+  requests: ["Suggest an idea or report a bug", () => true, () => requestForm("idea")],
 };
 function fabFor(view) {
   const f = FAB[view];
@@ -1518,6 +1540,7 @@ function expiryBadge(f) {
 }
 async function renderInfo() {
   $("#main").innerHTML = `<p class="muted pad">Unlocking…</p>`;
+  state.vaultOpen = new Set();   // every visit starts with the sections folded (tap one to open it)
   try { state.vault = await api("GET", "vault"); }
   catch (e) { $("#main").innerHTML = `<p class="pad">${esc(e.message)}</p>`; return; }
   renderInfoView();
@@ -1538,9 +1561,10 @@ function renderInfoView() {
           <button type="button" class="ackbtn" data-vcopy="${it.id}|${i}">Copy</button></span></div>`).join("")}
       ${it.notes ? `<div class="vnotes">${esc(it.notes)}</div>` : ""}
       <div class="meta">${it.updated_by ? `Last changed by ${esc(it.updated_by)} ${esc((it.updated_at || "").slice(0, 10))}` : ""}</div></div>`;
-  // filters (person / type) and folded sections - remembered on this device (names of sections only, never details)
+  // filters (person / type); sections start folded - opened ones only until you leave the page; a filter shows its matches open
   const vf = state.vaultFilter ||= { person: "", section: "" };
-  const folded = new Set(load("vaultFolded") || []);
+  const open = state.vaultOpen ||= new Set();
+  const folded = { has: (s) => !open.has(s) && !vf.person && !vf.section };
   const shown = items.filter((it) => (!vf.person || (it.person || "–") === vf.person) && (!vf.section || it.section === vf.section));
   const groups = sections.filter((s) => shown.some((it) => it.section === s));
   const who = [...new Set(items.map((it) => it.person || "–"))].sort((x, y) => (x === "–") - (y === "–") || az(x, y));
@@ -1565,8 +1589,8 @@ document.addEventListener("click", async (e) => {
   if (state.view !== "info") return;
   const fold = e.target.closest("[data-vfold]"), vf = e.target.closest("[data-vf]");
   if (fold) {   // fold / unfold a section (remembered on this device)
-    const s = fold.dataset.vfold, set = new Set(load("vaultFolded") || []);
-    set.has(s) ? set.delete(s) : set.add(s); save("vaultFolded", [...set]);
+    const s = fold.dataset.vfold, set = state.vaultOpen ||= new Set();
+    fold.closest(".vsec").classList.contains("folded") ? set.add(s) : set.delete(s);
     const card = fold.closest(".vsec"); card.classList.toggle("folded"); fold.querySelector(".vfold").textContent = card.classList.contains("folded") ? "▸ Show" : "▾ Hide";
     return;
   }
@@ -1738,3 +1762,109 @@ document.addEventListener("visibilitychange", () => {
     y0 = null; dy = 0;
   });
 })();
+
+// ---------- hover card (computers with a mouse): rest on an entry to see its details and notes without opening it
+(() => {
+  if (!matchMedia("(hover: hover) and (pointer: fine)").matches) return;
+  document.body.insertAdjacentHTML("beforeend", `<div id="hovercard" class="hovercard" hidden></div>`);
+  const card = $("#hovercard");
+  let timer = null, cur = null;
+  const hide = () => { clearTimeout(timer); timer = null; cur = null; card.hidden = true; };
+  document.addEventListener("mouseover", (e) => {
+    const t = e.target.closest("[data-ev]");
+    if (!t || $("#dlg").open) return hide();
+    if (t === cur) return;
+    hide(); cur = t;
+    timer = setTimeout(() => {
+      const ev = state.data?.events.find((x) => x.id == t.dataset.ev);
+      if (!ev || !t.isConnected) return;
+      const place = ev.location && CalendarRules.places(state.data)[ev.location];
+      card.innerHTML = `<b>${esc(ev.title)}</b>
+        <div class="hc-meta">${fmtDay(ev.start)}${ev.end !== ev.start ? ` – ${fmtDay(ev.end)}` : ""} · ${esc(ev.category || "")}${CalendarRules.pencilled(state.data, ev) ? " · ✏️ pencilled in" : ""}${ev.important ? " · ⭐" : ""}</div>
+        <div>${pchips(whoList(ev.who))}</div>
+        ${place ? `<div class="hc-meta">${place.icon} ${esc(place.label)}</div>` : ""}
+        ${ev.notes ? `<div class="hc-notes">${esc(ev.notes)}</div>` : `<div class="hc-meta"><i>No notes</i></div>`}
+        <div class="hc-meta">Click to open</div>`;
+      card.hidden = false;
+      const r = t.getBoundingClientRect(), w = card.offsetWidth, h = card.offsetHeight;
+      card.style.left = `${Math.max(8, Math.min(innerWidth - w - 8, r.left))}px`;
+      card.style.top = `${r.bottom + h + 8 > innerHeight ? Math.max(8, r.top - h - 6) : r.bottom + 6}px`;
+    }, 350);
+  });
+  document.addEventListener("mouseout", (e) => { if (cur && !cur.contains(e.relatedTarget)) hide(); });
+  addEventListener("scroll", hide, true);
+  document.addEventListener("click", hide, true);
+})();
+
+// ---------- 💡 Requests: anyone with a login can suggest an idea or report a bug; each one also goes to the Family Calendar
+// maker (lib/requests.js), who decides what's built - for every family - and whose status / reply comes back here.
+// The maker's own calendar also lists every family's requests ("All families") and answers them.
+const REQ_BADGE = { new: "#868e96", discussing: "#1971c2", planned: "#e8590c", done: "#2f9e44", wontdo: "#495057" };
+async function renderRequests() {
+  $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;
+  let R;
+  try { R = state.req = await api("GET", "requests"); } catch (e) { $("#main").innerHTML = `<p class="pad err">${esc(e.message)}</p>`; return; }
+  const stat = (r) => r.maker_status || (r.sent_at ? "new" : null);
+  const badge = (st) => st ? `<span class="rqb" style="--c:${REQ_BADGE[st]}">${esc(R.statuses[st])}</span>` : `<span class="rqb" style="--c:#adb5bd">Sending…</span>`;
+  const nC = (id) => R.comments.filter((c) => c.request_id === id).length;
+  const row = (r) => `<div class="rqrow" data-rq="${r.id}"><span class="rqk">${r.kind === "bug" ? "🐞" : "💡"}</span>
+      <div class="rqt"><b>${esc(r.title)}</b><small class="muted">${esc(r.created_by || "")} · ${esc(localDay(r.created_at))}${nC(r.id) ? ` · 💬 ${nC(r.id)}` : ""}${r.maker_note ? ` · the maker replied` : ""}</small></div>${badge(stat(r))}</div>`;
+  const open = R.list.filter((r) => !["done", "wontdo"].includes(stat(r))), closed = R.list.filter((r) => ["done", "wontdo"].includes(stat(r)));
+  $("#main").innerHTML = `<div class="pad rq">
+    <p class="meta">Anyone using the calendar can suggest an idea or report a bug. Each one is also sent to the Family Calendar maker, who decides what's built –
+      for every family using it – and the answer shows here. (Your name and any screenshot stay on this calendar.)</p>
+    <div class="rqbtns"><button class="primary" data-rqnew="idea">💡 Suggest an idea</button><button class="primary" data-rqnew="bug">🐞 Report a bug</button></div>
+    <h3>Open (${open.length})</h3>${open.map(row).join("") || `<p class="muted">Nothing open.</p>`}
+    ${closed.length ? `<h3>Done / decided (${closed.length})</h3>${closed.map(row).join("")}` : ""}
+    ${R.maker ? `<h3>All families – the maker's view (${R.maker.length})</h3>
+      <p class="meta">Every request from every calendar using Family Calendar. Set the status and a reply – it reaches that family's calendar within a few hours.</p>
+      ${R.maker.map((m) => `<div class="rqrow mk"><span class="rqk">${m.kind === "bug" ? "🐞" : "💡"}</span>
+        <div class="rqt"><b>${esc(m.title)}</b><small class="muted">${esc(m.install_name || m.name || "a calendar")} · v${esc(m.version || "?")} · ${esc(localDay(m.created_at))}${m.page ? ` · on ${esc(m.page)}` : ""}</small>
+          ${m.details ? `<div class="rqd">${esc(m.details)}</div>` : ""}
+          <div class="rqmk"><select data-mks="${m.id}">${Object.entries(R.statuses).map(([k, t]) => `<option value="${k}" ${m.status === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
+            <input data-mkn="${m.id}" value="${esc(m.note || "")}" placeholder="Reply to the family (optional)"><button data-mkb="${m.id}">Save</button></div></div></div>`).join("") || `<p class="muted">None yet.</p>`}` : ""}
+  </div>`;
+  $("#main").querySelectorAll("[data-rqnew]").forEach((b) => b.onclick = () => requestForm(b.dataset.rqnew));
+  $("#main").querySelectorAll("[data-rq]").forEach((d) => d.onclick = () => requestView(R.list.find((r) => r.id == d.dataset.rq)));
+  $("#main").querySelectorAll("[data-mkb]").forEach((b) => b.onclick = async () => {
+    const id = b.dataset.mkb;
+    try { await api("PUT", `requests/maker/${id}`, { status: $(`[data-mks="${id}"]`).value, note: $(`[data-mkn="${id}"]`).value }); toast("Saved – the family sees it within a few hours"); }
+    catch (x) { toast(x.message); }
+  });
+}
+function requestForm(kind = "idea") {
+  const bug = kind === "bug";
+  openDialog(`<form class="form" id="f" autocomplete="off"><h2>${bug ? "🐞 Report a bug" : "💡 Suggest an idea"}</h2>
+    <label>${bug ? "What went wrong (short)" : "Your idea (short)"}<input name="title" required maxlength="200" placeholder="${bug ? "e.g. The date box overlaps on my iPhone" : "e.g. Show the notes when I hover over an entry"}"></label>
+    <label>${bug ? "Details – what did you do, what happened, what did you expect?" : "Details – what would it do, and why would it help?"}<textarea name="details" rows="5"></textarea></label>
+    <label class="rqshot">📷 Add a screenshot (optional)<input type="file" name="shot" accept="image/*" hidden></label><div class="meta" id="rqshot"></div>
+    <div class="meta">It's also sent to the Family Calendar maker (the text only – your name and the screenshot stay on this calendar).</div>
+    <div class="err"></div><div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Send</button></div></form>`, () => {
+    const f = $("#f"); let shot = null;
+    $("#cancel").onclick = closeDialog;
+    f.elements.shot.onchange = async () => {   // made smaller (max 1400 px JPEG) before it's sent
+      const file = f.elements.shot.files[0]; if (!file) return;
+      try { const bmp = await createImageBitmap(file), k = Math.min(1, 1400 / Math.max(bmp.width, bmp.height)), cv = document.createElement("canvas");
+        cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k); cv.getContext("2d").drawImage(bmp, 0, 0, cv.width, cv.height);
+        shot = cv.toDataURL("image/jpeg", 0.8).split(",")[1]; $("#rqshot").textContent = `📎 ${file.name}`; } catch { $("#rqshot").textContent = "That picture couldn't be used"; }
+    };
+    f.onsubmit = (e) => { e.preventDefault(); const fd = new FormData(f);
+      submit(async () => { await api("POST", "requests", { kind, title: fd.get("title"), details: fd.get("details"), screenshot: shot,
+        page: state.view, device: navigator.userAgent.replace(/\s*\(KHTML, like Gecko\)/, "").slice(0, 200) }); state.view = "requests"; }, bug ? "Thanks – the bug is logged" : "Thanks – your idea is logged");
+    };
+  });
+}
+function requestView(r) {
+  const R = state.req, cm = R.comments.filter((c) => c.request_id === r.id), st = r.maker_status || (r.sent_at ? "new" : null);
+  openDialog(`<form class="form" id="f"><h2>${r.kind === "bug" ? "🐞" : "💡"} ${esc(r.title)}</h2>
+    <div class="meta">${esc(r.created_by || "")} · ${esc(localDay(r.created_at))}${r.page ? ` · on ${esc(r.page)}` : ""} · ${st ? esc(R.statuses[st]) : "being sent to the maker"}</div>
+    ${r.details ? `<div class="rqd">${esc(r.details)}</div>` : ""}
+    ${r.has_shot ? `<a href="/api/requests/${r.id}/shot" target="_blank" rel="noopener"><img src="/api/requests/${r.id}/shot" alt="Screenshot" style="max-width:100%;border:1px solid var(--line);border-radius:8px"></a>` : ""}
+    ${r.maker_note ? `<div class="rqreply">💬 <b>From the Family Calendar maker:</b> ${esc(r.maker_note)}</div>` : ""}
+    <div><b>Comments</b>${cm.map((c) => `<div class="rqc"><small class="muted">${esc(c.by || "")} · ${esc(localDay(c.at))}</small><div>${esc(c.text)}</div></div>`).join("") || `<div class="muted">None yet.</div>`}</div>
+    <label>Add a comment<textarea name="text" rows="2"></textarea></label>
+    <div class="err"></div><div class="actions"><button type="button" id="cancel">Close</button><button class="primary">Add comment</button></div></form>`, () => {
+    const f = $("#f"); $("#cancel").onclick = closeDialog;
+    f.onsubmit = (e) => { e.preventDefault(); submit(() => api("POST", `requests/${r.id}/comments`, { text: f.elements.text.value }), "Comment added"); };
+  });
+}

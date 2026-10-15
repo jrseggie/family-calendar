@@ -1,6 +1,6 @@
 // Hourly housekeeping (from the 10-minute cron): clear out old stored mail, and email the admin (ALERT_TO) if a background job
 // has stopped working. Jobs report in to the `health` table:
-//   digest      - this worker, after the weekly email (day and time from Setup > Weekly email)
+//   digest      - this worker, after the weekly email (day and time from Settings > Weekly email)
 //   inbox_check - tools/fetch_inbox.py (the cloud routine, every 2 h 07:00-23:00 SAST)
 //   backup      - tools/backup.sh on a PC, if someone runs one (optional)
 //   email_sync  - lib/email-sync.js (hourly, when the Cloudflare key is set) or a PC task
@@ -30,7 +30,7 @@ export const markHealthy = (env, key, detail = null) =>
 export async function problems(env, now = new Date()) {
   const h = Object.fromEntries((await env.DB.prepare("SELECT key, at FROM health").all()).results.map((r) => [r.key, r.at]));
   const older = (key, ms) => !h[key] || new Date(h[key]).getTime() < now.getTime() - ms;
-  const tz = brand(await loadSettings(env.DB)).tz;   // the calendar's time zone (Setup > This calendar)
+  const tz = brand(await loadSettings(env.DB)).tz;   // the calendar's time zone (Settings > This calendar)
   const when = (s) => s ? new Date(s).toLocaleString("en-GB", { timeZone: tz, dateStyle: "medium", timeStyle: "short" }) : "never";
   const sastHour = localParts(now, tz).hour;   // the hour where the family is
   const out = [];

@@ -1,6 +1,6 @@
 // Phone-calendar feed: GET /feed/<token>.ics (subscribe once in Outlook / iPhone; they re-read it about hourly).
 // Cloudflare Access is bypassed for /feed/* only (a separate Access "bypass" app); the long random token in the
-// link is the password. It shows exactly what that login can see. Setup > "Your phone calendar" makes / resets it.
+// link is the password. It shows exactly what that login can see. Settings > "Your phone calendar" makes / resets it.
 import { feedCalendar } from "../../lib/ics.js";
 import { brand, loadSettings } from "../../lib/settings.js";
 

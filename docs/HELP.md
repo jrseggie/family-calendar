@@ -61,7 +61,7 @@ Cloudflare's free sign-in service has to be switched on once by hand: dashboard 
 plan. It asks for card details; the Free plan (up to 50 people) isn't charged. Then click **Switch on sign-in** again.
 
 ## Something's wrong
-- **Updated, but Setup still shows the old version** (after 5 minutes): Cloudflare sometimes skips a build when two changes
+- **Updated, but Settings still shows the old version** (after 5 minutes): Cloudflare sometimes skips a build when two changes
   arrive close together. On GitHub open your copy, edit `CHANGELOG.md`, add an empty line at the end and commit – Cloudflare
   then builds the latest version.
 - **"The calendar's background jobs haven't run"** on Upcoming: after an update Cloudflare can take up to ~30 minutes to restart
