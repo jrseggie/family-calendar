@@ -1324,8 +1324,8 @@ async function settingsForm(forUpdate = false) {
     <a href="#" data-xc="${cc}" title="Remove">✕</a></span>`).join(" ");
   openDialog(`<form class="form" id="f"><h2>This calendar</h2>
     <label>Family name<input name="family_name" value="${esc(s.family_name || "")}" placeholder="e.g. Smith"></label>
-    <div class="two"><label>Site name<input name="site_name" value="${esc(s.site_name || "")}" placeholder="${esc(b.family ? b.family + " Family" : "Family Calendar")}"></label>
-      <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
+    <div class="two"><label>Site name<input name="site_name" value="${esc(s.site_name || b.site || "")}" placeholder="${esc(b.family ? b.family + " Family" : "Family Calendar")}"></label>
+      <label>Name under the phone icon<input name="short_name" value="${esc(s.short_name || b.short || "")}" maxlength="14" placeholder="${esc(b.family ? b.family + "s" : "Calendar")}"></label></div>
     <label>Web address<input name="site_url" value="${esc(s.site_url || "")}" placeholder="https://ourfamily.com"></label>
     ${cf.html}
     <label>Also show another country's public holidays <small class="muted">(for information – they don't change school days)</small>
@@ -1360,6 +1360,10 @@ async function settingsForm(forUpdate = false) {
       e.preventDefault();
       const body = Object.fromEntries(new FormData($("#f")));
       delete body.addextra;
+      // left as the automatic name ("<family> Family" / "<family>s") = not stored, so it follows a change of family name
+      const fam = String(body.family_name || "").trim();
+      if (fam && String(body.site_name || "").trim() === `${fam} Family`) body.site_name = "";
+      if (fam && String(body.short_name || "").trim() === `${fam}s`) body.short_name = "";
       body.extra_countries = extras.join(",");
       submit(async () => { await api("PUT", "setup/settings", body); location.reload(); }, "Saved");
     };

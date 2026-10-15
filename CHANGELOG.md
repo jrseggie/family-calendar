@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.22
+- ⚙ Settings → This calendar: the site name and the name under the phone icon show as normal text you can type over (they used to look greyed out).
+
 ## 1.0.21
 - On a computer: rest the mouse on an entry to see its details and notes without opening it.
 - 💡 Requests tab: anyone with a login can suggest an idea or report a bug (with a screenshot if they like) and comment on others.
