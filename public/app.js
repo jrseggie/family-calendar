@@ -419,8 +419,8 @@ function leaveCard() {
   const list = state.data.events.filter((e) => e.category === "Leave" && e.status !== "Cancelled" && e.end >= today && e.start <= week)
     .sort((a, b) => a.start.localeCompare(b.start));
   if (!list.length) return "";
-  return `<div class="leavebar">🌴 <b>On leave</b> · ${list.map((e) => `<span data-ev="${e.id}" style="cursor:pointer"><b style="color:${COLORS[whoList(e.who)[0]] || "inherit"}">${esc(whoList(e.who).join(" & "))}</b>
-    ${e.start <= today ? `until ${fmtShort(e.end)}` : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</span>`).join(" · ")}</div>`;
+  return `<div class="leavebar"><span class="lb-h">🌴 On leave</span>${list.map((e) => `<span class="lb-p" data-ev="${e.id}" style="--c:${COLORS[whoList(e.who)[0]] || "var(--muted)"}">
+    <b>${esc(whoList(e.who).join(" & "))}</b> ${e.start <= today ? `now – until ${fmtShort(e.end)}` : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</span>`).join("")}</div>`;
 }
 
 function renderUpcoming() {

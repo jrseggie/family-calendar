@@ -1,5 +1,12 @@
 # What's new in Family Calendar
 
+## 1.0.23
+- Today stands out: a bold red box round today's row on Month and today's card on Upcoming.
+- 🌴 On leave (Upcoming): a green card with a coloured pill per person and their dates, so it's easy to spot.
+- Nightly update: checking for the newest version now signs in to GitHub and tries again if GitHub is busy (it sometimes
+  refused with "403" and the update emailed "Run failed"). New calendars get this automatically; on an existing one, replace
+  `.github/workflows/update.yml` in your GitHub copy with the new `update.yml` from this release (optional - a failed night just tries again the next night).
+
 ## 1.0.22
 - ⚙ Settings → This calendar: the site name and the name under the phone icon show as normal text you can type over (they used to look greyed out).
 

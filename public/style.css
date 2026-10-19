@@ -2,7 +2,7 @@
   --bg: #f5f6f8; --card: #ffffff; --text: #1d2330; --muted: #6b7280; --line: #e3e6eb;
   --brand: #1f3864; --brand-text: #ffffff;
   --important: #fff2a8; --birthday: #f8cbdf; --school: #c6efce; --school-text: #1e6b34;
-  --public: #ffe14d; --public-text: #3d3000; --weekend: #f6ecd6; --banner: #fdebf2; --today: #a5d8ff;
+  --public: #ffe14d; --public-text: #3d3000; --weekend: #f6ecd6; --banner: #fdebf2; --today: #a5d8ff; --today-line: #e03131;
   --radius: 12px; --weekbg: #e6ebf2;
 }
 /* dark: follows the phone's setting ("Auto"), or forced with the header button */
@@ -10,14 +10,14 @@
   :root:not([data-theme="light"]) {
     --bg: #12151b; --card: #1b2029; --text: #e7e9ee; --muted: #9aa3b2; --line: #2b313d;
     --brand: #22365c; --important: #5a4e12; --birthday: #5b2740; --school: #1f4a2b; --school-text: #a6e3b4;
-    --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
+    --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --today-line: #ff4d4d; --weekbg: #161a22;
     color-scheme: dark;
   }
 }
 :root[data-theme="dark"] {
   --bg: #12151b; --card: #1b2029; --text: #e7e9ee; --muted: #9aa3b2; --line: #2b313d;
   --brand: #22365c; --important: #5a4e12; --birthday: #5b2740; --school: #1f4a2b; --school-text: #a6e3b4;
-  --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --weekbg: #161a22;
+  --public: #b38f00; --public-text: #fffbe6; --weekend: #313949; --banner: #3a2231; --today: #1c4f7a; --today-line: #ff4d4d; --weekbg: #161a22;
   color-scheme: dark;
 }
 :root[data-theme="light"] { color-scheme: light; }
@@ -272,7 +272,17 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .today-btn { border: 1px solid rgba(255,255,255,.45); background: transparent; color: var(--brand-text); border-radius: 999px;
   padding: 5px 14px; font-weight: 700; cursor: pointer; font-size: 14px; }
 .today-btn:hover { background: rgba(255,255,255,.12); }
-.fgrid > .today { border-top: 2px solid var(--brand); border-bottom: 2px solid var(--brand); }
+/* today: a bold red box round the whole row (date, family strip and every column) - drawn with inset shadows so nothing moves */
+/* (on a layer above the entries, so a trip continuing from yesterday can't cover the line) */
+.fgrid > .today { --t: 0px; --b: 0px; --l: 0px; --r: 0px; position: relative; }
+.fgrid > .today::after { content: ""; position: absolute; inset: 0; pointer-events: none; z-index: 2;
+  box-shadow: inset 0 var(--t) var(--today-line), inset 0 calc(-1 * var(--b)) var(--today-line),
+  inset var(--l) 0 var(--today-line), inset calc(-1 * var(--r)) 0 var(--today-line); }
+.gd.today { --t: 3px; --b: 3px; --l: 3px; }
+.gf.today { --t: 3px; }
+.gc.today { --t: 3px; --b: 3px; } .gf.today ~ .gc.today { --t: 0px; }
+.gf.today, .gc.today:has(+ :not(.today)), .gc.today:last-child { --r: 3px; }
+.day.today { border: 3px solid var(--today-line) !important; }   /* Upcoming: today's card */
 /* days that have passed: grey background, entries keep their colours */
 .gd.past, .gc.past, .gf.past { background: color-mix(in srgb, var(--muted) 22%, var(--card)) !important; }
 .gd.past { background: color-mix(in srgb, var(--muted) 38%, var(--card)) !important; }
@@ -299,7 +309,14 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .gi.leave { color: var(--muted); border-left-color: color-mix(in srgb, var(--c) 45%, var(--muted));
   background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--muted) 16%, transparent) 0 6px, transparent 6px 11px); }
 .item.leave .title { color: var(--muted); }
-.leavebar { font-size: 13.5px; padding: 8px 12px; margin-bottom: 12px; border-radius: 10px; background: var(--card); border: 1px dashed var(--line); }
+/* 🌴 who's on leave (Upcoming): a green holiday card with a pill per person, so it stands out from the plain lists */
+.leavebar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; font-size: 14.5px; padding: 10px 12px; margin-bottom: 12px; border-radius: 10px;
+  background: #e6fcf5; border: 1px solid #96f2d7; border-left: 5px solid #12b886; color: #085041; }
+.leavebar .lb-h { font-weight: 800; margin-right: 4px; }
+.leavebar .lb-p { cursor: pointer; background: var(--card); border: 1.5px solid var(--c); border-radius: 999px; padding: 3px 11px; color: var(--text); }
+.leavebar .lb-p b { color: var(--c); }
+[data-theme=dark] .leavebar { background: #0f2e27; border-color: #1f5c4d; border-left-color: #20c997; color: #96f2d7; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .leavebar { background: #0f2e27; border-color: #1f5c4d; border-left-color: #20c997; color: #96f2d7; } }
 .qstay .hpick, .form .qstay select.hpick { font: inherit; font-size: 13px; font-weight: 600; width: auto; min-width: 0; height: auto; margin: 0; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--text); }
 .gi.visit { background: repeating-linear-gradient(135deg, color-mix(in srgb, var(--c) 22%, transparent) 0 6px, transparent 6px 11px); }
 .gi.bday { background: var(--birthday); border-left-color: #e64980; font-weight: 700; }

@@ -19,9 +19,16 @@ jobs:
       - name: Replace the code with the latest release
         env:
           UPSTREAM: jrseggie/family-calendar
+          GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          tag=$(curl -fsSL "https://api.github.com/repos/$UPSTREAM/releases/latest" | jq -r .tag_name)
+          # which release is newest: GitHub's API (signed in, so GitHub's shared machines don't hit its limit for anonymous
+          # requests), tried 3 times; if that still fails, the releases page itself, which jumps to the newest one
+          tag=$(curl -fsSL --retry 3 --retry-all-errors -H "Authorization: Bearer $GH_TOKEN" "https://api.github.com/repos/$UPSTREAM/releases/latest" | jq -r .tag_name || true)
+          if [ -z "$tag" ] || [ "$tag" = null ]; then
+            tag=$(curl -fsSL --retry 3 -o /dev/null -w '%{url_effective}' "https://github.com/$UPSTREAM/releases/latest" | sed 's|.*/tag/||')
+          fi
+          case "$tag" in v[0-9]*) ;; *) echo "Couldn't find the latest release ($tag)"; exit 1 ;; esac
           echo "Latest release: $tag"
           mkdir -p /tmp/new && curl -fsSL "https://github.com/$UPSTREAM/archive/refs/tags/$tag.tar.gz" | tar xz -C /tmp/new --strip-components=1
           cp wrangler.toml /tmp/old-wrangler.toml
