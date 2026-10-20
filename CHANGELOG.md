@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.24
+- Hover card (computers): it now goes away when the mouse leaves the entry (it used to stay on screen until you rested on another one).
+
 ## 1.0.23
 - Today stands out: a bold red box round today's row on Month and today's card on Upcoming.
 - 🌴 On leave (Upcoming): a green card with a coloured pill per person and their dates, so it's easy to spot.

@@ -504,6 +504,7 @@ a.btn.go { display: inline-block; text-decoration: none; }
 /* hover card (app.js): an entry's details and notes, on computers with a mouse */
 .hovercard { position: fixed; z-index: 60; max-width: 340px; background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
   box-shadow: 0 8px 24px rgba(0,0,0,.18); padding: 10px 12px; font-size: 13px; display: grid; gap: 4px; pointer-events: none; }
+.hovercard[hidden] { display: none; }   /* "display: grid" above would otherwise keep it on screen after the mouse leaves */
 .hovercard .hc-meta { color: var(--muted); font-size: 12px; }
 .hovercard .hc-notes { white-space: pre-wrap; border-left: 3px solid var(--line); padding-left: 8px; }
 
