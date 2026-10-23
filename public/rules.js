@@ -79,6 +79,15 @@
   const pencilled = (data, e) => e.status === "Tentative" && !(e.location && whoList(e.who).some((p) => helpers(data).includes(p)));
   const pencilsOn = (data, key) => data.events.filter((e) => on(e, key) && pencilled(data, e));
   const plainTitle = (t) => String(t || "").replace(/\s*\?+\s*$/, "");
+  // an entry's time as it reads on day `key` (no key = its first day): "10:30", "10:30–11:30", on the last day of a
+  // longer entry "until 14:00"; "" for an all-day entry or the days in between. timeKey sorts a day: all-day first, then by time.
+  const timeText = (e, key) => {
+    if (!e.start_time) return "";
+    if (key && key !== e.start) return key === e.end && e.end_time ? `until ${e.end_time}` : "";
+    return e.end_time && e.end === e.start ? `${e.start_time}–${e.end_time}` : e.start_time;
+  };
+  const closesAt = (h) => h.closes_at || (String(h.notes || "").match(/\bclos(?:e|es|ing)\b\D{0,4}(\d{1,2}[:h.]\d{2})/i) || [])[1]?.replace(/[h.]/, ":") || "";
+  const timeKey = (e, key) => (!key || key === e.start) && e.start_time ? e.start_time : "";
   // ⚠ things to sort on `key` - pencilled-in entries left out (they only give "If … goes ahead" notes, maybesFor)
   function clashesFor(data, key) {
     const pen = pencilsOn(data, key);
@@ -277,5 +286,5 @@
   const expiries = (fields) => (fields || []).filter((f) => !f.hide && EXPIRY_LABEL.test(f.k || ""))
     .map((f) => ({ k: f.k, date: expiryDate(f.v) })).filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
-  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle, sharedKids, shareMode, sharedDays };
+  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle, timeText, timeKey, closesAt, sharedKids, shareMode, sharedDays };
 })();

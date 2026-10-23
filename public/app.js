@@ -207,8 +207,9 @@ function buildDays(from, to) {
       days[key].items.push({ kind: "birthday", rec: r, who: ["Family"], text });
     }
   }
+  const tk = (it, k) => it.ev ? CalendarRules.timeKey(it.ev, k) : "";
   for (const k in days) days[k].items.sort((a, b) => (b.kind === "birthday") - (a.kind === "birthday") ||
-    (b.ev?.important || 0) - (a.ev?.important || 0));
+    (!!tk(a, k)) - (!!tk(b, k)) || tk(a, k).localeCompare(tk(b, k)) || (b.ev?.important || 0) - (a.ev?.important || 0));
   return days;
 }
 
@@ -223,7 +224,7 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${esc(e.title)}${typeof isHelperStay === "function" && isHelperStay(e) ? stayStatus(e) : ""}${loc}${
+          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(e.title)}${typeof isHelperStay === "function" && isHelperStay(e) ? stayStatus(e) : ""}${loc}${
             CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
@@ -441,7 +442,7 @@ function renderUpcoming() {
       const items = info.items.filter((it) => it.kind !== "event" || it.first || key === from);
       const ongoing = info.items.filter((it) => it.kind === "event" && !it.first && key !== from);
       const breakItems = info.breaks.map((b) => `<div class="item" data-sh="${b.id}"><div class="who">${pchips([b.child])}</div>
-        <div class="title">🌿 ${esc(b.name)} starts${b.status === "Tentative" ? " (?)" : ""}</div>
+        <div class="title">🌿 ${esc(b.name)} starts${CalendarRules.closesAt(b) ? ` – school closes <span class="tm">${esc(CalendarRules.closesAt(b))}</span>` : ""}${b.status === "Tentative" ? " (?)" : ""}</div>
         <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span></div>`);
       const stillOn = ongoing.length ? `<div class="still">Still on: ${ongoing.map((it) =>
         `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
@@ -454,7 +455,7 @@ function renderUpcoming() {
                  <span class="free-add">+</span></div>${stillOn}</div>`;
         continue;
       }
-      body += `<div class="${cls}" id="d-${key}">${dayHeader(key, info)}${warn}${breakItems.join("")}${items.map((it) => itemHTML(it)).join("")}${stillOn}</div>`;
+      body += `<div class="${cls}" id="d-${key}">${dayHeader(key, info)}${warn}${breakItems.join("")}${items.map((it) => itemHTML(it, { day: key })).join("")}${stillOn}</div>`;
     }
     const label = w === 0 ? "This week" : w === 1 ? "Next week" : `Week of ${fmtShort(iso(mon))}`;
     const range = mon.getMonth() === sun.getMonth()
@@ -540,7 +541,7 @@ function renderSchool() {
     const badge = tag === "now" ? `<span class="sbadge now">on holiday now</span>`
       : tag === "next" ? `<span class="sbadge next">next · ${until === 1 ? "tomorrow" : `in ${until} days`}</span>` : "";
     return `<div class="row ${tag === "past" ? "past" : ""}" data-sh="${h.id}"><span><b>${esc(h.name)}</b> ${badge}
-            ${h.status === "Tentative" ? "<small>(tentative)</small>" : ""}<br><small>${fmtDay(h.start)} – ${fmtDay(h.end)} · back ${fmtDay(iso(addDays(parse(h.end), 1)))}</small></span>
+            ${h.status === "Tentative" ? "<small>(tentative)</small>" : ""}<br><small>${fmtDay(h.start)}${CalendarRules.closesAt(h) ? ` (closes ${esc(CalendarRules.closesAt(h))})` : ""} – ${fmtDay(h.end)} · back ${fmtDay(iso(addDays(parse(h.end), 1)))}</small></span>
             <small>${days} day${days > 1 ? "s" : ""}</small></div>`;
   };
   const card = (child) => {
@@ -732,9 +733,11 @@ function eventForm(ev, preset = {}) {
     + (!ev && state.data.me.canEditAll ? `<option value="__holiday">🌿 School holiday (shades the column)</option>` : "");
   openDialog(`<form class="form" id="f" autocomplete="off">
     <h2>${preset.title || (ev ? "Edit event" : preset.copy ? "Add a copy" : "Add event")}</h2>
-    <label>What<input name="title" value="${esc(e.title)}" placeholder="e.g. Dentist 10am" required></label>
+    <label>What<input name="title" value="${esc(e.title)}" placeholder="e.g. Dentist" required></label>
     <div class="two"><label>From<input type="date" name="start" value="${e.start}" required></label>
       <label>To (optional)<input type="date" name="end" value="${e.end !== e.start ? e.end || "" : ""}"></label></div>
+    <div class="two"><label>Time (optional)<input type="time" name="start_time" value="${esc(e.start_time || "")}"></label>
+      <label>Until (optional)<input type="time" name="end_time" value="${esc(e.end_time || "")}"></label></div>
     <label>Who<div class="whos">${(state.data.me.editablePeople || names()).map((p) =>
       `<button type="button" class="chip ${who.has(p) ? "on" : ""}" style="--c:${COLORS[p]}" data-who="${p}">${p}</button>`).join("")}</div></label>
     <label>Where are they sleeping?<select name="location">
@@ -806,6 +809,7 @@ function eventForm(ev, preset = {}) {
       const fd = new FormData(f);
       const body = { title: fd.get("title"), start: fd.get("start"), end: fd.get("end") || fd.get("start"),
                      who: [...who], category: fd.get("category"), notes: fd.get("notes"), location: fd.get("location") || null,
+                     start_time: fd.get("start_time") || null, end_time: fd.get("start_time") ? fd.get("end_time") || null : null,
                      important: fd.get("important") === "on", status: fd.get("stay") || (fd.get("tentative") === "on" ? "Tentative" : "Confirmed"),
                      source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null };
       if (f.elements.share) body.share = fd.get("share") || null;
@@ -897,7 +901,7 @@ function inviteForm(ev) {
     <label>Send to</label><div class="checks">${state.data.inviteTo.map((r) =>
       `<label><input type="checkbox" name="to" value="${esc(r.email)}" ${mine(r) ? "checked" : ""}> ${esc(r.name)}${mine(r) ? " (me)" : ""} <small class="muted">${esc(r.email)}</small></label>`).join("")}</div>
     <div class="meta" style="margin-top:-6px">Each person's invite address is set on ⚙ Settings → their login.</div>
-    <div class="two"><label>Time (optional)<input type="time" name="time" ${ev.end !== ev.start ? "disabled" : ""}></label>
+    <div class="two"><label>Time (optional)<input type="time" name="time" value="${ev.end === ev.start ? esc(ev.start_time || "") : ""}" ${ev.end !== ev.start ? "disabled" : ""}></label>
       <label>Length<select name="minutes"><option value="30">30 min</option><option value="60" selected>1 hour</option>
         <option value="120">2 hours</option><option value="180">3 hours</option><option value="240">4 hours</option></select></label></div>
     <label>Reminder<select name="alarm"></select></label>
@@ -912,6 +916,12 @@ function inviteForm(ev) {
       f.elements.alarm.innerHTML = opts.map(([k, v], i) => `<option value="${k}" ${i === (timed ? 1 : 0) ? "selected" : ""}>${v}</option>`).join("");
       f.elements.minutes.disabled = !timed;
     };
+    // the entry's own length (its "until"), if it has one
+    const len = ev.start_time && ev.end_time && ev.end === ev.start ? (+ev.end_time.slice(0, 2) * 60 + +ev.end_time.slice(3)) - (+ev.start_time.slice(0, 2) * 60 + +ev.start_time.slice(3)) : 0;
+    if (len > 0) {
+      if (![...f.elements.minutes.options].some((o) => +o.value === len)) f.elements.minutes.insertAdjacentHTML("afterbegin", `<option value="${len}">until ${esc(ev.end_time)}</option>`);
+      f.elements.minutes.value = String(len);
+    }
     alarms();
     f.elements.time.oninput = alarms;
     $("#icancel").onclick = () => eventForm(ev);
@@ -973,9 +983,10 @@ function holidayForm(h, preset = {}) {
     <label>Name<input name="name" value="${esc(x.name)}" placeholder="e.g. Term 2 half term" required></label>
     <div class="two"><label>From (school closes)<input type="date" name="start" value="${x.start}" required></label>
       <label>To (last day home)<input type="date" name="end" value="${x.end}" required></label></div>
+    <label>School closes at (optional)<input type="time" name="closes_at" value="${esc(CalendarRules.closesAt(x))}"></label>
+    <div class="meta" style="margin-top:-6px">E.g. 12:00 if they finish early on the first day – it shows on the calendar and in the Sunday email.</div>
     <div class="checks"><label><input type="checkbox" name="tentative" ${x.status === "Tentative" ? "checked" : ""}> Not confirmed yet</label></div>
-    <label>Notes<textarea name="notes" rows="2" placeholder="e.g. Closes 12:00">${esc(x.notes || "")}</textarea></label>
-    <div class="meta">A closing time in the notes (e.g. "Closes 12:00") shows on the calendar on the first day.</div>
+    <label>Notes<textarea name="notes" rows="2">${esc(x.notes || "")}</textarea></label>
     <div class="err"></div>
     <div class="actions">${h ? `<button type="button" class="danger" id="del">Delete</button>` : ""}
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
@@ -985,7 +996,7 @@ function holidayForm(h, preset = {}) {
     $("#f").onsubmit = (e) => {
       e.preventDefault();
       const fd = new FormData($("#f"));
-      const body = { child: fd.get("child"), name: fd.get("name"), start: fd.get("start"), end: fd.get("end"),
+      const body = { child: fd.get("child"), name: fd.get("name"), start: fd.get("start"), end: fd.get("end"), closes_at: fd.get("closes_at") || null,
                      notes: fd.get("notes"), status: fd.get("tentative") === "on" ? "Tentative" : "Confirmed" };
       submit(() => h ? api("PUT", `school-holidays/${h.id}`, body) : api("POST", "school-holidays", body), "Saved");
     };
@@ -996,7 +1007,7 @@ function daySheet(key) {
   const info = buildDays(key, key)[key];
   openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h2>
     <div>${info.ph ? `<span class="badge ph">${info.phFlag} ${esc(info.ph)}</span> ` : ""}${info.phx.map((x) => `<span class="badge phx">${x.flag} ${esc(x.name)}</span> `).join("")}${info.off.map((c) => `<span class="badge off">${c} off school</span>`).join(" ")}</div>
-    <div class="sheet-list">${info.items.map((it) => itemHTML(it)).join("") || `<p class="muted">Nothing planned.</p>`}</div>
+    <div class="sheet-list">${info.items.map((it) => itemHTML(it, { day: key })).join("") || `<p class="muted">Nothing planned.</p>`}</div>
     <div class="actions"><button type="button" id="cancel">Close</button><button class="primary" id="addday">+ Add on this day</button></div></div>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#addday").onclick = () => eventForm(null, { date: key });
@@ -1784,7 +1795,7 @@ document.addEventListener("visibilitychange", () => {
       if (!ev || !t.isConnected) return;
       const place = ev.location && CalendarRules.places(state.data)[ev.location];
       card.innerHTML = `<b>${esc(ev.title)}</b>
-        <div class="hc-meta">${fmtDay(ev.start)}${ev.end !== ev.start ? ` – ${fmtDay(ev.end)}` : ""} · ${esc(ev.category || "")}${CalendarRules.pencilled(state.data, ev) ? " · ✏️ pencilled in" : ""}${ev.important ? " · ⭐" : ""}</div>
+        <div class="hc-meta">${fmtDay(ev.start)}${ev.start_time ? ` ${esc(ev.start_time)}` : ""}${ev.end !== ev.start ? ` – ${fmtDay(ev.end)}` : ""}${ev.end_time ? `${ev.end !== ev.start ? " " : "–"}${esc(ev.end_time)}` : ""} · ${esc(ev.category || "")}${CalendarRules.pencilled(state.data, ev) ? " · ✏️ pencilled in" : ""}${ev.important ? " · ⭐" : ""}</div>
         <div>${pchips(whoList(ev.who))}</div>
         ${place ? `<div class="hc-meta">${place.icon} ${esc(place.label)}</div>` : ""}
         ${ev.notes ? `<div class="hc-notes">${esc(ev.notes)}</div>` : `<div class="hc-meta"><i>No notes</i></div>`}

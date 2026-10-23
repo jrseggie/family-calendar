@@ -151,7 +151,13 @@ function cleanEvent(b, people) {
   if (!DATE.test(b.start || "")) invalid("Start date is required");
   const end = b.end && DATE.test(b.end) ? b.end : b.start;
   if (end < b.start) invalid("End date is before start date");
+  // optional times (HH:MM); an "until" needs a start time, and on a one-day entry it must be later
+  const hm = (v) => { const m = String(v || "").trim().match(/^(\d{1,2}):(\d{2})$/); return m && +m[1] < 24 && +m[2] < 60 ? `${m[1].padStart(2, "0")}:${m[2]}` : null; };
+  const start_time = hm(b.start_time), end_time = start_time ? hm(b.end_time) : null;
+  if (b.start_time && !start_time) invalid("The time should look like 10:30");
+  if (end_time && end === b.start && end_time <= start_time) invalid("'Until' is before the start time");
   return {
+    start_time, end_time,
     start: b.start, end, title, who: cleanWho(b.who, people),
     category: CATEGORIES.includes(b.category) ? b.category : "General",
     status: ["Tentative", "Unavailable"].includes(b.status) ? b.status : "Confirmed",   // Unavailable: e.g. the helper can't stay
@@ -181,7 +187,9 @@ function cleanHoliday(b, people) {
   if (!name) invalid("Name is required");
   if (!DATE.test(b.start || "") || !DATE.test(b.end || "")) invalid("From and To dates are required");
   if (b.end < b.start) invalid("To date is before From date");
+  const t = String(b.closes_at || "").trim().match(/^(\d{1,2}):(\d{2})$/);
   return { child: b.child, school: child.school || null, name, start: b.start, end: b.end,
+           closes_at: t && +t[1] < 24 && +t[2] < 60 ? `${t[1].padStart(2, "0")}:${t[2]}` : null,   // school closes early on the first day
            status: b.status === "Tentative" ? "Tentative" : "Confirmed", notes: String(b.notes || "").trim() || null };
 }
 
@@ -216,7 +224,7 @@ function cleanUser(b, people) {
            can_edit: limited && b.can_edit ? 1 : 0, active: b.active === false || b.active === 0 ? 0 : 1, invite_email: invite || null };
 }
 
-const describe = (e) => `${e.start}${e.end && e.end !== e.start ? " to " + e.end : ""} [${e.who || e.child || ""}] ${e.title || e.name}`;
+const describe = (e) => `${e.start}${e.start_time ? " " + e.start_time + (e.end_time ? "-" + e.end_time : "") : ""}${e.end && e.end !== e.start ? " to " + e.end : ""} [${e.who || e.child || ""}] ${e.title || e.name}`;
 
 // ---------- generic insert / update helpers
 async function insert(env, table, rec) {

@@ -102,7 +102,8 @@ function barHTML(it, key, n, person, label, repeat = 0) {
   const cls = ["gi", pen ? "pencil" : "", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", !pen && ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
                multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : ""].join(" ");
   const who = label ? `<b>${esc(label)}:</b> ` : visit && !new RegExp(`\\b${visitor}\\b`, "i").test(title) ? `${esc(visitor)}: ` : "";   // "Mark: dinner", not "Mark: Emma with Mark"
-  const text = `${icon}${who}${esc(title)}${stayStatus(e)}${pencilMark(e)}`;
+  const tm = CalendarRules.timeText(e, key);   // "10:30" in front of the title (on the first day; "until 14:00" on the last)
+  const text = `${icon}${who}${tm ? `<span class="tm">${esc(tm)}</span> ` : ""}${esc(title)}${stayStatus(e)}${pencilMark(e)}`;
   const body = repeat ? Array(repeat).fill(`<span>${text}</span>`).join("") : text;
   return `<div class="${cls}${repeat ? " across" : ""}" style="--c:${COLORS[visit ? visitor : person || whoList(e.who)[0]]}${repeat ? `;grid-template-columns:repeat(${repeat},minmax(0,1fr))` : ""}" data-ev="${e.id}">${body}</div>`;   // label on every day, so each square makes sense on its own
 }
@@ -150,8 +151,8 @@ function gridCell(person, key, n, info, wh, rowCls) {
   const hol = KIDS().includes(person) ? info.offs.filter((h) => h.child === person && (h.start === key || key.endsWith("-01"))) : [];
   // the label says when they go back (the shading ends on the last day at home); the day back gets a small 🎒 marker
   const back = (h) => fmtDay(iso(addDays(parse(h.end), 1)));
-  // a closing time in the holiday's notes ("Closes 12:00", "close 14:30") shows on its first day
-  const closes = (h) => (String(h.notes || "").match(/\bclos(?:e|es|ing)\b\D{0,4}(\d{1,2}[:h.]\d{2})/i) || [])[1]?.replace(/[h.]/, ":");
+  // the time school closes on the first day ("School closes at", or "Closes 12:00" in older holidays' notes)
+  const closes = (h) => CalendarRules.closesAt(h);
   const holBars = hol.map((h) => `<div class="gi shol" data-sh="${h.id}" style="--c:${COLORS[person]}">🌿 ${esc(h.name)}
     <small>${h.start === key ? (closes(h) ? `closes ${closes(h)} · ` : "") : "cont. · "}back ${back(h)}</small></div>`).join("")
     // (not when a "Boarders Return" entry already says it, nor after a holiday that runs to 31 Dec because the next year isn't known)
@@ -278,7 +279,7 @@ function cellSheet(key, person) {
   const isPerson = state.data.people.some((p) => p.name === person && ["household", "helper"].includes(p.type));
   openDialog(`<div class="form"><h2>${esc(title)}</h2>
     ${whereTxt ? `<div class="meta">Sleeping: <b>${whereTxt}</b></div>` : ""}
-    <div class="sheet-list">${items.map((it) => itemHTML(it)).join("") || `<p class="muted">Nothing on.</p>`}</div>
+    <div class="sheet-list">${items.map((it) => itemHTML(it, { day: key })).join("") || `<p class="muted">Nothing on.</p>`}</div>
     <div class="actions"><button type="button" id="cancel">Close</button>
       ${canAdd() && KIDS().includes(person) && CalendarRules.helpersFree(state.data, key).length ? `<button type="button" id="helperstay">🏠 ${
         helpers().length === 1 ? esc(helpers()[0]) : "Helper"} staying with ${esc(person)}</button>` : ""}
@@ -372,7 +373,9 @@ function holidayPlan(h) {
   const start = existing.length ? existing.map((e) => ({ ...e, fixed: !mine(e), note: noteOf(e) }))
     : [{ location: usual, start: h.start, end: h.end, status: "Confirmed" }];
   openDialog(`<form class="form" id="f"><h2>🗓 ${esc(kid)} · ${esc(h.name)}</h2>
-    <div class="meta">${fmtDay(h.start)} – ${fmtDay(h.end)} (${nights.length} night${nights.length === 1 ? "" : "s"}) · back at school ${fmtDay(iso(addDays(parse(h.end), 1)))}</div>
+    <div class="meta">${fmtDay(h.start)}${CalendarRules.closesAt(h) ? ` (school closes ${esc(CalendarRules.closesAt(h))})` : ""} – ${fmtDay(h.end)} (${nights.length} night${nights.length === 1 ? "" : "s"}) · back at school ${fmtDay(iso(addDays(parse(h.end), 1)))}</div>
+    ${state.data.me.canEditAll ? `<label class="pcloses">School closes at <small class="muted">(optional – if they finish early on ${esc(fmtDay(h.start))})</small>
+      <input type="time" name="closes_at" value="${esc(CalendarRules.closesAt(h))}"></label>` : ""}
     <div class="lbl">Where ${esc(kid)} sleeps</div>
     <div id="prows">${start.map(row).join("")}</div>
     ${can ? `<button type="button" class="ackbtn" id="padd" style="margin-top:6px">+ Add a stretch</button>` : ""}
@@ -417,6 +420,10 @@ function holidayPlan(h) {
       }
       const body = (r, who) => ({ title: stayTitle(who, r.location, r.note), start: r.start, end: r.end, who: [who], category: "Travel", location: r.location, status: r.status });
       submit(async () => {
+        // the closing time belongs to the holiday itself (the same box as on ✏️ Holiday dates)
+        const closes = f.elements.closes_at ? f.elements.closes_at.value || null : undefined;
+        if (closes !== undefined && closes !== (h.closes_at || null) && !(closes === null && !h.closes_at))
+          await api("PUT", `school-holidays/${h.id}`, { ...h, closes_at: closes });
         const keep = new Set(want.filter((r) => r.id).map((r) => r.id));
         for (const e of existing.filter((e) => mine(e) && !keep.has(e.id))) await api("DELETE", `events/${e.id}`);
         for (const r of want) {

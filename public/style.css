@@ -545,3 +545,8 @@ body.nosections .sections { display: none; }
 }
 @media (max-width: 699px) and (prefers-color-scheme: dark) { :root:not([data-theme=light]) .sections button.active { color: #8fb3ff; } }
 @media print { .sections { display: none !important; } }
+
+/* an entry's time in front of its title (Month, Upcoming, day sheets) */
+.tm { font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.pcloses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; } .pcloses input { width: auto; }

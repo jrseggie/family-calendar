@@ -1,5 +1,13 @@
 # What's new in Family Calendar
 
+## 1.0.25
+- ⏰ Times: an entry can have a time (and an "until"), e.g. 10:30–11:15. It shows in front of the title on Month, Upcoming,
+  the hover card and the Sunday email; timed entries come after the all-day ones, in time order. In the phone calendar they
+  show at their time, and 📅 Send invite fills the time in (so its reminder goes off at the right moment). Leave it empty
+  for an all-day entry, as before.
+- 🌿 School holidays: a "School closes at" time (e.g. 12:00 when they finish early on the first day) – shows on Month,
+  Upcoming, the School tab, the holiday's planning sheet and the Sunday email. ("Closes 12:00" typed in a holiday's notes still works.)
+
 ## 1.0.24
 - Hover card (computers): it now goes away when the mouse leaves the entry (it used to stay on screen until you rested on another one).
 

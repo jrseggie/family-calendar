@@ -164,6 +164,25 @@ test("feed: long lines fold at 75 bytes", () => {
   assert.ok(out.split("\r\n").every((l) => new TextEncoder().encode(l).length <= 75));
 });
 
+test("times: how they read, all-day entries first then by time, timed entries in the feed and the Sunday email", () => {
+  const doc = ev("2026-10-14", "2026-10-14", "Anna, Tom", "Doctor", { start_time: "10:30", end_time: "11:30" });
+  const trip = ev("2026-10-14", "2026-10-16", "Tom", "Conference", { start_time: "08:00", end_time: "14:00" });
+  const allDay = ev("2026-10-14", "2026-10-14", "Anna", "School play");
+  assert.equal(R.timeText(doc), "10:30–11:30");
+  assert.equal(R.timeText(trip, "2026-10-14"), "08:00");
+  assert.equal(R.timeText(trip, "2026-10-15"), "");
+  assert.equal(R.timeText(trip, "2026-10-16"), "until 14:00");
+  assert.equal(R.timeText(allDay), "");
+  assert.deepEqual([doc, trip, allDay].sort((a, b) => (!!R.timeKey(a, "2026-10-14")) - (!!R.timeKey(b, "2026-10-14")) || R.timeKey(a, "2026-10-14").localeCompare(R.timeKey(b, "2026-10-14"))).map((e) => e.title),
+    ["School play", "Conference", "Doctor"]);
+  // 10:30 in Johannesburg = 08:30 UTC
+  const ics = feedCalendar({ places, events: [doc, allDay], recurring: [], schoolHolidays: [] }, new Date("2026-10-09T10:00:00Z"), { feed: "F", full: "F", url: "", host: "x", uid: "t", tz: "Africa/Johannesburg" });
+  assert.match(ics, /DTSTART:20261014T083000Z\r\nDTEND:20261014T093000Z/);
+  assert.match(ics, /DTSTART;VALUE=DATE:20261014\r\nDTEND;VALUE=DATE:20261015/);
+  const mail = buildDigest({ ...data([allDay, doc]), recurring: [] }, "2026-10-12", "2026-10-18", "https://example.com");
+  assert.match(mail.html, /<b>10:30–11:30<\/b> Doctor/);
+});
+
 // ---------- Sunday email
 test("Sunday email: next week's Mon-Sun, needs-sorting box, noted warnings left out", () => {
   assert.deepEqual(weekAfter(new Date("2026-10-11T16:00:00Z")), { from: "2026-10-12", to: "2026-10-18" });
