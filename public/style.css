@@ -130,7 +130,7 @@ main:has(.fgrid) { max-width: 1500px; }   /* the Family grid uses the width of a
 /* add button + dialog */
 .fab { position: fixed; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%;
   border: 0; background: var(--brand); color: #fff; font-size: 30px; line-height: 1; box-shadow: 0 6px 18px rgba(0,0,0,.25); cursor: pointer; z-index: 6; }
-dialog { border: 0; border-radius: 16px; padding: 0; width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 40px);
+dialog { border: 0; border-radius: 16px; padding: 0; width: min(520px, calc(100vw - 24px)); max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);
   background: var(--card); color: var(--text); box-shadow: 0 20px 60px rgba(0,0,0,.35); }
 dialog::backdrop { background: rgba(0,0,0,.4); }
 .form { padding: 16px; display: grid; gap: 12px; }
@@ -160,6 +160,10 @@ a.btn.go { display: inline-block; text-decoration: none; }
 .vacts { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: flex-end; }
 .form label.hl { outline: 2px solid #2f9e44; outline-offset: 4px; border-radius: 6px; }
 .actions .danger { color: #c92a2a; margin-right: auto; }
+/* a form taller than the screen (e.g. an entry on a phone): it scrolls inside the box, and Save / Cancel stay pinned at the bottom */
+dialog { overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: var(--card); margin: 0 -16px -16px; padding: 10px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid var(--line); box-shadow: 0 -6px 12px -10px rgba(0,0,0,.35); }
 .meta { font-size: 12px; color: var(--muted); }
 /* 🖨️ the printout for a tracked person (app.js renderPrint): always black on white, like the paper */
 .chip.printbtn { border-style: dashed; }

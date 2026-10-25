@@ -1,5 +1,8 @@
 # What's new in Family Calendar
 
+## 1.0.26
+- Phone: a long form (e.g. editing an entry) scrolls inside its box and Save / Cancel stay pinned at the bottom, so you can always reach them (on an iPhone they could end up off the screen).
+
 ## 1.0.25
 - ⏰ Times: an entry can have a time (and an "until"), e.g. 10:30–11:15. It shows in front of the title on Month, Upcoming,
   the hover card and the Sunday email; timed entries come after the all-day ones, in time order. In the phone calendar they
