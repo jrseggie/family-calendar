@@ -37,8 +37,12 @@
 .seg label:has(input:checked) { background: var(--brand); color: #fff; }
 .form .lbl { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 * { box-sizing: border-box; }
+/* flag emoji (🇿🇦): Windows has none and shows the letters "ZA", so flags come from Twemoji's flag font
+   (only the flag characters use it - unicode-range; without the network the letters show, as before) */
+@font-face { font-family: "Flags"; src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2") format("woff2");
+  unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F; font-display: swap; }
 html, body { margin: 0; background: var(--bg); color: var(--text);
-  font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
+  font: 15px/1.4 "Flags", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
 button, input, select, textarea { font: inherit; color: inherit; }
 .muted { color: var(--muted); }
 .pad { padding: 16px; }

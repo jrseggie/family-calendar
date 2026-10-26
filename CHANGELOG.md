@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.29
+- 🇿🇦 Flags on public holidays now show as flags on Windows computers too (Windows draws them as the letters "ZA").
+
 ## 1.0.28
 - A refresh, or reopening the app, comes back to the tab you were on (it could go back to Month).
 
