@@ -37,6 +37,9 @@
 .seg label:has(input:checked) { background: var(--brand); color: #fff; }
 .form .lbl { font-size: 13px; color: var(--muted); margin-bottom: 4px; }
 * { box-sizing: border-box; }
+/* ⏳ a button whose save is on its way (app.js busyOn) */
+button.busy { cursor: progress; opacity: .85; } .spin { display: inline-block; width: 12px; height: 12px; margin-right: 7px; vertical-align: -1px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .7s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 /* flag emoji (🇿🇦): Windows has none and shows the letters "ZA", so flags come from Twemoji's flag font
    (only the flag characters use it - unicode-range; without the network the letters show, as before) */
 @font-face { font-family: "Flags"; src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2") format("woff2");
@@ -227,6 +230,8 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .role { font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--line); align-self: flex-start; white-space: nowrap; }
 .role.admin { background: var(--brand); color: #fff; }
 .role.limited { background: var(--important); }
+/* Settings > Who can sign in: the welcome button and the access badge side by side, level with the name */
+.uacts { display: flex; align-items: center; gap: 8px; align-self: flex-start; flex-shrink: 0; } .uacts .role { align-self: center; }
 .form select option { white-space: normal; }
 
 /* birthdays by month */
@@ -394,6 +399,13 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .dbadge.ok { background: color-mix(in srgb, #2f9e44 16%, var(--card)); color: color-mix(in srgb, #2f9e44 75%, var(--text)); }
 .dbadge.wait { background: color-mix(in srgb, #f08c00 18%, var(--card)); color: color-mix(in srgb, #e67700 80%, var(--text)); }
 .dbadge.off { background: var(--weekbg); color: var(--muted); }
+/* 👋 the welcome sheet: one big button per way of sending it */
+.wbtns { display: grid; gap: 8px; margin: 6px 0 4px; } .wbig { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer; }
+.wbig b { font-size: 15px; } .wbig small { color: var(--muted); } .wbig:hover { border-color: var(--brand); }
+.wopen { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 6px; } .wopen a { text-decoration: none; } .wdone { display: flex; gap: 10px; align-items: center; margin-top: 8px; }
+.wprev { margin-top: 8px; } .wprev summary { cursor: pointer; color: var(--muted); font-size: 13px; } .wprev iframe { width: 100%; height: 420px; border: 1px solid var(--line); border-radius: 8px; background: #fff; margin-top: 6px; }
+/* Settings > Who can sign in: a welcome email still waiting for the address to be confirmed */
+.wnote { margin-top: 6px; padding: 7px 10px; border-left: 4px solid #f08c00; border-radius: 6px; font-size: 13px; line-height: 1.4; background: color-mix(in srgb, #f08c00 14%, var(--card)); color: var(--text); }
 .dbadge.hstate { font-size: 13px; padding: 3px 11px; margin-left: 6px; vertical-align: 2px; }   /* on/off next to a card title */
 @media (max-width: 699px) { .row:has(.dbadges) { flex-direction: column; align-items: flex-start; gap: 6px; } .dbadges { justify-content: flex-start; } }
 

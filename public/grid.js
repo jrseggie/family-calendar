@@ -182,7 +182,7 @@ function sortingCard() {
   const nudges = CalendarRules.pencilNudges(state.data, todayISO()).filter((e) => visible(whoList(e.who)));
   const nudgeRows = nudges.map((e) => `<div class="srow"><b>${e.start === e.end ? fmtDay(e.start) : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</b>
     <span data-ev="${e.id}" style="cursor:pointer">✏️ ${esc(whoList(e.who).join(" & "))}: ${esc(CalendarRules.plainTitle(e.title))} is still pencilled in – on or not?</span>
-    ${canEditEvent(e) ? `<span class="vmove"><button type="button" class="ackbtn" data-pon="${e.id}">✅ It's on</button>
+    ${canConfirm(e) ? `<span class="vmove"><button type="button" class="ackbtn" data-pon="${e.id}">✅ It's on</button>
       <button type="button" class="ackbtn" data-poff="${e.id}">🗑 Not happening</button></span>` : "<span></span>"}</div>`).join("");
   const ifs = CalendarRules.clashRuns(state.data, todayISO(), iso(addDays(new Date(), 8 * 7)), false, true);
   const ifList = ifs.length ? `<details class="noted"><summary>❔ If pencilled-in plans go ahead (${ifs.length})</summary>

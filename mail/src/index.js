@@ -13,6 +13,7 @@ import { purge, healthCheck, markHealthy } from "./health.js";
 import { brand, loadSettings } from "../../lib/settings.js";
 import { dumpDatabase, gzip } from "../../lib/backup.js";
 import { syncEmailAddresses } from "../../lib/email-sync.js";
+import { welcomeWaiting } from "../../lib/welcome.js";
 import { processInbox } from "../../lib/inbox.js";
 import { sendUsage } from "../../lib/usage.js";
 import { extraEmail } from "../../src/extras.js";
@@ -43,6 +44,7 @@ export default {
       // the weekly email: on the day and hour chosen on Settings > Weekly email (in the family's time zone), once
       const t = new Date(event.scheduledTime), step = (name, p) => p.catch((e) => console.log(`${name}:`, String(e)));   // one failing step never stops the others
       await step("weekly email", maybeDigest(env, t));
+      await step("welcome emails", welcomeWaiting(env));   // ✉️ a new login's welcome, once they've confirmed Cloudflare's email
       await step("outbox", sendOutbox(env));
       // once a day: "this calendar is in use" to the Family Calendar maker (Settings > This calendar; lib/usage.js)
       await step("usage check-in", sendUsage(env, t));

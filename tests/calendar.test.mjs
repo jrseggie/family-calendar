@@ -7,6 +7,8 @@ import { publicHolidays } from "../lib/holidays.js";
 import { feedCalendar, fold } from "../lib/ics.js";
 import { repeatDates } from "../lib/repeat.js";
 import { buildDigest, weekAfter } from "../mail/src/digest.js";
+import { welcomeMail, welcomeWhatsApp } from "../lib/welcome.js";
+import { involvesOthers, ownEntry } from "../lib/child.js";
 
 const R = globalThis.CalendarRules;
 // the test family = how the Smiths are set up on the Settings tab (children, boarder, usual house, places)
@@ -674,4 +676,32 @@ test("printout: only the shared children, and only what the tracked person needs
   assert.deepEqual(R.sharedDays(d2, "Mark", "2026-11-07", "2026-11-07").days[0].cells[0].items.map((it) => it.text), ["Emma with Mark", "Hockey trials 08:00"]);
   assert.deepEqual(R.sharedDays({ ...d2, events: [trials] }, "Mark", "2026-11-07", "2026-11-07").days[0].cells[0].items.map((it) => it.text), ["Not available"]);
   assert.ok(!JSON.stringify(days).includes("Beach House"));
+});
+
+test("welcome email: the link, the sign-in steps and what a login can see", () => {
+  const b = brand({ family_name: "Smith", site_url: "https://smith.example" });
+  const m = welcomeMail(b, { name: "Mia Jones", email: "mia@example.com", role: "limited", see: "Emma, Leo", see_school: 1 }, "Anna");
+  assert.equal(m.subject, "Your login for the Smith Family calendar");
+  assert.ok(m.text.startsWith("Hi Mia,"));
+  assert.ok(m.text.includes("Anna has given you a login") && m.text.includes("https://smith.example") && m.text.includes("mia@example.com"));
+  assert.ok(m.text.includes("see the entries for Emma and Leo, plus the school holidays. You can't change anything."));
+  assert.ok(m.html.includes('href="https://smith.example"') && m.html.includes("6-digit code"));
+  assert.ok(welcomeMail(b, { name: "Leo", email: "l@example.com", role: "viewer" }, "").text.includes("see the whole calendar, but not change anything."));
+  const wa = welcomeWhatsApp(b, { name: "Mia Jones", email: "mia@example.com", role: "viewer" }, "Anna");
+  assert.ok(wa.startsWith("👋 *Welcome to the Smith Family calendar, Mia!*") && wa.includes("mia@example.com") && wa.trim().endsWith("👉 https://smith.example"));
+  assert.ok(welcomeMail(b, { name: "Mia", email: "m@example.com", role: "limited", see: "Emma, Mia", can_edit: 1, edit_who: "Mia" }, "Anna").text
+    .includes("see the entries for Emma and Mia. You can add and change entries for Mia (e.g. when you're not available)."));
+});
+
+test("child logins: own entries vs entries with other people; only their own can be changed", () => {
+  const fam = ["Anna", "Ben", "Emma", "Leo"];
+  assert.equal(involvesOthers("Emma", "Emma", fam), false);
+  assert.equal(involvesOthers("Emma, Anna", "Emma", fam), true);
+  assert.equal(involvesOthers("Family", "Emma", fam), true);
+  assert.equal(involvesOthers("Emma", null, fam), true);   // no person picked: everything waits for a parent
+  const kid = { id: 7, name: "Emma Smith" };
+  assert.equal(ownEntry(kid, { created_login: 7, created_by: "Emma Smith" }), true);
+  assert.equal(ownEntry(kid, { created_login: 2, created_by: "Emma Smith" }), false);
+  assert.equal(ownEntry(kid, { created_login: null, created_by: "Emma Smith" }), true);   // older entries: by name
+  assert.equal(ownEntry(kid, { created_login: null, created_by: "Anna" }), false);
 });

@@ -2,6 +2,22 @@
 
 ## Next version (not released yet)
 
+## 1.0.31
+- Fresh data after a save, or when you come back to the app, now updates the page in place – Settings and other pages no longer flash "Loading…" and jump back to the top (it looked like the page kept reloading itself).
+- ⏳ Save, Delete, Send and Add buttons now show "Saving…" (with a spinner) while they work, and a second click is ignored – a slow save no longer looks like nothing happened (which led to double saves).
+- 👋 Welcome for new logins (Settings › Who can sign in): after adding someone, send them the link, how to sign in with an email code,
+  how to put it on their phone's home screen and what they can see – "📧 Send from my email" (the designed email is copied; paste it into a
+  new message, which Gmail / your email app opens already addressed) or "💬 Send by WhatsApp". It comes from you, so Cloudflare sends them
+  nothing but the sign-in code. "📨 Send from the calendar" is offered for addresses the calendar can already email.
+- Each login shows whether it has been used: "✅ Signed in · last used …", "👋 Welcome sent … · not signed in yet" or "Not signed in yet".
+- 🧒 New access level "Child" (Settings › Who can sign in): sees the whole calendar and adds entries for anyone (e.g. "need a lift"),
+  but changes or deletes only the entries they added. Their own entries go straight on; one that includes anyone else goes on
+  ✏️ pencilled in until a parent taps "✅ It's on". The admins get an email about those, and about anything a Child deletes
+  (it can be restored from Changes › Recently deleted for 30 days). Pick "Which person is this login?" so their own entries are known.
+- 🔐 A Limited login that can add / edit can be kept to only some of the people it sees ("… only for"), e.g. a helper who sees
+  the children but only adds her own "not available" entries.
+- Adding, turning off or removing a login now also updates who may sign in on calendars set up before the set-up wizard.
+
 ## 1.0.30
 - Selecting text in a form (e.g. to copy an entry's title) no longer closes the form when you let go of the mouse outside it.
 

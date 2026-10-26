@@ -45,7 +45,29 @@ function toast(msg, action) {   // action = { label, run }: e.g. "Undo" after a 
   clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove("show"), action ? 8000 : 2200);
 }
 
+// ⏳ while a save / delete / send is on its way: the button pressed (or the open form's main button) is turned off and says
+// "Saving…" with a spinner, and the form can't be sent again - a slow save used to look like nothing happened (double saves)
+function busyOn() {
+  const dlg = document.getElementById("dlg");
+  const active = document.activeElement?.closest?.("button");
+  // (the button pressed may already have turned itself off before sending - it still gets "Sending…")
+  const el = active || (dlg?.open ? dlg.querySelector(".actions button.primary") : null);
+  if (!el || el.classList.contains("busy")) return null;
+  const t = el.textContent.trim();
+  const word = /^(✕ )?(close|cancel)$/i.test(t) ? null : /save|keep|apply/i.test(t) ? "Saving…" : /delete|remove|not happening/i.test(t) ? "Deleting…"
+    : /send|email|invite/i.test(t) ? "Sending…" : /add|load|import/i.test(t) ? "Adding…" : null;
+  const was = el.innerHTML;
+  el.classList.add("busy"); el.disabled = true; el.innerHTML = `<span class="spin" aria-hidden="true"></span>${word ? esc(word) : was}`;
+  return () => { if (el.isConnected) { el.classList.remove("busy"); el.disabled = false; el.innerHTML = was; } };
+}
+// Enter in a form whose save is still going: ignored
+document.addEventListener("submit", (e) => { if (e.target.querySelector?.("button.busy")) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+
 async function api(method, path, body) {
+  const done = method === "GET" ? null : busyOn();
+  try { return await apiCall(method, path, body); } finally { done?.(); }
+}
+async function apiCall(method, path, body) {
   const headers = { "content-type": "application/json" };
   const as = load("viewAs");                       // demo only: "View as" another login
   if (as) headers["X-Demo-User"] = as;
@@ -133,7 +155,7 @@ async function refresh() {
   for (const k of Object.keys(colorMap)) delete colorMap[k];
   for (const p of state.data.people) colorMap[p.name] = p.color;
   const me = state.data.me;
-  const ROLE = { admin: "Admin", editor: "Editor", viewer: "Viewer", limited: "Limited" };
+  const ROLE = { admin: "Admin", editor: "Editor", child: "Child", viewer: "Viewer", limited: "Limited" };
   $("#me").innerHTML = me.demo
     ? `<button class="theme-btn" id="viewas">👁 ${esc(me.name)} · ${ROLE[me.role]} ▾</button>`
     : `${esc(me.name)}`;
@@ -157,8 +179,13 @@ const canAdd = () => state.data.me.canAddEvents;
 function canEditEvent(ev) {
   const me = state.data.me;
   if (me.canEditAll) return true;
+  // 🧒 a Child changes / deletes only the entries they added (API canChangeEvent)
+  if (me.role === "child") return ev.created_login ? ev.created_login === me.id : ev.created_by === me.name;
   return !!me.editablePeople?.length && whoList(ev.who).every((p) => me.editablePeople.includes(p));
 }
+
+// ✅ It's on / 🗑 Not happening on a pencilled-in entry: the parents decide, not a Child
+const canConfirm = (ev) => canEditEvent(ev) && state.data.me.role !== "child";
 
 // ---------- what's on each day
 // the filter with "Family" turned into the people ticked "Part of the family" (Setup)
@@ -563,7 +590,7 @@ function renderSchool() {
 }
 
 async function renderLog() {
-  $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;
+  if (!state.stay) $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;   // a refresh of the same page updates it in place
   const [rows, gone] = await Promise.all([api("GET", "log"), api("GET", "deleted")]);
   const when = (s) => new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
   const deleted = gone.length ? `<div class="card log"><h3>🗑 Recently deleted <small class="muted">(can be restored for 30 days)</small></h3>${gone.map((g) =>
@@ -615,14 +642,18 @@ function render() {
   renderFilters();
   setBarH();
   const stay = state.lastView === state.view;   // re-render after a save/filter: keep scroll position
-  state.lastView = state.view;
+  state.lastView = state.view; state.stay = stay;
+  const y = window.scrollY;
   fabFor(state.view);
   document.body.classList.toggle("printing", state.view === "print");
   if (state.view === "month") return renderMonth(stay);
   if (state.view === "print") return renderPrint();
-  if (EXTRA_VIEWS[state.view]) return EXTRA_VIEWS[state.view].render();
   if (state.view !== "info") state.vault = null;   // don't keep the details in memory once you leave the page
-  ({ requests: renderRequests, upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
+  const shown = EXTRA_VIEWS[state.view] ? EXTRA_VIEWS[state.view].render()
+    : ({ requests: renderRequests, upcoming: renderUpcoming, birthdays: renderBirthdays, school: renderSchool, log: renderLog, info: renderInfo, setup: renderSetup })[state.view]();
+  // the same page drawn again (a save, or fresh data when you come back to the app): stay where you were, not back at the top
+  if (stay) Promise.resolve(shown).then(() => window.scrollTo(0, y)).catch(() => {});
+  return shown;
 }
 
 // ---------- 🖨️ the printout for a tracked person (e.g. a co-parent or their lawyer): filter on them -> "Print for …".
@@ -752,7 +783,8 @@ function eventForm(ev, preset = {}) {
       <label><input type="radio" name="stay" value="Unavailable" ${e.status === "Unavailable" ? "checked" : ""}> 🚫 Can't stay</label></div>` : ""}
     <div class="checks"><label><input type="checkbox" name="important" ${e.important ? "checked" : ""}> ⭐ Important</label>
       ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> ✏️ Pencilled in – might not happen</label>`}</div>
-    ${ev && CalendarRules.pencilled(state.data, ev) && canEditEvent(ev) ? `<div class="qstay" style="margin:-4px 0 4px">✏️ Pencilled in:
+    ${state.data.me.role === "child" && (!ev || canEditEvent(ev)) ? `<div class="meta" style="margin-top:-6px">If it includes anyone besides you, it goes on ✏️ pencilled in until a parent confirms it – your parents get an email about it.</div>` : ""}
+    ${ev && CalendarRules.pencilled(state.data, ev) && canConfirm(ev) ? `<div class="qstay" style="margin:-4px 0 4px">✏️ Pencilled in:
       <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn" id="poff">🗑 Not happening</button></div>` : ""}
     ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(localDay(ev.confirmed_at))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
@@ -822,7 +854,7 @@ function eventForm(ev, preset = {}) {
       if (fd.get("repeat")) body.repeat = { every: fd.get("repeat"), until: fd.get("until"), days: fd.getAll("rday").map(Number) };
       if (!ev && (!navigator.onLine || state.data._offline)) return queueAdd(body);
       if (!ev) return submit(async () => {
-        try { const r = await api("POST", "events", body); submit.msg = r.count > 1 ? `Added ${r.count} entries` : "Added"; }
+        try { const r = await api("POST", "events", body); submit.msg = (r.count > 1 ? `Added ${r.count} entries` : "Added") + (r.pencilled ? " – ✏️ pencilled in until a parent confirms it" : ""); }
         catch (x) { if (!x.offline) throw x; queueAdd(body, true); submit.msg = "Kept on this phone – it'll be sent when you're back online"; }
       }, () => submit.msg);
       saveEdit(ev, { ...body, loaded_at: ev.updated_at || "" });
@@ -1029,12 +1061,13 @@ const TYPE_INFO = {
 const ROLE_INFO = {
   admin: ["Admin", "sees and edits everything, and can use Settings"],
   editor: ["Editor", "sees and edits everything, no Settings"],
+  child: ["Child", "sees everything, adds entries, edits only their own"],
   viewer: ["Viewer", "sees everything, can't change anything"],
   limited: ["Limited", "only sees the people you pick"],
 };
 
 async function renderSetup() {
-  $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;
+  if (!state.stay) $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;   // a refresh of the same page updates it in place
   const [people, users, digest, places, settings, inbox] = await Promise.all([api("GET", "setup/people"), api("GET", "setup/users"), api("GET", "setup/digest"),
     api("GET", "setup/places"), api("GET", "setup/settings"), api("GET", "setup/inbox")]);
   state.setup = { people, users, digest, places, settings, inbox };
@@ -1047,11 +1080,22 @@ async function renderSetup() {
         <button type="button" class="ackbtn" data-pmove="${i}|-1" title="Move up" ${i ? "" : "disabled"}>↑</button>
         <button type="button" class="ackbtn" data-pmove="${i}|1" title="Move down" ${i < people.length - 1 ? "" : "disabled"}>↓</button></span></div>`).join("");
   const uRows = users.map((u) => {
-    const extra = u.role === "limited"
-      ? `sees ${esc(u.see || "nobody")}${u.see_school ? " + school holidays" : ""}${u.see_birthdays ? " + birthdays" : ""}${u.can_edit ? " · can add/edit" : " · view only"}`
+    const extra = u.role === "child" ? (u.person ? `is ${esc(u.person)}` : "⚠ pick which person they are") : u.role === "limited"
+      ? `sees ${esc(u.see || "nobody")}${u.see_school ? " + school holidays" : ""}${u.see_birthdays ? " + birthdays" : ""}${u.can_edit ? ` · can add/edit${u.edit_who ? ` for ${esc(u.edit_who)}` : ""}` : " · view only"}`
       : "";
+    const first = esc(u.name.split(" ")[0]);
+    // has this login been used? (users.last_seen = the day it last opened the calendar) - and did the welcome go?
+    const seen = u.last_seen ? (u.last_seen === todayISO() ? "today" : fmtShort(u.last_seen)) : "";
+    const VIA = { calendar: "by the calendar", email: "by email", whatsapp: "by WhatsApp" };
+    const welcome = seen ? `<div style="margin-top:4px"><span class="dbadge ok">✅ Signed in · last used ${seen}</span></div>`
+      : u.welcome_wait && !u.welcome_at ? `<div class="wnote"><b>⏳ Waiting for ${first} to confirm their email</b><br>Cloudflare emailed them a "verify" link on ${fmtShort(u.welcome_wait.slice(0, 10))}.
+        The welcome email goes out by itself once they click it (after which Cloudflare shows "Page not found" – that's normal).</div>`
+      : u.welcome_at ? `<div style="margin-top:4px"><span class="dbadge wait">👋 Welcome sent ${fmtShort(u.welcome_at.slice(0, 10))}${VIA[u.welcome_via] ? ` ${VIA[u.welcome_via]}` : ""} · not signed in yet</span></div>`
+      : u.active ? `<div style="margin-top:4px"><span class="dbadge off">Not signed in yet – send them the welcome</span></div>` : "";
     return `<div class="row" data-user="${u.id}"><span><b>${esc(u.name)}</b>${u.active ? "" : " <small>(disabled)</small>"}<br>
-      <small>${esc(u.email)}${u.invite_email ? `<br>📅 invites → ${esc(u.invite_email)}` : ""}${extra ? "<br>" + extra : ""}</small></span><small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small></div>`;
+      <small>${esc(u.email)}${u.invite_email ? `<br>📅 invites → ${esc(u.invite_email)}` : ""}${extra ? "<br>" + extra : ""}</small>${welcome}</span>
+      <span class="uacts">${u.active ? `<button type="button" class="ackbtn" data-welcome="${u.id}" title="Email them the link and how to sign in">${u.welcome_at || u.welcome_wait ? "Send welcome again" : "Send welcome email"}</button>` : ""}
+      <small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small></span></div>`;
   }).join("");
   const sb = settings.brand;
   $("#main").innerHTML = `
@@ -1110,6 +1154,7 @@ async function renderSetup() {
   checkForUpdate();
   document.querySelectorAll("[data-place]").forEach((el) => el.onclick = () => placeForm(state.setup.places.find((p) => p.key === el.dataset.place)));
   $("#add-user").onclick = () => userForm();
+  document.querySelectorAll("[data-welcome]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); welcomeForm(state.setup.users.find((x) => x.id == b.dataset.welcome)); });
   $("#add-digest").onclick = () => digestForm();
   $("#digest-time").onclick = () => digestTimeForm();
   $("#sync-digest")?.addEventListener("click", async (e) => {
@@ -1125,7 +1170,7 @@ async function renderSetup() {
 function digestBadges(r) {
   const receive = !r.active ? `<span class="dbadge off" title="Paused – tap to turn back on">⏸ Weekly email paused</span>`
     : r.status === "ok" ? `<span class="dbadge ok" title="Verified – gets the Sunday email">✅ Receives weekly email</span>`
-    : `<span class="dbadge wait" title="Click the Cloudflare confirmation link in that mailbox">✉️ Not verified yet</span>`;
+    : `<span class="dbadge wait" title="Click the Cloudflare confirmation link in that mailbox">📧 Not verified yet</span>`;
   const send = r.active ? `<span class="dbadge ok" title="Can forward things to ${esc(state.data.brand?.inbox || "the inbox")}">📥 Can send to inbox</span>`
     : `<span class="dbadge off" title="Paused addresses can't send to the inbox">📥 Can't send to inbox</span>`;
   return receive + send;
@@ -1137,7 +1182,7 @@ function digestForm(r) {
     <label>Email<input type="email" name="email" value="${esc(r?.email || "")}" ${r ? "disabled" : "required"}></label>
     <label>Name (optional)<input name="name" value="${esc(r?.name || "")}" placeholder="e.g. Dad (work)"></label>
     ${r ? `<div class="checks"><label><input type="checkbox" name="active" ${r.active ? "checked" : ""}> Send the weekly email here</label></div>
-      ${r.status === "waiting" ? `<div class="meta">✉️ Waiting for the confirmation link (from Cloudflare) to be clicked in that mailbox. The link is sent within about an hour of adding the address.</div>` : ""}`
+      ${r.status === "waiting" ? `<div class="meta">📧 Waiting for the confirmation link (from Cloudflare) to be clicked in that mailbox. The link is sent within about an hour of adding the address.</div>` : ""}`
       : `<div class="meta">Within about an hour Cloudflare sends a one-off "verify this address" email to it – click the link in it, or the weekly email can't be delivered there.</div>`}
     <div class="err"></div>
     <div class="actions">${r ? `<button type="button" class="danger" id="del">Remove</button>` : ""}
@@ -1412,6 +1457,57 @@ function placeForm(pl) {
   });
 }
 
+// 👋 the welcome for a login (lib/welcome.js): sent by YOU - from your own email (the designed email is copied, you paste it into
+// a new message) or by WhatsApp - so Cloudflare sends them nothing but the sign-in code. The calendar can email it itself only to
+// an address that's already confirmed with Cloudflare (e.g. someone on the Weekly email list).
+async function welcomeForm(u) {
+  const w = await api("GET", `setup/users/${u.id}/welcome`);
+  const first = esc(u.name.split(" ")[0]);
+  openDialog(`<form class="form" id="f"><h2>👋 Welcome ${esc(u.name)}</h2>
+    <p class="meta" style="margin-top:0">Send it yourself, so it comes from you. After that, all ${first} gets from Cloudflare is the 6-digit sign-in code when they sign in.</p>
+    <div class="wbtns">
+      <button type="button" class="wbig" id="wmail"><b>📧 Send from my email</b><small>The designed email – you paste it into a new message</small></button>
+      <button type="button" class="wbig" id="wapp"><b>💬 Send by WhatsApp</b><small>A tidy message with the link</small></button>
+      ${w.direct ? `<button type="button" class="wbig" id="wcal"><b>📨 Send from the calendar</b><small>${esc(w.email)} is confirmed – the site emails it within 10 minutes</small></button>` : ""}
+    </div>
+    <div id="wsteps"></div>
+    <details class="wprev"><summary>See the email</summary><iframe title="The welcome email" id="wframe"></iframe></details>
+    <div class="err"></div>
+    <div class="actions"><button type="button" id="cancel">Close</button></div></form>`, () => {
+    $("#wframe").srcdoc = `<body style="margin:0">${w.html}</body>`;
+    $("#cancel").onclick = closeDialog;
+    const done = async (via, label) => {
+      $("#wsteps").insertAdjacentHTML("beforeend", `<div class="wdone"><button type="button" class="primary" id="wsent">✓ I've sent it</button>
+        <small class="muted">so Settings shows the welcome went</small></div>`);
+      $("#wsent").onclick = async () => { await api("POST", `setup/users/${u.id}/welcome`, { via }); closeDialog(); toast(`👋 Noted: welcome sent to ${u.name} by ${label}`); await refresh(); };
+    };
+    $("#wmail").onclick = async () => {
+      let rich = true;
+      try { await navigator.clipboard.write([new ClipboardItem({ "text/html": new Blob([w.html], { type: "text/html" }), "text/plain": new Blob([w.text], { type: "text/plain" }) })]); }
+      catch { rich = false; try { await navigator.clipboard.writeText(w.text); } catch { /* shown below to copy by hand */ } }
+      const to = encodeURIComponent(w.email), su = encodeURIComponent(w.subject);
+      $("#wsteps").innerHTML = `<div class="wnote"><b>✅ The email is copied${rich ? "" : " (as plain text)"}.</b> Now:
+        <ol style="margin:6px 0 4px 18px;padding:0"><li>Open a new email – these buttons fill in <b>${esc(w.email)}</b> and the subject for you</li>
+        <li>Click in the message and paste: <b>Ctrl+V</b> (phone: press and hold › <b>Paste</b>)</li><li>Press <b>Send</b></li></ol>
+        <div class="wopen"><a class="ackbtn" target="_blank" rel="noopener" href="https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}">Open Gmail</a>
+        <a class="ackbtn" href="mailto:${to}?subject=${su}">Open my email app</a></div></div>`;
+      done("email", "email");
+    };
+    $("#wapp").onclick = async () => {
+      // phones: the share sheet (pick WhatsApp and the person); computers: WhatsApp Web / the app with the message filled in
+      if (navigator.share && matchMedia("(pointer: coarse)").matches) { try { await navigator.share({ text: w.whatsapp }); } catch { return; } }
+      else window.open(`https://wa.me/?text=${encodeURIComponent(w.whatsapp)}`, "_blank", "noopener");
+      $("#wsteps").innerHTML = `<div class="wnote"><b>💬 Pick ${first} in WhatsApp and send the message.</b></div>`;
+      done("whatsapp", "WhatsApp");
+    };
+    $("#wcal")?.addEventListener("click", async () => {
+      try { const r = await api("POST", `setup/users/${u.id}/welcome`, { via: "calendar" });
+        closeDialog(); toast(r.state === "sent" ? `📨 Welcome email to ${u.name} goes out within 10 minutes` : "That address isn't confirmed – use your email or WhatsApp instead"); await refresh(); }
+      catch (x) { $("#f .err").textContent = x.message; }
+    });
+  });
+}
+
 function userForm(u) {
   const x = u || { email: "", name: "", role: "viewer", see: "", see_school: 1, see_birthdays: 0, can_edit: 0, active: 1 };
   const see = new Set(whoList(x.see));
@@ -1420,6 +1516,9 @@ function userForm(u) {
     <label>Email they sign in with<input type="email" name="email" value="${esc(x.email)}" required></label>
     <label>Access<select name="role">${Object.entries(ROLE_INFO).map(([k, [lbl, help]]) =>
       `<option value="${k}" ${x.role === k ? "selected" : ""}>${lbl} – ${help}</option>`).join("")}</select></label>
+    <label id="person-box">Which person is this login?<select name="person"><option value="">–</option>${state.setup.people.filter((p) => p.active && p.type !== "group").map((p) =>
+      `<option ${x.person === p.name ? "selected" : ""}>${esc(p.name)}</option>`).join("")}</select></label>
+    <div class="meta" id="person-help" style="margin-top:-6px">Their own entries go straight on; entries that include anyone else are ✏️ pencilled in until a parent confirms them, and you're emailed about those and about anything they delete.</div>
     <div id="limited-box">
       <div class="lbl">Can see entries for</div>
       <div class="whos">${state.setup.people.filter((p) => p.active).map((p) =>
@@ -1427,7 +1526,8 @@ function userForm(u) {
       <div class="checks" style="margin-top:10px">
         <label><input type="checkbox" name="see_school" ${x.see_school ? "checked" : ""}> School holidays</label>
         <label><input type="checkbox" name="see_birthdays" ${x.see_birthdays ? "checked" : ""}> Birthdays</label>
-        <label><input type="checkbox" name="can_edit" ${x.can_edit ? "checked" : ""}> Can add / edit entries for these people</label></div>
+        <label><input type="checkbox" name="can_edit" ${x.can_edit ? "checked" : ""}> Can add / edit entries</label></div>
+      <div id="edit-box"><div class="lbl">… only for <small class="muted">(none ticked = everyone they see)</small></div><div class="whos" id="edit-whos"></div></div>
     </div>
     <label>Calendar invites go to<select name="invite_email">
       <option value="">Their sign-in email${x.email ? ` (${esc(x.email)})` : ""}</option>
@@ -1435,15 +1535,31 @@ function userForm(u) {
         `<option value="${esc(r.email)}" ${x.invite_email === r.email ? "selected" : ""}>${esc(r.name || r.email)} – ${esc(r.email)}${r.status === "ok" ? "" : " (not confirmed yet)"}</option>`).join("")}
     </select></label>
     <div class="meta" style="margin-top:-6px">Used by 📅 Send invite. Addresses come from the Weekly email list below.</div>
-    <div class="checks"><label><input type="checkbox" name="active" ${x.active ? "checked" : ""}> Login enabled</label></div>
+    <div class="checks"><label><input type="checkbox" name="active" ${x.active ? "checked" : ""}> Login enabled</label>
+      ${u ? "" : `<label><input type="checkbox" name="welcome" checked> Then send them the welcome (from my email or WhatsApp)</label>`}</div>
     <div class="err"></div>
     <div class="actions">${u ? `<button type="button" class="danger" id="del">Remove</button>` : ""}
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
-    const sync = () => { $("#limited-box").hidden = f.elements.role.value !== "limited"; };
-    f.elements.role.onchange = sync; sync();
+    // "… only for": the people they see; e.g. a helper sees the child but only adds her own entries
+    const edit = new Set(whoList(x.edit_who || ""));
+    const editChips = () => {
+      for (const p of [...edit]) if (!see.has(p)) edit.delete(p);
+      $("#edit-whos").innerHTML = state.setup.people.filter((p) => p.active && see.has(p.name)).map((p) =>
+        `<button type="button" class="chip ${edit.has(p.name) ? "on" : ""}" style="--c:${p.color}" data-edit="${esc(p.name)}">${esc(p.name)}</button>`).join("") || `<small class="muted">Pick who they see first</small>`;
+      $("#edit-whos").querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => { edit.has(b.dataset.edit) ? edit.delete(b.dataset.edit) : edit.add(b.dataset.edit); b.classList.toggle("on"); });
+    };
+    const sync = () => { $("#limited-box").hidden = f.elements.role.value !== "limited"; $("#edit-box").hidden = !f.elements.can_edit.checked;
+      $("#person-box").hidden = $("#person-help").hidden = f.elements.role.value !== "child";
+      // first guess: the person whose name the login's name starts with ("Emma Smith" -> Emma)
+      if (f.elements.role.value === "child" && !f.elements.person.value) {
+        const first = String(f.elements.name.value).trim().split(" ")[0].toLowerCase();
+        const hit = state.setup.people.find((p) => p.name.toLowerCase() === first); if (hit) f.elements.person.value = hit.name;
+      }
+    };
+    f.elements.role.onchange = sync; f.elements.can_edit.onchange = sync; sync(); editChips();
     f.querySelectorAll("[data-see]").forEach((b) => b.onclick = () => {
-      see.has(b.dataset.see) ? see.delete(b.dataset.see) : see.add(b.dataset.see); b.classList.toggle("on");
+      see.has(b.dataset.see) ? see.delete(b.dataset.see) : see.add(b.dataset.see); b.classList.toggle("on"); editChips();
     });
     $("#cancel").onclick = closeDialog;
     if (u) $("#del").onclick = () => confirm(`Remove ${u.name}'s login?`) && submit(() => api("DELETE", `setup/users/${u.id}`), "Removed");
@@ -1452,8 +1568,12 @@ function userForm(u) {
       const fd = new FormData(f);
       const body = { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), see: [...see],
                      see_school: fd.get("see_school") === "on", see_birthdays: fd.get("see_birthdays") === "on",
-                     can_edit: fd.get("can_edit") === "on", active: fd.get("active") === "on", invite_email: fd.get("invite_email") || null };
-      submit(() => u ? api("PUT", `setup/users/${u.id}`, body) : api("POST", "setup/users", body), "Saved");
+                     can_edit: fd.get("can_edit") === "on", active: fd.get("active") === "on", invite_email: fd.get("invite_email") || null,
+                     edit_who: [...edit], person: fd.get("person") || null, welcome: fd.get("welcome") === "on" };
+      let saved;
+      // a new login: straight on to the welcome (from your email or WhatsApp) if ticked
+      submit(async () => { saved = await (u ? api("PUT", `setup/users/${u.id}`, body) : api("POST", "setup/users", body)); }, "Saved")
+        .then(() => { if (!u && saved?.id && body.welcome && body.active) welcomeForm({ id: saved.id, name: body.name, email: body.email }); });
     };
   });
 }
@@ -1825,7 +1945,7 @@ document.addEventListener("visibilitychange", () => {
 // The maker's own calendar also lists every family's requests ("All families") and answers them.
 const REQ_BADGE = { new: "#868e96", discussing: "#1971c2", planned: "#e8590c", done: "#2f9e44", wontdo: "#495057" };
 async function renderRequests() {
-  $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;
+  if (!state.stay) $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;   // a refresh of the same page updates it in place
   let R;
   try { R = state.req = await api("GET", "requests"); } catch (e) { $("#main").innerHTML = `<p class="pad err">${esc(e.message)}</p>`; return; }
   const stat = (r) => r.maker_status || (r.sent_at ? "new" : null);

@@ -19,11 +19,13 @@ import { VERSION, UPSTREAM_REPO, UNRELEASED } from "../../lib/version.js";
 import { USAGE_SHARE, usageMode, usagePayload } from "../../lib/usage.js";
 import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
+import { sendWelcome, welcomeMail, welcomeWhatsApp, canSendDirect, markWelcome } from "../../lib/welcome.js";
+import { involvesOthers, ownEntry, tellParents } from "../../lib/child.js";
 import { extraApi } from "../../src/extras.js";
 import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
-const ROLES = ["admin", "editor", "viewer", "limited"];
+const ROLES = ["admin", "editor", "child", "viewer", "limited"];
 const PERSON_TYPES = ["household", "helper", "tracked", "group"];
 const PLACE_KEY = /^[a-z0-9_-]{1,30}$/;   // events.location = a key from the places table (Settings > Places)
 const PLACE_KINDS = ["home", "school", "friend", "away"];
@@ -85,7 +87,7 @@ async function setupUser(request, env) {
 
 async function currentUser(request, env) {
   const setup = await setupUser(request, env);
-  if (setup) return { ...setup, seeList: split(setup.see), setup: true };
+  if (setup) return { ...setup, seeList: split(setup.see), editList: editList(setup), setup: true };
   // live site: only a verified Access token counts. Demo: the "View as" header. Anything else: nobody.
   const accessEmail = env.ACCESS_AUD ? await verifiedAccessEmail(request, env) : "";
   if (!env.ACCESS_AUD && !demo(env)) return null;
@@ -103,7 +105,13 @@ async function currentUser(request, env) {
   // the day this login last opened the calendar (at most one write a day; for the usage check-in, lib/usage.js)
   const today = new Date().toISOString().slice(0, 10);
   if (u.id && "last_seen" in u && (u.last_seen || "") < today) await env.DB.prepare("UPDATE users SET last_seen = ? WHERE id = ?").bind(today, u.id).run().catch(() => {});
-  return { ...u, seeList: split(u.see) };
+  return { ...u, seeList: split(u.see), editList: editList(u) };
+}
+// a limited login's "can add / edit" people: those ticked under it (users.edit_who), else everyone it sees
+function editList(u) {
+  if (!u.can_edit) return [];
+  const see = split(u.see), only = split(u.edit_who).filter((p) => see.includes(p));
+  return only.length ? only : see;
 }
 
 const isAdmin = (u) => u.role === "admin";
@@ -115,9 +123,14 @@ const seesBirthdays = (u) => seesAll(u) || !!u.see_birthdays;
 const eventVisible = (u, who, fam = []) => seesAll(u) || split(who).flatMap((p) => p === "Family" ? [p, ...fam] : [p]).some((p) => u.seeList.includes(p));
 const familyOf = (people) => people.filter((p) => p.family && p.active).map((p) => p.name);
 function canWriteEvent(u, whoNames) {
-  if (canEditAll(u)) return true;
-  return u.role === "limited" && !!u.can_edit && whoNames.length > 0 && whoNames.every((p) => u.seeList.includes(p));
+  if (canEditAll(u) || u.role === "child") return true;   // a Child may add entries for anyone (canChangeEvent: only their own after that)
+  return u.role === "limited" && whoNames.length > 0 && whoNames.every((p) => u.editList.includes(p));
 }
+
+// an existing entry: may this login change / delete it?
+const canChangeEvent = (u, ev) => u.role === "child" ? ownEntry(u, ev) : canWriteEvent(u, split(ev.who));
+// 🧒 a Child's entry that includes anyone else is pencilled in until a parent confirms it (lib/child.js)
+const childPencil = (u, rec, people) => u.role === "child" && rec.status === "Confirmed" && involvesOthers(rec.who, u.person, familyOf(people));
 
 async function log(env, user, action, details) {
   await env.DB.prepare("INSERT INTO change_log (at,user,action,details) VALUES (?,?,?,?)")
@@ -219,10 +232,12 @@ function cleanUser(b, people) {
   const role = ROLES.includes(b.role) ? b.role : "viewer";
   const limited = role === "limited";
   const see = limited ? cleanWho(b.see || [], people) : null;
+  const editWho = limited && b.can_edit ? (Array.isArray(b.edit_who) ? b.edit_who.map(String) : split(b.edit_who)).filter((p) => split(see).includes(p)).join(", ") : "";
+  const person = role === "child" && people.some((p) => p.name === b.person) ? b.person : null;
   const invite = String(b.invite_email || "").trim().toLowerCase();
   if (invite && !EMAIL.test(invite)) invalid("Pick a valid address for calendar invites");
   return { email, name, role, see, see_school: limited && b.see_school ? 1 : 0, see_birthdays: limited && b.see_birthdays ? 1 : 0,
-           can_edit: limited && b.can_edit ? 1 : 0, active: b.active === false || b.active === 0 ? 0 : 1, invite_email: invite || null };
+           can_edit: limited && b.can_edit ? 1 : 0, edit_who: editWho || null, person, active: b.active === false || b.active === 0 ? 0 : 1, invite_email: invite || null };
 }
 
 const describe = (e) => `${e.start}${e.start_time ? " " + e.start_time + (e.end_time ? "-" + e.end_time : "") : ""}${e.end && e.end !== e.start ? " to " + e.end : ""} [${e.who || e.child || ""}] ${e.title || e.name}`;
@@ -255,9 +270,9 @@ async function getAll(env, u) {
   if (!seesAll(u)) people = people.filter((p) => u.seeList.includes(p.name));
   return json({
     setupMode: !!u.setup, signInOn: !!env.ACCESS_AUD || demo(env),
-    me: { name: u.name, email: u.email, role: u.role, isAdmin: isAdmin(u), canEditAll: canEditAll(u),
-          canAddEvents: canEditAll(u) || (u.role === "limited" && !!u.can_edit),
-          editablePeople: canEditAll(u) ? null : (u.can_edit ? u.seeList : []),
+    me: { id: u.id, name: u.name, email: u.email, role: u.role, person: u.person || null, isAdmin: isAdmin(u), canEditAll: canEditAll(u),
+          canAddEvents: canEditAll(u) || u.role === "child" || (u.role === "limited" && !!u.can_edit),
+          editablePeople: canEditAll(u) || u.role === "child" ? null : u.editList,
           seeSchool: seesSchool(u), seeBirthdays: seesBirthdays(u), seeLog: canEditAll(u), demo: demo(env) },
     people, categories: CATEGORIES, places: await loadPlaces(env), brand: brand(await loadSettings(env.DB), env.ORIGIN || ""),
     country: (await loadSettings(env.DB)).country || null,
@@ -295,7 +310,7 @@ async function restoreDeleted(request, env, u) {
   const stmts = [], done = [];
   for (const r of rows) {
     const rec = JSON.parse(r.data);
-    if (!canWriteEvent(u, split(rec.who))) deny();
+    if (!canChangeEvent(u, rec)) deny();
     if (await byId(env, "events", rec.id)) continue;   // somehow back already
     const cols = Object.keys(rec);
     stmts.push(env.DB.prepare(`INSERT INTO events (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => rec[c])));
@@ -319,8 +334,10 @@ async function events(request, env, u, id) {
   if (request.method === "POST") {
     const body = await request.json();
     const rec = cleanEvent(body, people);
-    if (!canWriteEvent(u, split(rec.who))) deny(u.role === "limited" ? "You can only add entries for the people you can see" : undefined);
-    Object.assign(rec, { created_by: u.name, created_at: now(), updated_by: u.name, updated_at: now() });
+    if (!canWriteEvent(u, split(rec.who))) deny(u.role === "limited" ? `You can only add entries for ${u.editList.join(", ") || "nobody"}` : undefined);
+    Object.assign(rec, { created_by: u.name, created_login: u.id || null, created_at: now(), updated_by: u.name, updated_at: now() });
+    const pencil = childPencil(u, rec, people);
+    if (pencil) rec.status = "Tentative";
     const dates = repeatDates(rec.start, rec.end, body.repeat);
     if (!dates.length) invalid("None of the ticked days fall between the start and end dates");
     [rec.start, rec.end] = dates[0];   // ticked weekdays may move the first one off the start date
@@ -331,18 +348,20 @@ async function events(request, env, u, id) {
           return env.DB.prepare(`INSERT INTO events (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => r[c])); })]);
       await log(env, u, "Added event", `${describe(rec)} – repeats ${REPEAT_LABEL[body.repeat.every]} until ${dates[dates.length - 1][0]} (${dates.length} times)`);
     } else await log(env, u, "Added event", describe(rec));
-    return json({ ok: true, id: newId, count: dates.length }, 201);
+    if (pencil) await tellParents(env, u, "added", rec, `It includes other people, so it's ✏️ pencilled in until a parent taps "✅ It's on".${dates.length > 1 ? ` (${dates.length} entries – it repeats.)` : ""}`).catch(() => {});
+    return json({ ok: true, id: newId, count: dates.length, pencilled: pencil }, 201);
   }
   const before = await byId(env, "events", id);
   if (!before || !eventVisible(u, before.who)) return fail(404, "Not found");
-  if (!canWriteEvent(u, split(before.who))) deny();
+  if (!canChangeEvent(u, before)) deny(u.role === "child" ? "You can only change or delete entries you added yourself" : undefined);
   if (request.method === "DELETE") {
     // ?scope=later on a repeating entry: this one and the later repeats
     const later = new URL(request.url).searchParams.get("scope") === "later" && before.series;
     const rows = later ? (await env.DB.prepare("SELECT * FROM events WHERE series=? AND start>=? ORDER BY start").bind(before.series, before.start).all()).results
-      .filter((r) => canWriteEvent(u, split(r.who))) : [before];
+      .filter((r) => canChangeEvent(u, r)) : [before];
     const batch = await softDelete(env, u, rows);
     await log(env, u, "Deleted event", describe(before) + (rows.length > 1 ? ` and ${rows.length - 1} later repeat${rows.length > 2 ? "s" : ""}` : ""));
+    if (u.role === "child") await tellParents(env, u, "deleted", before, `${rows.length > 1 ? `With ${rows.length - 1} later repeat${rows.length > 2 ? "s" : ""}. ` : ""}It can be put back for 30 days: Changes tab › Recently deleted › Restore.`).catch(() => {});
     return json({ ok: true, undo: batch, count: rows.length });
   }
   if (request.method === "PUT") {
@@ -360,14 +379,17 @@ async function events(request, env, u, id) {
       return json({ error: `${before.updated_by || "Someone"} changed this entry while you had it open.`, conflict: { by: before.updated_by, at: before.updated_at } }, 409);
     }
     const rec = cleanEvent(body, people);
-    if (!canWriteEvent(u, split(rec.who))) deny("You can only use the people you can see");
+    if (!canWriteEvent(u, split(rec.who))) deny(`You can only add or change entries for ${u.editList.join(", ") || "nobody"}`);
     Object.assign(rec, { updated_by: u.name, updated_at: now() });
+    const pencil = childPencil(u, rec, people);   // a Child's change to an entry with other people in it: pencilled in again
+    if (pencil) rec.status = "Tentative";
     // ✏️ -> ✅: note who confirmed it and when (shows ✅ for 3 days, and in the weekly email); pencilled in again: cleared
     if (before.status === "Tentative" && rec.status === "Confirmed") Object.assign(rec, { confirmed_at: now(), confirmed_by: u.name });
     if (rec.status === "Tentative" && before.confirmed_at) Object.assign(rec, { confirmed_at: null, confirmed_by: null });
     await update(env, "events", id, rec);
     await log(env, u, rec.confirmed_at ? "Confirmed event" : "Edited event", describe(rec) + (describe(before) !== describe(rec) ? `  (was: ${describe(before)})` : ""));
-    return json({ ok: true });
+    if (pencil) await tellParents(env, u, "changed", rec, `${describe(before) !== describe(rec) ? `It was: ${describe(before)}. ` : ""}It includes other people, so it's ✏️ pencilled in until a parent taps "✅ It's on".`).catch(() => {});
+    return json({ ok: true, pencilled: pencil });
   }
   return fail(405, "Method not allowed");
 }
@@ -625,12 +647,12 @@ async function setupUsers(request, env, u, id) {
   const people = await loadPeople(env);
   const activeAdmins = (except) => all.filter((x) => x.role === "admin" && x.active && x.id !== except).length;
   if (request.method === "POST") {
-    const rec = cleanUser(await request.json(), people);
+    const b = await request.json(), rec = cleanUser(b, people);
     if (all.some((x) => x.email === rec.email)) invalid("That email already has a login");
     const newId = await insert(env, "users", rec);
     await log(env, u, "Added login", `${rec.name} <${rec.email}> as ${rec.role}`);
     await syncAccessPolicy(env).catch((e) => log(env, u, "Sign-in list not updated", String(e.message || e)));
-    return json({ ok: true, id: newId }, 201);
+    return json({ ok: true, id: newId }, 201);   // the screen then offers the welcome (from your email / WhatsApp)
   }
   const before = all.find((x) => x.id === id);
   if (!before) return fail(404, "Not found");
@@ -651,6 +673,32 @@ async function setupUsers(request, env, u, id) {
     return json({ ok: true });
   }
   return fail(405, "Method not allowed");
+}
+
+// 👋 welcome message (lib/welcome.js). GET = the email (designed + plain), the WhatsApp text, and whether the calendar itself may
+// email this address. POST { via: "calendar" } = the site sends it; { via: "email" | "whatsapp" } = noted as sent by this admin.
+async function setupWelcome(request, env, u, id) {
+  const user = await env.DB.prepare("SELECT * FROM users WHERE id = ?").bind(id).first();
+  if (!user) return fail(404, "Not found");
+  const b = brand(await loadSettings(env.DB), env.SITE);
+  if (request.method === "GET") {
+    const m = welcomeMail(b, user, u.name);
+    return json({ ...m, email: user.email, whatsapp: welcomeWhatsApp(b, user, u.name), direct: await canSendDirect(env, b, user.email) });
+  }
+  if (request.method !== "POST") return fail(405, "Method not allowed");
+  if (!user.active) invalid("Turn the login on first");
+  const via = String((await request.json().catch(() => ({}))).via || "calendar");
+  await syncAccessPolicy(env).catch((e) => log(env, u, "Sign-in list not updated", String(e.message || e)));
+  if (via === "email" || via === "whatsapp") {
+    await markWelcome(env, user, via, u.name);
+    await log(env, u, "Welcome sent", `${user.name} <${user.email}> by ${via === "email" ? "email" : "WhatsApp"} (from ${u.name})`);
+    return json({ state: via });
+  }
+  try {
+    const r = await sendWelcome(env, user, u.name);
+    await log(env, u, "Welcome email", `${user.name} <${user.email}>: ${r.state === "sent" ? "sent by the calendar" : r.state === "notconfirmed" ? "not sent - address not confirmed" : "no email on this calendar"}`);
+    return json(r);
+  } catch (e) { invalid(`The welcome email couldn't be sent: ${String(e.message || e)}`); }
 }
 
 // ---------- weekly email recipients (admins). Cloudflare only delivers to verified "destination addresses":
@@ -1108,6 +1156,7 @@ export async function onRequest({ request, env, params }) {
         return new Response(sql, { headers: { "content-type": "application/sql; charset=utf-8", "cache-control": "no-store",
           "content-disposition": `attachment; filename="calendar-backup-${day}.sql"` } });
       }
+      if (parts[1] === "users" && parts[3] === "welcome" && /^\d+$/.test(parts[2])) return await setupWelcome(request, env, u, +parts[2]);
       if (parts[1] === "users") return await setupUsers(request, env, u, id);
       if (parts[1] === "digest") return await setupDigest(request, env, u, id);
     }
