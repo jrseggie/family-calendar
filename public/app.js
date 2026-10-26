@@ -8,7 +8,9 @@ const MONTHS = ["January","February","March","April","May","June","July","August
 const EXTRA_VIEWS = globalThis.EXTRA_VIEWS || {};
 // opening the site starts on Month; a refresh (F5) in the same tab stays on the tab you were on
 function lastTab() {
-  try { return ["month", "upcoming", "birthdays", "school", "log", "info", "requests", "setup", ...Object.keys(EXTRA_VIEWS)].find((v) => v === sessionStorage.getItem("cal.view")) || "month"; }
+  // the tab you were on: this window first, else the last one on this device (a refresh or reopening the app comes back to it)
+  try { const last = sessionStorage.getItem("cal.view") || localStorage.getItem("cal.view");
+    return ["month", "upcoming", "birthdays", "school", "log", "info", "requests", "setup", ...Object.keys(EXTRA_VIEWS)].find((v) => v === last) || "month"; }
   catch { return "month"; }
 }
 const state = {
@@ -601,7 +603,7 @@ function renderFilters() {
 }
 
 function render() {
-  try { sessionStorage.setItem("cal.view", state.view); } catch {}   // F5 / refresh comes back to this tab
+  try { sessionStorage.setItem("cal.view", state.view); localStorage.setItem("cal.view", state.view); } catch {}   // F5 / refresh comes back to this tab
   document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("active", b.dataset.view === state.view));
   const sec = sectionOf(state.view);
   document.querySelectorAll("#sections button").forEach((b) => b.classList.toggle("active", b.dataset.sec === sec));
