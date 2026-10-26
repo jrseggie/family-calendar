@@ -90,6 +90,13 @@ test("rules: a Study day is not a school day", () => {
                   ev("2026-10-14", "2026-10-14", "Emma", "Study Day", { category: "Study" })]);
   assert.deepEqual(R.clashesFor(d, "2026-10-14"), ["Emma is at the Town House with no adult there"]);
 });
+test("rules: 'School is open this day' makes a public holiday a school day for that child only", () => {
+  const ph = publicHolidays({ country: "ZA" }, [{ date: "2026-11-04", name: "Elections" }], new Date("2026-06-01"));
+  const open = ev("2026-11-04", "2026-11-04", "Emma", "Normal school day (elections)", { category: "School", school_open: 1 });
+  assert.equal(R.isSchoolDay(data([], { publicHolidays: ph }), "Emma", "2026-11-04"), false);
+  assert.equal(R.isSchoolDay(data([open], { publicHolidays: ph }), "Emma", "2026-11-04"), true);
+  assert.equal(R.isSchoolDay(data([open], { publicHolidays: ph }), "Leo", "2026-11-04"), false);
+});
 test("rules: someone down for two places, Mark on a school day, Leo's holiday not planned", () => {
   const d = data([ev("2026-10-14", "2026-10-14", "Tom", "A", { location: "beach" }), ev("2026-10-14", "2026-10-14", "Tom", "B", { location: "other" }),
                   ev("2026-10-14", "2026-10-14", "Leo, Mark", "Dubai")],

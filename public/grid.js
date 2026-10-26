@@ -153,7 +153,7 @@ function gridCell(person, key, n, info, wh, rowCls) {
   const back = (h) => fmtDay(iso(addDays(parse(h.end), 1)));
   // the time school closes on the first day ("School closes at", or "Closes 12:00" in older holidays' notes)
   const closes = (h) => CalendarRules.closesAt(h);
-  const holBars = hol.map((h) => `<div class="gi shol" data-sh="${h.id}" style="--c:${COLORS[person]}">🌿 ${esc(h.name)}
+  const holBars = hol.map((h) => `<div class="gi shol" data-sh="${h.id}" style="--c:${COLORS[person]}" ${h.notes ? `title="${esc(h.notes)}"` : ""}>🌿 ${esc(h.name)}
     <small>${h.start === key ? (closes(h) ? `closes ${closes(h)} · ` : "") : "cont. · "}back ${back(h)}</small></div>`).join("")
     // (not when a "Boarders Return" entry already says it, nor after a holiday that runs to 31 Dec because the next year isn't known)
     + (KIDS().includes(person) && !items.some((it) => /boarders return/i.test(it.ev?.title || ""))
@@ -376,6 +376,7 @@ function holidayPlan(h) {
     <div class="meta">${fmtDay(h.start)}${CalendarRules.closesAt(h) ? ` (school closes ${esc(CalendarRules.closesAt(h))})` : ""} – ${fmtDay(h.end)} (${nights.length} night${nights.length === 1 ? "" : "s"}) · back at school ${fmtDay(iso(addDays(parse(h.end), 1)))}</div>
     ${state.data.me.canEditAll ? `<label class="pcloses">School closes at <small class="muted">(optional – if they finish early on ${esc(fmtDay(h.start))})</small>
       <input type="time" name="closes_at" value="${esc(CalendarRules.closesAt(h))}"></label>` : ""}
+    ${h.notes ? `<div class="hnote">📝 ${esc(h.notes)}</div>` : ""}
     <div class="lbl">Where ${esc(kid)} sleeps</div>
     <div id="prows">${start.map(row).join("")}</div>
     ${can ? `<button type="button" class="ackbtn" id="padd" style="margin-top:6px">+ Add a stretch</button>` : ""}

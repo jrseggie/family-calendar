@@ -1,5 +1,9 @@
 # What's new in Family Calendar
 
+## 1.0.27
+- 🌿 A school holiday's notes (e.g. "boarders back by 17:00 on Monday") now show on Upcoming, on its planning sheet and when you rest the mouse on it on Month.
+- 🏫 "School is open this day" on a School entry: that child has a normal school day even on a public holiday (e.g. a boarding school that stays open on an election day) – children at different schools no longer have to share the public holidays.
+
 ## 1.0.26
 - Phone: a long form (e.g. editing an entry) scrolls inside its box and Save / Cancel stay pinned at the bottom, so you can always reach them (on an iPhone they could end up off the screen).
 

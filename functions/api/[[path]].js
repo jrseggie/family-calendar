@@ -166,7 +166,8 @@ function cleanEvent(b, people) {
     house_off: PLACE_KEY.test(b.house_off || "") ? b.house_off : null,   // "nobody needed at this house" on these days
     notes: String(b.notes || "").trim() || null,
     source: String(b.source || "").trim() || null,
-    share: ["show", "busy", "hide"].includes(b.share) ? b.share : null,   // 🖨️ the printout for a tracked person (null = automatic)
+    share: ["show", "busy", "hide"].includes(b.share) ? b.share : null,
+    school_open: b.school_open && b.category === "School" ? 1 : null,   // 🏫 a normal school day even on a public holiday   // 🖨️ the printout for a tracked person (null = automatic)
   };
 }
 

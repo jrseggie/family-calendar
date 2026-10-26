@@ -50,7 +50,9 @@
     if (!String(personOf(data, child).school || "").trim()) return false;
     const wd = parse(key).getUTCDay();
     const study = data.events.some((e) => e.category === "Study" && on(e, key) && expandWho(data, e.who).includes(child));
-    return wd !== 0 && wd !== 6 && !publicHoliday(data, key) && !holidayOf(data, child, key) && !study;
+    // a public holiday is no school - unless a School entry for this child says the school is open that day
+    const open = data.events.some((e) => e.school_open && e.category === "School" && on(e, key) && expandWho(data, e.who).includes(child));
+    return wd !== 0 && wd !== 6 && (!publicHoliday(data, key) || open) && !holidayOf(data, child, key) && !study;
   }
 
   // where each household person sleeps on `key`: { loc: <place key>|unknown|conflict|null,

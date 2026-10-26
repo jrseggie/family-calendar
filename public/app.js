@@ -443,7 +443,7 @@ function renderUpcoming() {
       const ongoing = info.items.filter((it) => it.kind === "event" && !it.first && key !== from);
       const breakItems = info.breaks.map((b) => `<div class="item" data-sh="${b.id}"><div class="who">${pchips([b.child])}</div>
         <div class="title">🌿 ${esc(b.name)} starts${CalendarRules.closesAt(b) ? ` – school closes <span class="tm">${esc(CalendarRules.closesAt(b))}</span>` : ""}${b.status === "Tentative" ? " (?)" : ""}</div>
-        <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span></div>`);
+        <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span>${b.notes ? `<div class="hnote">📝 ${esc(b.notes)}</div>` : ""}</div>`);
       const stillOn = ongoing.length ? `<div class="still">Still on: ${ongoing.map((it) =>
         `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
       const dow = parse(key).getDay();
@@ -754,6 +754,7 @@ function eventForm(ev, preset = {}) {
       <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn" id="poff">🗑 Not happening</button></div>` : ""}
     ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(localDay(ev.confirmed_at))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
+    <div class="checks" id="sopen" ${e.category === "School" ? "" : "hidden"}><label><input type="checkbox" name="school_open" ${e.school_open ? "checked" : ""}> 🏫 School is open this day – a normal school day, even if it's a public holiday</label></div>
     <label>Notes<textarea name="notes" rows="2">${esc(e.notes || "")}</textarea></label>
     ${CalendarRules.tracked(state.data).length && state.data.me.canEditAll ? `<label>In the printout for ${esc(CalendarRules.tracked(state.data).join(" / "))}<select name="share">
       ${SHARE_PICK.map(([v, t]) => `<option value="${v}" ${(e.share || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
@@ -790,6 +791,7 @@ function eventForm(ev, preset = {}) {
     if (ev) $("#del").onclick = () => deleteEvent(ev);
     $("#pon")?.addEventListener("click", () => confirmEvent(ev));
     $("#poff")?.addEventListener("click", () => deleteEvent(ev));
+    f.elements.category.addEventListener("change", () => { $("#sopen").hidden = f.elements.category.value !== "School"; });
     f.elements.category.addEventListener("change", () => {
       if (f.elements.category.value === "Leave" && !f.elements.title.value.trim()) f.elements.title.value = "🌴 On leave";
       if (f.elements.category.value !== "__holiday") return;
@@ -809,6 +811,7 @@ function eventForm(ev, preset = {}) {
       const fd = new FormData(f);
       const body = { title: fd.get("title"), start: fd.get("start"), end: fd.get("end") || fd.get("start"),
                      who: [...who], category: fd.get("category"), notes: fd.get("notes"), location: fd.get("location") || null,
+                     school_open: fd.get("school_open") === "on" && fd.get("category") === "School",
                      start_time: fd.get("start_time") || null, end_time: fd.get("start_time") ? fd.get("end_time") || null : null,
                      important: fd.get("important") === "on", status: fd.get("stay") || (fd.get("tentative") === "on" ? "Tentative" : "Confirmed"),
                      source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null };

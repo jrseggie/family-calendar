@@ -554,3 +554,6 @@ body.nosections .sections { display: none; }
 .tm { font-weight: 700; font-variant-numeric: tabular-nums; }
 
 .pcloses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; } .pcloses input { width: auto; }
+
+/* a school holiday's notes (e.g. when boarders must be back) on Upcoming and its planning sheet */
+.hnote { font-size: 13px; color: var(--muted); white-space: pre-wrap; grid-column: 1 / -1; }
