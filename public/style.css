@@ -246,6 +246,7 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .row.tap::after { content: "›"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 22px; color: var(--muted); }
 .row.tap:hover { background: color-mix(in srgb, var(--brand) 5%, var(--card)); }
 .rbadges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; } .rtype { align-self: center; white-space: nowrap; }
+.usum { margin-top: 6px; padding: 7px 10px; border-radius: 8px; background: var(--act-bg); color: var(--text); }   /* the login form's "X can see … and change …" line */
 .row .role { font-size: 11px; vertical-align: 1px; } .uacts { align-self: center; }
 @media (max-width: 600px) { .row.tap:has(.uacts) { flex-wrap: wrap; } .row .uacts { flex-basis: 100%; } }   /* phones: the welcome button under the name, not off the edge */
 .mebtn { white-space: nowrap; }

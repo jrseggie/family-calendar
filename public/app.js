@@ -1601,9 +1601,10 @@ function userForm(u) {
         `<button type="button" class="chip ${see.has(p.name) ? "on" : ""}" style="--c:${p.color}" data-see="${esc(p.name)}">${esc(p.name)}</button>`).join("")}</div>
       <div class="checks" style="margin-top:10px">
         <label><input type="checkbox" name="see_school" ${x.see_school ? "checked" : ""}> School holidays</label>
-        <label><input type="checkbox" name="see_birthdays" ${x.see_birthdays ? "checked" : ""}> Birthdays</label>
-        <label><input type="checkbox" name="can_edit" ${x.can_edit ? "checked" : ""}> Can add / edit entries</label></div>
-      <div id="edit-box"><div class="lbl">… only for <small class="muted">(none ticked = everyone they see)</small></div><div class="whos" id="edit-whos"></div></div>
+        <label><input type="checkbox" name="see_birthdays" ${x.see_birthdays ? "checked" : ""}> Birthdays</label></div>
+      <div class="lbl" style="margin-top:12px">Can add / change entries for</div>
+      <div class="checks" id="edit-whos"></div>
+      <div class="meta usum" id="edit-sum"></div>
     </div>
     <label>Calendar invites go to<select name="invite_email">
       <option value="">Their sign-in email${x.email ? ` (${esc(x.email)})` : ""}</option>
@@ -1618,15 +1619,24 @@ function userForm(u) {
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
     $("#uwelcome")?.addEventListener("click", () => welcomeForm(u));
-    // "… only for": the people they see; e.g. a helper sees the child but only adds her own entries
-    const edit = new Set(whoList(x.edit_who || ""));
+    // "Can add / change entries for": a tick box per person they see (e.g. a helper sees the child but only adds her own entries);
+    // nothing ticked = view only. A line underneath says it in words.
+    const edit = new Set(x.can_edit ? (whoList(x.edit_who || "").length ? whoList(x.edit_who) : [...see]) : []);
+    const and = (l) => l.length > 1 ? `${l.slice(0, -1).join(", ")} and ${l.at(-1)}` : l[0] || "";
     const editChips = () => {
       for (const p of [...edit]) if (!see.has(p)) edit.delete(p);
-      $("#edit-whos").innerHTML = state.setup.people.filter((p) => p.active && see.has(p.name)).map((p) =>
-        `<button type="button" class="chip ${edit.has(p.name) ? "on" : ""}" style="--c:${p.color}" data-edit="${esc(p.name)}">${esc(p.name)}</button>`).join("") || `<small class="muted">Pick who they see first</small>`;
-      $("#edit-whos").querySelectorAll("[data-edit]").forEach((b) => b.onclick = () => { edit.has(b.dataset.edit) ? edit.delete(b.dataset.edit) : edit.add(b.dataset.edit); b.classList.toggle("on"); });
+      const seen = state.setup.people.filter((p) => p.active && see.has(p.name)).map((p) => p.name);
+      $("#edit-whos").innerHTML = seen.map((n) => `<label><input type="checkbox" data-edit="${esc(n)}" ${edit.has(n) ? "checked" : ""}> ${esc(n)}</label>`).join("")
+        || `<small class="muted">Tick who they can see first</small>`;
+      $("#edit-whos").querySelectorAll("[data-edit]").forEach((c) => c.onchange = () => { c.checked ? edit.add(c.dataset.edit) : edit.delete(c.dataset.edit); editSum(); });
+      editSum();
     };
-    const sync = () => { $("#limited-box").hidden = f.elements.role.value !== "limited"; $("#edit-box").hidden = !f.elements.can_edit.checked;
+    const editSum = () => {
+      const who = esc(String(f.elements.name.value).trim().split(" ")[0] || "They"), seen = [...see], can = seen.filter((n) => edit.has(n));
+      $("#edit-sum").innerHTML = !seen.length ? "" : `${who} can see <b>${esc(and(seen))}</b>` + (!can.length ? ", but can't add or change anything."
+        : can.length === seen.length ? `, and add or change entries for ${seen.length > 1 ? "all of them" : "them"}.` : `, and add or change entries for <b>${esc(and(can))}</b> only.`);
+    };
+    const sync = () => { $("#limited-box").hidden = f.elements.role.value !== "limited";
       $("#person-box").hidden = $("#person-help").hidden = f.elements.role.value !== "child";
       // first guess: the person whose name the login's name starts with ("Emma Smith" -> Emma)
       if (f.elements.role.value === "child" && !f.elements.person.value) {
@@ -1634,7 +1644,7 @@ function userForm(u) {
         const hit = state.setup.people.find((p) => p.name.toLowerCase() === first); if (hit) f.elements.person.value = hit.name;
       }
     };
-    f.elements.role.onchange = sync; f.elements.can_edit.onchange = sync; sync(); editChips();
+    f.elements.role.onchange = sync; f.elements.name.addEventListener("input", editSum); sync(); editChips();
     f.querySelectorAll("[data-see]").forEach((b) => b.onclick = () => {
       see.has(b.dataset.see) ? see.delete(b.dataset.see) : see.add(b.dataset.see); b.classList.toggle("on"); editChips();
     });
@@ -1645,7 +1655,7 @@ function userForm(u) {
       const fd = new FormData(f);
       const body = { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), see: [...see],
                      see_school: fd.get("see_school") === "on", see_birthdays: fd.get("see_birthdays") === "on",
-                     can_edit: fd.get("can_edit") === "on", active: fd.get("active") === "on", invite_email: fd.get("invite_email") || null,
+                     can_edit: edit.size > 0, active: fd.get("active") === "on", invite_email: fd.get("invite_email") || null,
                      edit_who: [...edit], person: fd.get("person") || null, welcome: fd.get("welcome") === "on" };
       let saved;
       // a new login: straight on to the welcome (from your email or WhatsApp) if ticked

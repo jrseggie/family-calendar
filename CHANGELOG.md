@@ -2,6 +2,10 @@
 
 ## Next version (not released yet)
 
+## 1.0.33
+- 🔐 Limited logins: "Can add / change entries for" is now a tick box per person they can see (none ticked = view only), with a line
+  that says it in words, e.g. "Mia can see Emma and Mia, and add or change entries for Mia only." (Replaces the "… only for" chips.)
+
 ## 1.0.32
 - 🎨 One look everywhere: small action buttons (+ Add, Reorder, Send welcome, It's on, OK noted, Copy, Restore …) are light green with dark
   green text; buttons that save stay dark blue; anything that removes something (Delete, 🗑 Not happening) is red.
