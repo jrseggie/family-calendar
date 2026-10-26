@@ -156,10 +156,9 @@ async function refresh() {
   for (const p of state.data.people) colorMap[p.name] = p.color;
   const me = state.data.me;
   const ROLE = { admin: "Admin", editor: "Editor", child: "Child", viewer: "Viewer", limited: "Limited" };
-  $("#me").innerHTML = me.demo
-    ? `<button class="theme-btn" id="viewas">👁 ${esc(me.name)} · ${ROLE[me.role]} ▾</button>`
-    : `${esc(me.name)}`;
-  if (me.demo) $("#viewas").onclick = viewAsPicker;
+  // 👤 your own menu (every login; on phones just the icon): your phone-calendar link, and on the demo "View as"
+  $("#me").innerHTML = `<button class="theme-btn mebtn" id="mebtn" title="Your phone calendar${me.demo ? " · view as someone else" : ""}">👤<span class="mename"> ${esc(me.name)}${me.demo ? ` · ${ROLE[me.role]}` : ""} ▾</span></button>`;
+  $("#mebtn").onclick = meSheet;
   // only show what this login is allowed to use
   const tabOk = { birthdays: me.seeBirthdays, school: me.seeSchool, log: me.seeLog, info: me.isAdmin, setup: me.isAdmin };
   for (const [k, x] of Object.entries(EXTRA_VIEWS)) tabOk[k] = !!x.ok(state.data);
@@ -471,8 +470,8 @@ function renderUpcoming() {
       const items = info.items.filter((it) => it.kind !== "event" || it.first || key === from);
       const ongoing = info.items.filter((it) => it.kind === "event" && !it.first && key !== from);
       const breakItems = info.breaks.map((b) => `<div class="item" data-sh="${b.id}"><div class="who">${pchips([b.child])}</div>
-        <div class="title">🌿 ${esc(b.name)} starts${CalendarRules.closesAt(b) ? ` – school closes <span class="tm">${esc(CalendarRules.closesAt(b))}</span>` : ""}${b.status === "Tentative" ? " (?)" : ""}</div>
-        <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span>${b.notes ? `<div class="hnote">📝 ${esc(b.notes)}</div>` : ""}</div>`);
+        <div class="title">🌿 ${esc(b.name)} starts${CalendarRules.closesAt(b) ? ` – school closes <span class="tm">${esc(CalendarRules.closesAt(b))}</span>` : ""}${b.status === "Tentative" ? " (?)" : ""}${b.notes ? `<div class="hnote">📝 ${esc(b.notes)}</div>` : ""}</div>
+        <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span></div>`);
       const stillOn = ongoing.length ? `<div class="still">Still on: ${ongoing.map((it) =>
         `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
       const dow = parse(key).getDay();
@@ -534,7 +533,7 @@ const MONTH_HUE = ["#4dabf7", "#f783ac", "#69db7c", "#ffd43b", "#b197fc", "#ffa9
 function renderBirthdays() {
   const list = [...state.data.recurring].sort((a, b) => nextOccurrence(a) - nextOccurrence(b));
   const today = new Date().setHours(0, 0, 0, 0);
-  let html = state.data.me.canEditAll ? `<button class="btn-add" id="add-rec">+ Add birthday / anniversary</button>` : "";
+  let html = pageHead("🎂 Birthdays & anniversaries", state.data.me.canEditAll ? `<button class="btn-add" id="add-rec">+ Add birthday / anniversary</button>` : "");
   let month = null;
   for (const r of list) {
     const n = nextOccurrence(r), age = r.born ? n.getFullYear() - r.born : null;
@@ -584,7 +583,7 @@ function renderSchool() {
     const school = state.data.people.find((p) => p.name === child)?.school || "";
     return `<div class="card"><h3><span class="p" style="--c:${COLORS[child]}">${esc(child)}</span> ${esc(school)}</h3>${rows || `<p class="muted pad">None yet.</p>`}</div>`;
   };
-  $("#main").innerHTML = `${state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : ""}${KIDS().map(card).join("") || `<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`}
+  $("#main").innerHTML = `${pageHead("🌿 School holidays", state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : "")}${KIDS().map(card).join("") || `<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`}
     <p class="muted" style="font-size:12px">The dates are the days at home: from the day school closes to the last day before going back.</p>`;
   $("#add-sh")?.addEventListener("click", () => holidayForm());
 }
@@ -597,7 +596,7 @@ async function renderLog() {
     `<div class="row del-row"><span><small>${esc(when(g.at))} · ${byName(g.by)}</small><br><b>${esc(g.title)}</b> ${whoList(g.who).map((p) => `<span class="pill" style="--c:${COLORS[p] || "var(--muted)"}">${esc(p)}</span>`).join(" ")}
       <small class="muted">${fmtShort(g.start)}${g.end !== g.start ? " – " + fmtShort(g.end) : ""}${g.n > 1 ? ` + ${g.n - 1} more repeat${g.n > 2 ? "s" : ""}` : ""}</small></span>
       <button type="button" class="ackbtn" data-restore="${esc(g.batch)}">↩ Restore</button></div>`).join("")}</div>` : "";
-  $("#main").innerHTML = deleted + `<div class="card log"><h3>Recent changes</h3>${rows.map((r) =>
+  $("#main").innerHTML = pageHead("🕘 Changes") + deleted + `<div class="card log"><h3>Recent changes</h3>${rows.map((r) =>
     `<div class="row"><small>${esc(new Date(r.at.endsWith("Z") ? r.at : r.at + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))} · ${byName(r.user)}</small><br>
      <b>${esc(r.action)}</b> ${esc(r.details || "")}</div>`).join("")}</div>`;
 }
@@ -655,6 +654,9 @@ function render() {
   if (stay) Promise.resolve(shown).then(() => window.scrollTo(0, y)).catch(() => {});
   return shown;
 }
+
+// the top of a list page (Birthdays, School, Changes, Info, Requests): its name on the left, its add buttons top right
+const pageHead = (title, actions = "") => `<div class="pagehead"><h2>${title}</h2>${actions ? `<div class="pacts">${actions}</div>` : ""}</div>`;
 
 // ---------- 🖨️ the printout for a tracked person (e.g. a co-parent or their lawyer): filter on them -> "Print for …".
 // Only the children they share, and only what's theirs to know (rules.js sharedDays / shareMode decide). What's on this page
@@ -785,7 +787,7 @@ function eventForm(ev, preset = {}) {
       ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> ✏️ Pencilled in – might not happen</label>`}</div>
     ${state.data.me.role === "child" && (!ev || canEditEvent(ev)) ? `<div class="meta" style="margin-top:-6px">If it includes anyone besides you, it goes on ✏️ pencilled in until a parent confirms it – your parents get an email about it.</div>` : ""}
     ${ev && CalendarRules.pencilled(state.data, ev) && canConfirm(ev) ? `<div class="qstay" style="margin:-4px 0 4px">✏️ Pencilled in:
-      <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn" id="poff">🗑 Not happening</button></div>` : ""}
+      <button type="button" class="ackbtn" id="pon">✅ It's on</button><button type="button" class="ackbtn danger" id="poff">🗑 Not happening</button></div>` : ""}
     ${ev?.confirmed_at && ev.status !== "Tentative" ? `<div class="meta">✅ Confirmed by ${esc(ev.confirmed_by || "")} on ${esc(localDay(ev.confirmed_at))}</div>` : ""}
     <label>Category<select name="category">${cats}</select></label>
     <div class="checks" id="sopen" ${e.category === "School" ? "" : "hidden"}><label><input type="checkbox" name="school_open" ${e.school_open ? "checked" : ""}> 🏫 School is open this day – a normal school day, even if it's a public holiday</label></div>
@@ -1066,104 +1068,166 @@ const ROLE_INFO = {
   limited: ["Limited", "only sees the people you pick"],
 };
 
+// ⚙ Settings, in four tabs (state.setupTab, remembered): 👪 Family (people, places) · 🔑 Logins · 📧 Emails (Sunday email, email addresses)
+// · ⚙ Calendar (name and address, version, backups, set-up wizard, usage check-in). Every block works the same way: tap a row
+// (›) to open it, "+ Add" in the block's heading. The phone-calendar link is in each person's own menu (👤 in the header, meSheet).
+const SETUP_TABS = [["family", "👪 Family"], ["logins", "🔑 Logins"], ["emails", "📧 Emails"], ["calendar", "⚙ Calendar"]];
+const card = (title, body, { sub = "", add = "" } = {}) => `<div class="card"><h3 class="chead"><span>${title}${sub ? ` <small class="muted">${sub}</small>` : ""}</span>${add}</h3>${body}</div>`;
+const addBtn = (id, label) => `<button type="button" class="ackbtn cadd" id="${id}">+ ${label}</button>`;
+
 async function renderSetup() {
   if (!state.stay) $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;   // a refresh of the same page updates it in place
   const [people, users, digest, places, settings, inbox] = await Promise.all([api("GET", "setup/people"), api("GET", "setup/users"), api("GET", "setup/digest"),
     api("GET", "setup/places"), api("GET", "setup/settings"), api("GET", "setup/inbox")]);
   state.setup = { people, users, digest, places, settings, inbox };
   syncAppIcon(people, settings.iconKey).catch(() => { /* the standard icon stays */ });   // the home-screen icon in the family's colours
-  // in their order (= the order of the columns on the Month grid); ↑ ↓ move someone
-  const pRows = people.map((p, i) => `<div class="row" data-person="${p.id}">
+  drawSetup();
+}
+// switching tabs / Reorder: drawn again from what's already loaded
+function drawSetup() {
+  let tab = state.setupTab || load("setupTab") || "family";
+  if (!SETUP_TABS.some(([k]) => k === tab)) tab = "family";
+  const body = { family: setupFamily, logins: setupLogins, emails: setupEmails, calendar: setupCalendar }[tab]();
+  $("#main").innerHTML = `<div class="stabs" role="tablist">${SETUP_TABS.map(([k, t]) =>
+    `<button type="button" role="tab" data-stab="${k}" class="${k === tab ? "active" : ""}">${t}</button>`).join("")}</div>${body}`;
+  $("#main").querySelectorAll("[data-stab]").forEach((b) => b.onclick = () => {
+    state.setupTab = b.dataset.stab; save("setupTab", b.dataset.stab); drawSetup(); window.scrollTo(0, 0);
+  });
+  wireSetup(tab);
+}
+
+// 👪 people (their order = the columns on Month; "↕ Reorder" shows the arrows) and places
+function setupFamily() {
+  const { people, places } = state.setup, moving = !!state.reorder;
+  const pRows = people.map((p, i) => `<div class="row ${moving ? "" : "tap"}" ${moving ? "" : `data-person="${p.id}"`}>
       <span><span class="swatch" style="background:${p.color}"></span><b>${esc(p.name)}</b>
         ${p.active ? "" : `<small>(hidden)</small>`}${personNote(p) ? `<br><small class="muted">${esc(personNote(p))}</small>` : ""}</span>
-      <span class="vmove"><small style="align-self:center;margin-right:6px">${TYPE_INFO[p.type][0]}</small>
-        <button type="button" class="ackbtn" data-pmove="${i}|-1" title="Move up" ${i ? "" : "disabled"}>↑</button>
-        <button type="button" class="ackbtn" data-pmove="${i}|1" title="Move down" ${i < people.length - 1 ? "" : "disabled"}>↓</button></span></div>`).join("");
-  const uRows = users.map((u) => {
+      ${moving ? `<span class="vmove"><button type="button" class="ackbtn" data-pmove="${i}|-1" title="Move up" ${i ? "" : "disabled"}>↑</button>
+        <button type="button" class="ackbtn" data-pmove="${i}|1" title="Move down" ${i < people.length - 1 ? "" : "disabled"}>↓</button></span>`
+        : `<small class="muted rtype">${TYPE_INFO[p.type][0]}</small>`}</div>`).join("");
+  return card("People in the calendar", pRows, { sub: moving ? "move people up or down – this is the order of the columns" : "",
+      add: `<span class="cbtns"><button type="button" class="ackbtn ${moving ? "on" : ""}" id="reorder">${moving ? "✓ Done" : "↕ Reorder"}</button>${moving ? "" : addBtn("add-person", "Add")}</span>` })
+    + card("Places", places.map((p) => `<div class="row tap" data-place="${esc(p.key)}"><span>${p.icon} <b>${esc(p.label)}</b>${p.active ? "" : " <small>(hidden)</small>"}${p.needs
+        ? `<br><small class="muted">needs someone there: ${esc(p.needs)}</small>` : ""}</span><small class="muted rtype">${PLACE_KINDS[p.kind] || p.kind}</small></div>`).join(""),
+      { sub: "where people sleep – a child at a house needs an adult there", add: addBtn("add-place", "Add") });
+}
+
+// 🔑 one row per login: who, access, whether they've signed in; the welcome button until they have
+function setupLogins() {
+  const { users, digest } = state.setup;
+  const VIA = { calendar: "by the calendar", email: "by email", whatsapp: "by WhatsApp" };
+  const rows = users.map((u) => {
     const extra = u.role === "child" ? (u.person ? `is ${esc(u.person)}` : "⚠ pick which person they are") : u.role === "limited"
       ? `sees ${esc(u.see || "nobody")}${u.see_school ? " + school holidays" : ""}${u.see_birthdays ? " + birthdays" : ""}${u.can_edit ? ` · can add/edit${u.edit_who ? ` for ${esc(u.edit_who)}` : ""}` : " · view only"}`
       : "";
-    const first = esc(u.name.split(" ")[0]);
-    // has this login been used? (users.last_seen = the day it last opened the calendar) - and did the welcome go?
     const seen = u.last_seen ? (u.last_seen === todayISO() ? "today" : fmtShort(u.last_seen)) : "";
-    const VIA = { calendar: "by the calendar", email: "by email", whatsapp: "by WhatsApp" };
-    const welcome = seen ? `<div style="margin-top:4px"><span class="dbadge ok">✅ Signed in · last used ${seen}</span></div>`
-      : u.welcome_wait && !u.welcome_at ? `<div class="wnote"><b>⏳ Waiting for ${first} to confirm their email</b><br>Cloudflare emailed them a "verify" link on ${fmtShort(u.welcome_wait.slice(0, 10))}.
-        The welcome email goes out by itself once they click it (after which Cloudflare shows "Page not found" – that's normal).</div>`
-      : u.welcome_at ? `<div style="margin-top:4px"><span class="dbadge wait">👋 Welcome sent ${fmtShort(u.welcome_at.slice(0, 10))}${VIA[u.welcome_via] ? ` ${VIA[u.welcome_via]}` : ""} · not signed in yet</span></div>`
-      : u.active ? `<div style="margin-top:4px"><span class="dbadge off">Not signed in yet – send them the welcome</span></div>` : "";
-    return `<div class="row" data-user="${u.id}"><span><b>${esc(u.name)}</b>${u.active ? "" : " <small>(disabled)</small>"}<br>
-      <small>${esc(u.email)}${u.invite_email ? `<br>📅 invites → ${esc(u.invite_email)}` : ""}${extra ? "<br>" + extra : ""}</small>${welcome}</span>
-      <span class="uacts">${u.active ? `<button type="button" class="ackbtn" data-welcome="${u.id}" title="Email them the link and how to sign in">${u.welcome_at || u.welcome_wait ? "Send welcome again" : "Send welcome email"}</button>` : ""}
-      <small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small></span></div>`;
+    const sunday = digest.some((r) => r.active && r.email.toLowerCase() === u.email.toLowerCase());
+    const status = !u.active ? `<span class="dbadge off">Turned off</span>`
+      : seen ? `<span class="dbadge ok">✅ Signed in · last used ${seen}</span>`
+      : u.welcome_at ? `<span class="dbadge wait">👋 Welcome sent ${fmtShort(u.welcome_at.slice(0, 10))}${VIA[u.welcome_via] ? ` ${VIA[u.welcome_via]}` : ""} · not signed in yet</span>`
+      : `<span class="dbadge off">Not signed in yet</span>`;
+    return `<div class="row tap" data-user="${u.id}"><span><b>${esc(u.name)}</b> <small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small><br>
+      <small class="muted">${esc(u.email)}${u.invite_email ? ` · 📅 invites → ${esc(u.invite_email)}` : ""}${extra ? `<br>${extra}` : ""}</small>
+      <div class="rbadges">${status}${sunday ? `<span class="dbadge ok">📧 Sunday email</span>` : ""}</div></span>
+      ${u.active && !seen ? `<span class="uacts"><button type="button" class="ackbtn" data-welcome="${u.id}">👋 Send welcome</button></span>` : ""}</div>`;
   }).join("");
-  const sb = settings.brand;
-  $("#main").innerHTML = `
-    <div class="card"><h3>This calendar</h3><div class="row" id="site-settings"><span><b>${esc(sb.site)}</b><br>
+  return card("Who can sign in", rows + `<p class="meta pad" style="margin:0">They sign in with their email address and a 6-digit code Cloudflare emails them – no password.
+      Limited logins only ever receive the entries they're allowed to see.</p>`, { add: addBtn("add-user", "Add login") });
+}
+
+// 📧 the Sunday email (when, and to whom) and the email addresses the calendar receives on - one short line per row,
+// a clear status on the right; the details are in the sheet each row opens
+const mstat = (cls, text, title = "") => `<span class="mstat ${cls}"${title ? ` title="${esc(title)}"` : ""}><i></i>${text}</span>`;
+function setupEmails() {
+  const { digest, settings, inbox } = state.setup;
+  const list = digest.map((r) => `<div class="row tap mrow" data-digest="${r.id}">
+      <span class="mtext"><b>${esc(r.name || r.email)}</b>${r.name ? `<small class="muted">${esc(r.email)}</small>` : ""}</span>
+      ${!r.active ? mstat("off", "Paused") : r.status === "ok" ? mstat("ok", "Gets it") : mstat("wait", "Waiting to verify", "They need to click the link in Cloudflare's \"verify\" email")}</div>`).join("")
+    || `<p class="muted pad">Nobody yet.</p>`;
+  const foot = `<p class="meta pad mfoot">Everyone here can also forward emails to the addresses below.${settings.emailSync
+    ? ` A new address gets a one-off "verify" email from Cloudflare first – <a href="#" id="sync-digest">check confirmations now</a>.` : ""}</p>`;
+  return card("Sunday email", `<div class="row tap mwhen" id="digest-time"><span class="mtext"><b>${esc(digestWhen(settings))}</b>
+      <small class="muted">The week ahead, plus ⚠ things to sort</small></span><span class="mstat link">Change</span></div>` + list + foot,
+      { add: addBtn("add-digest", "Add address") })
+    + mailboxesCard(inbox);
+}
+
+// 📥 every address the calendar receives email on: inbox@ (dates -> Waiting for approval) plus any extra ones (e.g. a private
+// expenses@) - what it's for, its address, where things go and who reads them, last email / problem - and the one Claude key they share
+function mailboxesCard(inbox) {
+  const day = (t) => esc(new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
+  const status = (last, problem) => problem ? mstat("wait", "⚠ Problem", problem) : last ? mstat("ok", `Last email ${day(last)}`) : mstat("off", "No email yet");
+  const row = (attr, icon, color, title, address, to, reader, last, problem) => `<div class="row tap mrow" ${attr}>
+      <span class="mico" style="--c:${color}">${icon}</span>
+      <span class="mtext"><b>${esc(title)}</b><span class="maddr">${esc(address)}</span><small class="muted">→ ${to} · read by ${esc(reader)}</small></span>
+      ${status(last, problem)}</div>`;
+  const reader = inbox.routine ? "your inbox routine" : inbox.on ? `Claude (${inbox.models[inbox.model].split(" –")[0]})` : "nobody yet – tap to set up";
+  const main = row(`id="inbox-settings"`, "📥", "#1971c2", "Dates for the calendar", inbox.inbox || "inbox@ your web address", "Waiting for approval",
+    reader, inbox.lastMail || (inbox.routine ? inbox.lastRun : null), inbox.lastError?.detail);
+  const extras = (inbox.extras || []).map((x, i) => row(`data-mbox="${i}"`, x.icon, "#2f9e44", x.title, x.address, esc(x.to || x.what),
+    x.readerShort || x.reader, x.last, x.problem)).join("");
+  const users = ["inbox@", ...(inbox.extras || []).map((x) => `${x.box}@`)];
+  const key = `<div class="row tap mrow" id="ai-key"><span class="mico" style="--c:#7048e8">🤖</span>
+      <span class="mtext"><b>Claude (AI) key</b><small class="muted">${inbox.keyHint ? `Ending ${esc(inbox.keyHint.replace(/^[.…]+/, ""))} · reads the emails sent to ${esc(users.join(" and "))}`
+        : "Only needed if the calendar reads emails itself"}</small></span>${inbox.keyHint ? mstat("ok", "Added") : mstat("off", "Not added")}</div>`;
+  return card("Email addresses", main + extras + key
+    + `<p class="meta pad mfoot">Forward things to these addresses. Only logins and Sunday-email addresses can send to them – email from anyone else is turned away.</p>`);
+}
+
+// ⚙ the calendar itself
+function setupCalendar() {
+  const { settings } = state.setup, sb = settings.brand;
+  return card("This calendar", `<div class="row tap" id="site-settings"><span><b>${esc(sb.site)}</b><br>
       <small class="muted">${esc(sb.url || "no web address set")} · phone icon name "${esc(sb.short)}"${sb.inbox ? ` · inbox ${esc(sb.inbox)}` : ""}
         <br>${flagOf(settings.countries.country)} public holidays${settings.countries.region ? ` (${esc(settings.countries.region)})` : ""}${settings.countries.extras.length
-          ? ` + ${settings.countries.extras.map(flagOf).join(" ")} for information` : ""} · times in ${esc(tzName(sb.tz))}</small></span><small>Edit</small></div>
-      <div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
-        <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>
-      <div class="row"><span><small class="muted">Change the family name, people or houses step by step</small></span>
-        <span><button type="button" class="ackbtn" onclick="wizardForm()">👋 Set-up wizard</button></span></div></div>
-    <div class="card"><h3>People in the calendar</h3>${pRows}</div>
-    <button class="btn-add" id="add-person">+ Add person</button>
-    <div class="card"><h3>Places <small class="muted">where people sleep – a child at a house needs an adult there</small></h3>${places.map((p) =>
-      `<div class="row" data-place="${esc(p.key)}"><span>${p.icon} <b>${esc(p.label)}</b>${p.active ? "" : " <small>(hidden)</small>"}${p.needs ? `<br><small class="muted">needs someone there: ${esc(p.needs)}</small>` : ""}</span><small>${PLACE_KINDS[p.kind] || p.kind}</small></div>`).join("")}</div>
-    <button class="btn-add" id="add-place">+ Add place</button>
-    <div class="card"><h3>Who can sign in</h3>${uRows}</div>
-    <button class="btn-add" id="add-user">+ Add login</button>
-    <div class="card"><h3>Weekly email <small class="muted">${esc(digestWhen(settings))} – the week ahead + ⚠ things to sort</small>
-      <button type="button" class="ackbtn" id="digest-time" style="float:right">🕖 Change day & time</button></h3>${digest.map((r) =>
-      `<div class="row" data-digest="${r.id}"><span><b>${esc(r.name || r.email)}</b><br><small>${esc(r.email)}</small></span>
-        <span class="dbadges">${digestBadges(r)}</span></div>`).join("") || `<p class="muted pad">Nobody yet.</p>`}</div>
-    <button class="btn-add" id="add-digest">+ Add email address</button>${settings.emailSync ? ` <button class="btn-add" id="sync-digest" title="Send Cloudflare's confirmation email to new addresses and check which are confirmed">🔄 Check confirmations now</button>` : ""}
-    <div class="card"><h3>📥 Smart inbox ${inbox.on || inbox.routine ? `<span class="dbadge ok hstate">● On</span>` : `<span class="dbadge off hstate">○ Off</span>`}</h3><div class="row" id="inbox-settings"><span>
-      ${inbox.routine ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by your <b>Claude Code inbox routine</b>
-        and the dates show under <b>Waiting for approval</b>.<br><small class="muted">Last check ${esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))}
-        · the calendar's own built-in reader stays off, so the two don't both pick up the same emails</small>` : ""}
-      ${inbox.routine ? "" : inbox.on ? `Emails forwarded to <b>${esc(inbox.inbox || "the inbox address")}</b> are read by ${esc(inbox.models[inbox.model].split(" –")[0])} and the dates
-        show under <b>Waiting for approval</b>.<br><small class="muted">Key ${esc(inbox.keyHint)} · last checked ${inbox.lastRun ? esc(new Date(inbox.lastRun).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" })) : "not yet"}</small>`
-      : `Optional: forward school letters, invitations and bookings to ${esc(inbox.inbox || "the inbox address")} and Claude proposes the dates for you to approve.
-        Needs your own Anthropic API key (pay-as-you-go, roughly R1–2 per email).`}
-      ${inbox.lastError ? `<br><small style="color:#c92a2a">⚠ Last problem: ${esc(inbox.lastError.detail)}</small>` : ""}</span><small style="white-space:nowrap">${inbox.on ? "Edit" : inbox.routine ? "Built-in reader" : "Set up"}</small></div></div>
-    <div class="card"><h3>🗄️ Backups</h3><p class="muted" style="margin:0 0 8px">Cloudflare keeps 30 days of restore points
-      automatically, and on the 1st of each month a full backup is emailed to the admins. You can also download one now
-      (🔒 Info items stay scrambled in it).</p><a class="btn" href="/api/setup/backup" download>⬇️ Download a backup</a></div>
-    <div class="card" id="feed"><h3>📅 Your phone calendar</h3>
-      <p class="muted" style="margin:0 0 8px">Subscribe once and the family calendar shows in Outlook / your iPhone next to your own
-        (read-only; it updates itself about every hour). The link is private to you – don't share it.</p>
-      <button type="button" class="btn-add" id="feed-show" style="margin:0">Show my link</button><div id="feed-box"></div></div>
-    <p class="muted" style="font-size:12px">Logins use the person's email address: they sign in
-      with a one-time code sent to that email. Limited logins only ever receive the entries they're allowed to see.</p>
-    <div class="card"><h3>📡 Usage check-in</h3><div class="row" id="usage-row"><span><small class="muted">Let the Family Calendar maker know you use it:
-        <b>${esc(settings.usage.choices[settings.usage.mode])}</b>${settings.usage.sends ? ` – sends once a day: ${esc(usageText(settings.usage.sends))}` : ""}</small></span>
-        <small>Edit</small></div></div>${installsCard(settings.installs)}`;
-  $("#add-person").onclick = () => personForm();
-  document.querySelectorAll("[data-pmove]").forEach((b) => b.onclick = (e) => {
-    e.stopPropagation();
-    const [i, d] = b.dataset.pmove.split("|").map(Number), ids = people.map((p) => p.id);
-    [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
-    submit(() => api("PUT", "setup/people-order", { ids }), "Order saved");
-  });
-  $("#add-place").onclick = () => placeForm();
-  $("#site-settings").onclick = () => settingsForm();
-  $("#usage-row").onclick = () => settingsForm();
-  $("#inbox-settings").onclick = () => inboxForm();
-  checkForUpdate();
-  document.querySelectorAll("[data-place]").forEach((el) => el.onclick = () => placeForm(state.setup.places.find((p) => p.key === el.dataset.place)));
-  $("#add-user").onclick = () => userForm();
-  document.querySelectorAll("[data-welcome]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); welcomeForm(state.setup.users.find((x) => x.id == b.dataset.welcome)); });
-  $("#add-digest").onclick = () => digestForm();
-  $("#digest-time").onclick = () => digestTimeForm();
-  $("#sync-digest")?.addEventListener("click", async (e) => {
-    e.target.disabled = true;
-    try { const r = await api("POST", "setup/email-sync"); toast(r.changes.length ? r.changes.join(" · ") : "All up to date"); renderSetup(); }
-    catch (err) { e.target.disabled = false; toast(err.message); }
-  });
-  document.querySelectorAll("[data-digest]").forEach((el) =>
-    el.onclick = () => digestForm(state.setup.digest.find((r) => r.id === +el.dataset.digest)));
+          ? ` + ${settings.countries.extras.map(flagOf).join(" ")} for information` : ""} · times in ${esc(tzName(sb.tz))}</small></span></div>
+      <div class="row tap" id="wizard-row"><span>👋 Set-up wizard<br><small class="muted">Change the family name, people or houses step by step</small></span></div>`)
+    + card("Version", `<div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
+        <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>`)
+    + card("🗄️ Backups", `<div class="row"><span><small class="muted">Cloudflare keeps 30 days of restore points automatically, and on the 1st of each month a full backup
+        is emailed to the admins. 🔒 Info items stay scrambled in it.</small></span><span><a class="ackbtn" href="/api/setup/backup" download>⬇️ Download now</a></span></div>`)
+    + card("📡 Usage check-in", `<div class="row tap" id="usage-row"><span>Let the Family Calendar maker know you use it: <b>${esc(settings.usage.choices[settings.usage.mode])}</b>
+        ${settings.usage.sends ? `<br><small class="muted">Sends once a day: ${esc(usageText(settings.usage.sends))}</small>` : ""}</span></div>`)
+    + installsCard(settings.installs);   // the maker's own calendar only
+}
+
+function wireSetup(tab) {
+  const on = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = (e) => { e.preventDefault(); fn(e); }; };
+  const each = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.onclick = (e) => fn(el, e));
+  if (tab === "family") {
+    on("add-person", () => personForm());
+    on("add-place", () => placeForm());
+    on("reorder", () => { state.reorder = !state.reorder; drawSetup(); });
+    each("[data-pmove]", (b, e) => {
+      e.stopPropagation();
+      const [i, d] = b.dataset.pmove.split("|").map(Number), ids = state.setup.people.map((p) => p.id);
+      [ids[i], ids[i + d]] = [ids[i + d], ids[i]];
+      submit(() => api("PUT", "setup/people-order", { ids }), "Order saved");
+    });
+    each("[data-place]", (el) => placeForm(state.setup.places.find((p) => p.key === el.dataset.place)));
+  }
+  if (tab === "logins") {
+    on("add-user", () => userForm());
+    each("[data-welcome]", (b, e) => { e.stopPropagation(); welcomeForm(state.setup.users.find((x) => x.id == b.dataset.welcome)); });
+  }
+  if (tab === "emails") {
+    on("add-digest", () => digestForm());
+    on("digest-time", () => digestTimeForm());
+    on("inbox-settings", () => inboxForm());
+    on("ai-key", () => inboxForm());
+    each("[data-mbox]", (el) => mailboxSheet(state.setup.inbox.extras[+el.dataset.mbox]));
+    each("[data-digest]", (el) => digestForm(state.setup.digest.find((r) => r.id === +el.dataset.digest)));
+    on("sync-digest", async () => {
+      try { const r = await api("POST", "setup/email-sync"); toast(r.changes.length ? r.changes.join(" · ") : "All up to date"); state.stay = true; renderSetup(); }
+      catch (err) { toast(err.message); }
+    });
+  }
+  if (tab === "calendar") {
+    on("site-settings", () => settingsForm());
+    on("usage-row", () => settingsForm());
+    on("wizard-row", () => wizardForm());
+    checkForUpdate();
+  }
 }
 
 // receive = gets the Sunday email (needs Cloudflare verification); send = may email things to the inbox address
@@ -1274,9 +1338,21 @@ async function addUpdater(mine) {
   w.location = `https://github.com/${mine}/new/main?filename=${encodeURIComponent(wf)}&value=${encodeURIComponent(yml)}`;
 }
 
+// an extra address (e.g. expenses@): what it does, and a way to its page
+function mailboxSheet(x) {
+  openDialog(`<div class="form"><h2>${x.icon} ${esc(x.address)}</h2>
+    <p style="margin-top:0">${esc(x.what)}.</p><p class="meta">Read by ${esc(x.reader)}. Uses the same Claude (AI) key as inbox@.
+      Only logins and Sunday-email addresses can send to it.</p>
+    ${x.problem ? `<p class="meta" style="color:#c92a2a">⚠ Latest problem: ${esc(x.problem)}</p>` : ""}
+    <div class="actions"><button type="button" id="cancel">Close</button>${EXTRA_VIEWS[x.view] ? `<button type="button" class="primary" id="mgo">Open it</button>` : ""}</div></div>`, () => {
+    $("#cancel").onclick = closeDialog;
+    $("#mgo")?.addEventListener("click", () => { closeDialog(); EXTRA_VIEWS[x.view].open?.(x.tab); state.view = x.view; render(); window.scrollTo(0, 0); });
+  });
+}
+
 function inboxForm() {
   const x = state.setup.inbox;
-  openDialog(`<form class="form" id="f" autocomplete="off"><h2>📥 Smart inbox</h2>
+  openDialog(`<form class="form" id="f" autocomplete="off"><h2>📥 Reading forwarded emails</h2>
     <details ${x.keyHint ? "" : "open"}><summary>How to get an Anthropic API key (once, about 5 minutes)</summary><ol class="meta" style="margin:6px 0 0 18px;padding:0">
       <li>Go to <b>platform.claude.com</b> and sign up (separate from any Claude chat subscription).</li>
       <li><b>Billing</b> → add some credit, e.g. $10. Set a <b>monthly spend limit</b> (e.g. $10) so it can never cost more.</li>
@@ -1538,9 +1614,10 @@ function userForm(u) {
     <div class="checks"><label><input type="checkbox" name="active" ${x.active ? "checked" : ""}> Login enabled</label>
       ${u ? "" : `<label><input type="checkbox" name="welcome" checked> Then send them the welcome (from my email or WhatsApp)</label>`}</div>
     <div class="err"></div>
-    <div class="actions">${u ? `<button type="button" class="danger" id="del">Remove</button>` : ""}
+    <div class="actions">${u ? `<button type="button" class="danger" id="del">Remove</button>` : ""}${u?.active ? `<button type="button" id="uwelcome">👋 Send welcome</button>` : ""}
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
+    $("#uwelcome")?.addEventListener("click", () => welcomeForm(u));
     // "… only for": the people they see; e.g. a helper sees the child but only adds her own entries
     const edit = new Set(whoList(x.edit_who || ""));
     const editChips = () => {
@@ -1717,9 +1794,9 @@ function renderInfoView() {
       chip("person", p, p === "–" ? "General" : esc(p), COLORS[p])).join("")}</div>
     <div class="vfilters"><span class="lbl">Type</span>${chip("section", "", "All")}${sections.filter((s) => items.some((it) => it.section === s)).map((s) =>
       chip("section", s, `${VAULT_ICON[s]} ${s}`)).join("")}</div>` : "";
-  $("#main").innerHTML = `<div class="vintro">🔒 Only ${esc(adminNames())} can open this page. It's stored scrambled (encrypted) – the backups and
+  $("#main").innerHTML = `${pageHead("🔒 Info", `<button class="btn-add" id="add-vault">+ Add</button>`)}<div class="vintro">🔒 Only ${esc(adminNames())} can open this page. It's stored scrambled (encrypted) – the backups and
       the inbox check can't read it. Hidden numbers show for 30 seconds when you tap <b>Show</b>. Don't keep passwords, PINs or card numbers here.</div>
-    <button class="btn-add" id="add-vault">+ Add</button>${filters}
+    ${filters}
     ${groups.length ? groups.map((s) => { const list = shown.filter((it) => it.section === s);
       return `<div class="card vsec ${folded.has(s) ? "folded" : ""}"><h3 data-vfold="${s}"><span>${VAULT_ICON[s]} ${s} <small class="muted">(${list.length})</small></span>
         <span class="vfold">${folded.has(s) ? "▸ Show" : "▾ Hide"}</span></h3>${list.map(card).join("")}</div>`; }).join("")
@@ -1804,14 +1881,30 @@ function vaultForm(it) {
   });
 }
 
-// phone-calendar link (Setup)
+// 👤 your own menu: the phone-calendar link (private to each login, so it's here rather than on the admins' Settings page)
+function meSheet() {
+  const me = state.data.me;
+  openDialog(`<div class="form"><h2>👤 ${esc(me.name)}</h2>
+    <p class="meta" style="margin-top:0">${esc(me.email || "")}${me.role ? ` · ${esc(ROLE_INFO[me.role]?.[0] || me.role)}` : ""}</p>
+    <div class="card" style="margin:0"><h3>📅 Your phone calendar</h3><div class="pad" style="padding-top:0">
+      <p class="meta" style="margin:0 0 8px">Subscribe once and the family calendar shows in your phone's calendar or Outlook next to your own
+        (read-only; it updates itself about every hour). The link is private to you – don't share it.</p>
+      <button type="button" class="ackbtn" id="feed-show">Show my link</button><div id="feed-box"></div></div></div>
+    ${me.demo ? `<div class="actions" style="justify-content:flex-start"><button type="button" id="viewas">👁 View as someone else (demo)</button></div>` : ""}
+    <div class="actions"><button type="button" id="cancel">Close</button></div></div>`, () => {
+    $("#cancel").onclick = closeDialog;
+    $("#viewas")?.addEventListener("click", viewAsPicker);
+  });
+}
+
+// phone-calendar link (👤 menu)
 async function showFeed(reset) {
   if (reset && !confirm("Make a new link? The old one stops working – re-subscribe with the new one.")) return;
   const { url } = await api(reset ? "POST" : "GET", reset ? "me/feed/reset" : "me/feed");
   const webcal = url.replace(/^https?:/, "webcal:");
   $("#feed-box").innerHTML = `<input readonly value="${esc(url)}" id="feed-url" style="width:100%;margin:6px 0">
     <div class="feed-btns"><button type="button" id="feed-copy" class="primary">Copy link</button>
-      <a class="btn" href="${esc(webcal)}">Open on this phone</a> <button type="button" id="feed-reset">New link</button></div>
+      <a class="btn" href="${esc(webcal)}">Open on this phone</a> <button type="button" class="ackbtn" id="feed-reset" title="The old link stops working">New link</button></div>
     <div class="meta"><b>iPhone:</b> tap <i>Open on this phone</i> → Subscribe (or Settings › Calendar › Accounts › Add Account › Other › Add Subscribed Calendar, paste the link).<br>
       <b>Outlook (PC):</b> Calendar › Add calendar › Subscribe from web › paste the link › name it "${esc(state.data.brand?.feed || "Family Calendar")}".<br>
       <b>Outlook (phone app):</b> add it in Outlook on the PC or outlook.com – it then shows on the phone too.</div>`;
@@ -1954,10 +2047,9 @@ async function renderRequests() {
   const row = (r) => `<div class="rqrow" data-rq="${r.id}"><span class="rqk">${r.kind === "bug" ? "🐞" : "💡"}</span>
       <div class="rqt"><b>${esc(r.title)}</b><small class="muted">${esc(r.created_by || "")} · ${esc(localDay(r.created_at))}${nC(r.id) ? ` · 💬 ${nC(r.id)}` : ""}${r.maker_note ? ` · the maker replied` : ""}</small></div>${badge(stat(r))}</div>`;
   const open = R.list.filter((r) => !["done", "wontdo"].includes(stat(r))), closed = R.list.filter((r) => ["done", "wontdo"].includes(stat(r)));
-  $("#main").innerHTML = `<div class="pad rq">
+  $("#main").innerHTML = `${pageHead("💡 Requests", `<button class="btn-add" data-rqnew="idea">💡 Suggest an idea</button><button class="btn-add" data-rqnew="bug">🐞 Report a bug</button>`)}<div class="pad rq">
     <p class="meta">Anyone using the calendar can suggest an idea or report a bug. Each one is also sent to the Family Calendar maker, who decides what's built –
       for every family using it – and the answer shows here. (Your name and any screenshot stay on this calendar.)</p>
-    <div class="rqbtns"><button class="primary" data-rqnew="idea">💡 Suggest an idea</button><button class="primary" data-rqnew="bug">🐞 Report a bug</button></div>
     <h3>Open (${open.length})</h3>${open.map(row).join("") || `<p class="muted">Nothing open.</p>`}
     ${closed.length ? `<h3>Done / decided (${closed.length})</h3>${closed.map(row).join("")}` : ""}
     ${R.maker ? `<h3>All families – the maker's view (${R.maker.length})</h3>

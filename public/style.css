@@ -132,7 +132,11 @@ main:has(.fgrid) { max-width: 1500px; }   /* the Family grid uses the width of a
 .row small { color: var(--muted); }
 .row.past { opacity: .5; }
 .log .row { cursor: default; display: block; }
-.btn-add { margin: 12px 0; padding: 9px 14px; border-radius: 10px; border: 0; background: var(--brand); color: #fff; cursor: pointer; }
+.btn-add { margin: 12px 0; padding: 9px 16px; border-radius: 999px; border: 1px solid var(--act-line); background: var(--act-bg); color: var(--act-text); font-weight: 600; cursor: pointer; }
+.btn-add:hover { background: var(--act-bg2); }
+/* the top of every list page: name left, add buttons top right (app.js pageHead) */
+.pagehead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
+.pagehead h2 { margin: 0; font-size: 19px; } .pacts { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; } .pacts .btn-add { margin: 0; }
 
 /* add button + dialog */
 .fab { position: fixed; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%;
@@ -230,6 +234,32 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .role { font-weight: 700; padding: 2px 8px; border-radius: 999px; background: var(--line); align-self: flex-start; white-space: nowrap; }
 .role.admin { background: var(--brand); color: #fff; }
 .role.limited { background: var(--important); }
+/* ⚙ Settings: tabs, block headings with their own "+ Add", rows you can tap (›) */
+.stabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 2px; margin-bottom: 4px; }
+.stabs button { border: 1px solid var(--line); background: var(--card); color: var(--muted); padding: 8px 14px; border-radius: 999px; white-space: nowrap; cursor: pointer; font-weight: 600; }
+.stabs button.active { background: var(--brand); border-color: var(--brand); color: var(--brand-text); }
+@media (max-width: 480px) { .stabs { gap: 4px; } .stabs button { padding: 7px 8px; font-size: 13px; } }
+.chead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
+.chead small { font-weight: 400; } .cbtns { display: flex; gap: 6px; } .chead .ackbtn { font-size: 13px; font-weight: 600; }
+.chead .ackbtn, .uacts .ackbtn { padding: 6px 12px; }
+.row.tap { position: relative; padding-right: 28px; }
+.row.tap::after { content: "›"; position: absolute; right: 12px; top: 50%; transform: translateY(-50%); font-size: 22px; color: var(--muted); }
+.row.tap:hover { background: color-mix(in srgb, var(--brand) 5%, var(--card)); }
+.rbadges { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; } .rtype { align-self: center; white-space: nowrap; }
+.row .role { font-size: 11px; vertical-align: 1px; } .uacts { align-self: center; }
+@media (max-width: 600px) { .row.tap:has(.uacts) { flex-wrap: wrap; } .row .uacts { flex-basis: 100%; } }   /* phones: the welcome button under the name, not off the edge */
+.mebtn { white-space: nowrap; }
+/* Settings > Emails: one clear line per row - a coloured icon, the name, the address, and a status on the right */
+.mrow { align-items: center; gap: 12px; } .mtext { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.mtext b { font-size: 15px; } .maddr { font-weight: 600; color: var(--brand); font-size: 14px; overflow-wrap: anywhere; } :root[data-theme=dark] .maddr { color: #8fb4ff; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme=light]) .maddr { color: #8fb4ff; } }
+.mico { flex: 0 0 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; font-size: 21px; background: color-mix(in srgb, var(--c) 15%, var(--card)); }
+.mstat { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; font-size: 13px; font-weight: 600; color: var(--muted); }
+.mstat i { width: 9px; height: 9px; border-radius: 50%; background: currentColor; } .mstat.ok { color: #2f9e44; } .mstat.wait { color: #e8590c; } .mstat.off i { background: #ced4da; }
+.mstat.link { color: var(--brand); } .mstat.link i { display: none; } .mfoot { margin: 0; font-size: 12.5px; }
+@media (max-width: 600px) { .mrow { flex-wrap: wrap; row-gap: 4px; } .mrow .mtext { flex-basis: calc(100% - 52px); } .mrow .mstat { order: 3; flex-basis: 100%; }
+  .mrow:has(.mico) .mstat { padding-left: 52px; } .maddr { overflow-wrap: normal; word-break: keep-all; } }   /* phones: the status under the text, so the address stays on one line */
+
 /* Settings > Who can sign in: the welcome button and the access badge side by side, level with the name */
 .uacts { display: flex; align-items: center; gap: 8px; align-self: flex-start; flex-shrink: 0; } .uacts .role { align-self: center; }
 .form select option { white-space: normal; }
@@ -386,8 +416,17 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .srow { display: grid; grid-template-columns: 112px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px; }
 .srow b { white-space: nowrap; }
 .sorting .srow { grid-template-columns: 112px 1fr auto; align-items: center; }
-.ackbtn { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--line); background: var(--card); color: var(--ink); cursor: pointer; white-space: nowrap; }
-.ackbtn:hover { border-color: #2f9e44; color: #2f9e44; }
+/* the one look for every small action button (+ Add, Reorder, Send welcome, It's on, OK noted, Copy, Restore …): light green with dark
+   green text. "Do it" buttons (Save, Add ticked …) stay dark blue; anything that removes something is red (.ackbtn.danger, .danger) */
+:root { --act-bg: #e6f6ea; --act-bg2: #d3efdb; --act-line: #8fd19e; --act-text: #1e6b33; --del-bg: #fff0f0; --del-line: #f5b5b5; --del-text: #b42318; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) { --act-bg: #1d3a26; --act-bg2: #24492f; --act-line: #2f7a45; --act-text: #b6eac3;
+  --del-bg: #3a1d1d; --del-line: #7a2f2f; --del-text: #f5b5b5; } }
+:root[data-theme="dark"] { --act-bg: #1d3a26; --act-bg2: #24492f; --act-line: #2f7a45; --act-text: #b6eac3; --del-bg: #3a1d1d; --del-line: #7a2f2f; --del-text: #f5b5b5; }
+.ackbtn { font: inherit; font-size: 12px; font-weight: 600; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--act-line); background: var(--act-bg); color: var(--act-text);
+  cursor: pointer; white-space: nowrap; text-decoration: none; display: inline-block; }
+.ackbtn:hover { background: var(--act-bg2); }
+.ackbtn.on { background: #2f9e44; border-color: #2f9e44; color: #fff; }
+.ackbtn.danger { background: var(--del-bg); border-color: var(--del-line); color: var(--del-text); }
 .noted { margin: 4px 0 8px; font-size: 13px; color: var(--muted); }
 .noted summary { cursor: pointer; padding: 6px 0; font-weight: 600; }
 .noted .srow { opacity: .75; }
@@ -420,8 +459,10 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
   padding: 6px 12px; font-size: 14px; color: color-mix(in srgb, #c92a2a 85%, var(--text)); display: grid; gap: 4px; }
 .dwarn [data-clash] { cursor: pointer; font-weight: 600; }
 .qstay { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
-.qstay button { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px; padding: 3px 10px;
-  font-size: 13px; cursor: pointer; }
+.qstay button { border: 1px solid var(--act-line); background: var(--act-bg); color: var(--act-text); border-radius: 999px; padding: 4px 11px;
+  font-size: 13px; font-weight: 600; cursor: pointer; }
+.qstay button:hover { background: var(--act-bg2); }
+.qstay button[data-quickstay$="|Unavailable"], .qstay button[data-housesit$="|Unavailable"] { background: var(--del-bg); border-color: var(--del-line); color: var(--del-text); }
 
 /* Upcoming > Waiting for approval */
 .approvals { background: var(--card); border: 2px solid #1f6feb; border-radius: var(--radius); margin: 14px 0 6px; overflow: hidden; }
@@ -447,7 +488,7 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 @media (max-width: 480px) {
   .top h1 { font-size: 16px; }
   .top-r { gap: 6px; }
-  .me { display: none; }
+  .mename { display: none; }   /* phones: just 👤 */
   .today-btn, .theme-btn { padding: 5px 9px; font-size: 13px; }
 }
 
@@ -572,4 +613,4 @@ body.nosections .sections { display: none; }
 .pcloses { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; } .pcloses input { width: auto; }
 
 /* a school holiday's notes (e.g. when boarders must be back) on Upcoming and its planning sheet */
-.hnote { font-size: 13px; color: var(--muted); white-space: pre-wrap; grid-column: 1 / -1; }
+.hnote { font-size: 13px; color: var(--muted); white-space: pre-wrap; margin-top: 2px; font-weight: 400; }   /* under the holiday's title */

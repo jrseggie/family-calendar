@@ -2,6 +2,24 @@
 
 ## Next version (not released yet)
 
+## 1.0.32
+- 🎨 One look everywhere: small action buttons (+ Add, Reorder, Send welcome, It's on, OK noted, Copy, Restore …) are light green with dark
+  green text; buttons that save stay dark blue; anything that removes something (Delete, 🗑 Not happening) is red.
+- Every list page (Birthdays, School, Changes, Info, Requests) starts the same way: its name on the left and its add button top right
+  (the round + at the bottom right is still there too). Tabs inside a page look the same everywhere.
+- The quick answers on a ⚠ (Requested / Confirmed / Uber to school / not required) use the same green buttons; "🚫 Can't" is red.
+- Phones: Settings › Emails keeps each address on one line (the status moves underneath).
+- Phones: Settings › Logins puts "Send welcome" under the person instead of off the edge of the screen; every page and form was checked at phone size.
+- Upcoming: a school holiday with long notes squeezed its title into a one-letter-wide strip – the notes now sit under the title.
+
+- ⚙ Settings tidied into four tabs – 👪 Family (people, places) · 🔑 Logins · 📧 Emails (Sunday email, smart inbox) · ⚙ Calendar (name and
+  address, version, backups, set-up wizard, usage check-in). Every block works the same way: tap a row (›) to open it, "+ Add" in its heading;
+  "↕ Reorder" shows the arrows for moving people. Each login shows its access, whether they've signed in and if they get the Sunday email.
+- 📥 Settings › Emails › "Email addresses": every address the calendar receives email on (inbox@ and any extra ones), what each one
+  does, who reads it, when it last got an email and any problem – plus the one Claude (AI) key they share. (Was the "Smart inbox" block.)
+- 👤 Your own menu in the header (just 👤 on phones): your phone-calendar link is there now, so every login can get theirs – not only admins.
+
+
 ## 1.0.31
 - Fresh data after a save, or when you come back to the app, now updates the page in place – Settings and other pages no longer flash "Loading…" and jump back to the top (it looked like the page kept reloading itself).
 - ⏳ Save, Delete, Send and Add buttons now show "Saving…" (with a spinner) while they work, and a second click is ignored – a slow save no longer looks like nothing happened (which led to double saves).

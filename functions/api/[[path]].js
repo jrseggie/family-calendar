@@ -21,7 +21,7 @@ import { digestSchedule, DAYS } from "../../lib/digest-schedule.js";
 import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/cloudflare-setup.js";
 import { sendWelcome, welcomeMail, welcomeWhatsApp, canSendDirect, markWelcome } from "../../lib/welcome.js";
 import { involvesOthers, ownEntry, tellParents } from "../../lib/child.js";
-import { extraApi } from "../../src/extras.js";
+import { extraApi, extraInboxes } from "../../src/extras.js";
 import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
@@ -556,8 +556,13 @@ async function setupInbox(request, env, u) {
     const c = await inboxConfig(env), h = Object.fromEntries((await env.DB.prepare("SELECT key, at, detail FROM health WHERE key IN ('inbox_check','inbox_error')").all()).results.map((r) => [r.key, r]));
     // a Claude Code cloud routine (tools/fetch_inbox.py) reading the inbox instead: it stamps inbox_check too, without "(smart inbox)"
     const routine = !c.on && h.inbox_check && !/smart inbox/.test(h.inbox_check.detail || "") && Date.now() - new Date(h.inbox_check.at).getTime() < 26 * 3600e3;
+    const b = brand(await loadSettings(env.DB)), lastMail = await env.DB.prepare("SELECT max(received_at) AS at FROM inbox_mail").first().catch(() => null);
+    // the other addresses (private extras, e.g. expenses@): what they do + their last email / problem
+    const extras = await Promise.all(extraInboxes.map(async ({ status, ...x }) => ({ ...x, address: b.host ? `${x.box}@${b.host}` : `${x.box}@…`,
+      ...(await status(env).catch((e) => ({ problem: String(e.message || e) }))) })));
     return json({ on: c.on, routine, model: c.model, notes: c.notes, keyHint: c.keyHint, models: INBOX_MODELS, lastRun: h.inbox_check?.at || null,
-                  lastError: h.inbox_error && (!h.inbox_check || h.inbox_error.at > h.inbox_check.at) ? h.inbox_error : null, inbox: brand(await loadSettings(env.DB)).inbox });
+                  lastError: h.inbox_error && (!h.inbox_check || h.inbox_error.at > h.inbox_check.at) ? h.inbox_error : null, inbox: b.inbox,
+                  lastMail: lastMail?.at || null, extras });
   }
   if (request.method !== "PUT") return fail(405, "Method not allowed");
   if (!env.VAULT_KEY) invalid("The calendar has no VAULT_KEY to keep the key safe");

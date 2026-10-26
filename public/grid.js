@@ -183,7 +183,7 @@ function sortingCard() {
   const nudgeRows = nudges.map((e) => `<div class="srow"><b>${e.start === e.end ? fmtDay(e.start) : `${fmtShort(e.start)} – ${fmtShort(e.end)}`}</b>
     <span data-ev="${e.id}" style="cursor:pointer">✏️ ${esc(whoList(e.who).join(" & "))}: ${esc(CalendarRules.plainTitle(e.title))} is still pencilled in – on or not?</span>
     ${canConfirm(e) ? `<span class="vmove"><button type="button" class="ackbtn" data-pon="${e.id}">✅ It's on</button>
-      <button type="button" class="ackbtn" data-poff="${e.id}">🗑 Not happening</button></span>` : "<span></span>"}</div>`).join("");
+      <button type="button" class="ackbtn danger" data-poff="${e.id}">🗑 Not happening</button></span>` : "<span></span>"}</div>`).join("");
   const ifs = CalendarRules.clashRuns(state.data, todayISO(), iso(addDays(new Date(), 8 * 7)), false, true);
   const ifList = ifs.length ? `<details class="noted"><summary>❔ If pencilled-in plans go ahead (${ifs.length})</summary>
     ${ifs.map((r) => `<div class="srow" data-clash="${r.start}"><b>${r.start === r.end ? fmtDay(r.start) : `${fmtShort(r.start)} – ${fmtShort(r.end)}`}</b><span>${esc(r.msg)}</span><span></span></div>`).join("")}</details>` : "";
