@@ -1521,7 +1521,11 @@ $("#today").onclick = () => {
   const top = el.getBoundingClientRect().top + window.scrollY - $("#bar").offsetHeight - (state.view === "month" ? 90 : 20);
   window.scrollTo(0, top);
 };
-$("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg") closeDialog(); });  // tap outside to close
+// tap outside to close - only when the press also started outside: selecting text in a box and letting go past the
+// edge of the form counts as a click outside, which closed the form
+let downOutside = false;
+$("#dlg").addEventListener("pointerdown", (e) => { downOutside = e.target.id === "dlg"; });
+$("#dlg").addEventListener("click", (e) => { if (e.target.id === "dlg" && downOutside) closeDialog(); downOutside = false; });
 
 // keep sticky week/month headings just below the pinned top bar (its height changes with the filters row)
 const setBarH = () => document.documentElement.style.setProperty("--bar-h", $("#bar").offsetHeight + "px");

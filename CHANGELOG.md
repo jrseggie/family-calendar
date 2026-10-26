@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.30
+- Selecting text in a form (e.g. to copy an entry's title) no longer closes the form when you let go of the mouse outside it.
+
 ## 1.0.29
 - 🇿🇦 Flags on public holidays now show as flags on Windows computers too (Windows draws them as the letters "ZA").
 
