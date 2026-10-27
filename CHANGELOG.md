@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.37
+- 📱 Phones: opening an entry (or any form) no longer pops the keyboard up over half the screen – it only comes up when you tap a box.
+
 ## 1.0.36
 - 📅 Dates in the entry form: the "To" date picker opens on the "From" date (not today), can't go before it, and moves along if "From" is moved past it.
 - 😀 Emojis in "What" (on a computer): a 😀 button at the end of the box opens a picker – seasonal and family favourites, a search

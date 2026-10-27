@@ -747,10 +747,12 @@ $("#theme").onclick = () => {
 };
 
 // ---------- forms
+const TOUCH = () => matchMedia("(hover: none) and (pointer: coarse)").matches;
 function openDialog(html, onReady) {
   $("#dlg-body").innerHTML = html;
   const dlg = $("#dlg");
   if (!dlg.open) dlg.showModal();
+  if (TOUCH()) document.activeElement?.blur();   // phones: showModal focuses the first box, which pops the keyboard over half the form
   onReady?.(dlg);
 }
 const closeDialog = () => $("#dlg").close();
@@ -948,7 +950,7 @@ function eventForm(ev, preset = {}) {
       }, () => submit.msg);
       saveEdit(ev, { ...body, loaded_at: ev.updated_at || "" });
     };
-    if (!ev) f.elements.title.focus();
+    if (!ev && !TOUCH()) f.elements.title.focus();
     else if (!canEditEvent(ev)) lockForm("Details");
   });
 }
