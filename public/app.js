@@ -772,6 +772,72 @@ async function submit(fn, okMsg) {
 
 // preset: { date, who } for a new entry; { copy: entry } = new entry pre-filled (Duplicate, or an inbox proposal
 // with onSave(body) + title); ev = edit an existing entry
+// 😀 emojis for "What" (computers only - phones have their own emoji keyboard; style.css hides these there)
+// [emoji, words to search on]; the first group shows before anything is searched
+const EMOJIS = [
+  ["🎃", "halloween pumpkin"], ["👻", "halloween ghost"], ["🎄", "christmas tree"], ["🎅", "christmas santa father"], ["🎁", "present gift christmas"],
+  ["🐣", "easter chick"], ["🐰", "easter bunny rabbit"], ["💝", "valentine heart love"], ["🎂", "birthday cake"], ["🎉", "party celebrate"],
+  ["🎆", "new year fireworks"], ["🥂", "cheers drinks toast anniversary"], ["💍", "wedding ring engagement"], ["👶", "baby"], ["🎓", "graduation"],
+  ["✈️", "flight plane fly travel airport"], ["🏖️", "beach holiday"], ["🏕️", "camp camping"], ["⛰️", "mountain hike"], ["🚗", "car drive road trip"],
+  ["🚌", "bus tour"], ["🚆", "train"], ["🚢", "cruise ship boat"], ["🏨", "hotel"], ["🧳", "luggage pack"],
+  ["🏫", "school"], ["📚", "books study homework"], ["📝", "exam test write"], ["🎒", "school bag back to school term"], ["🏆", "prize trophy award"],
+  ["⚽", "soccer football"], ["🏑", "hockey"], ["🏉", "rugby"], ["🏏", "cricket"], ["🎾", "tennis"], ["🏊", "swim swimming gala"],
+  ["🏃", "run race athletics"], ["🚴", "cycle bike"], ["⛳", "golf"], ["🐎", "horse riding"], ["🥋", "karate judo"], ["🩰", "ballet dance"],
+  ["🎭", "drama play theatre"], ["🎵", "music"], ["🎹", "piano"], ["🎸", "guitar"], ["🥁", "drums"], ["🎤", "concert sing choir"],
+  ["🎨", "art paint"], ["🎬", "movie film cinema"], ["🎮", "games"], ["🍽️", "dinner lunch eat restaurant"], ["☕", "coffee breakfast"], ["🍕", "pizza"],
+  ["🍖", "braai bbq"], ["🏥", "hospital"], ["🩺", "doctor gp"], ["🦷", "dentist teeth orthodontist"], ["👓", "optometrist eyes glasses"], ["💉", "vaccine injection jab"],
+  ["💊", "medicine pharmacy"], ["💇", "haircut hairdresser"], ["💅", "nails"], ["🐶", "dog vet"], ["🐱", "cat"], ["🐾", "pets kennels"],
+  ["🏠", "home house"], ["🔧", "repair fix plumber"], ["🧹", "clean cleaner"], ["🛒", "shopping groceries"], ["💼", "work meeting"], ["💻", "computer online"],
+  ["📞", "call phone"], ["📅", "date reminder"], ["⏰", "alarm time"], ["⚠️", "warning important"], ["❤️", "love heart"], ["⭐", "star"],
+  ["🙏", "church prayer"], ["⛪", "church"], ["🕯️", "memorial candle"], ["🌴", "leave holiday palm"], ["❄️", "winter snow ski"], ["☀️", "summer sun"],
+  ["🇿🇦", "south africa flag election"], ["🗳️", "vote election"], ["🎟️", "ticket show event"], ["🎪", "fair circus"], ["🛍️", "shopping mall"], ["👨‍👩‍👧‍👦", "family"],
+];
+// typed in "What" -> a suggestion (the first match wins)
+const EMOJI_HINTS = [
+  [/hallowe.?en/i, "🎃"], [/christmas|xmas/i, "🎄"], [/santa/i, "🎅"], [/easter/i, "🐣"], [/valentine/i, "💝"], [/new year/i, "🎆"],
+  [/birthday|bday/i, "🎂"], [/party/i, "🎉"], [/wedding/i, "💍"], [/anniversary/i, "🥂"], [/graduat/i, "🎓"],
+  [/flight|fly(ing)? |airport/i, "✈️"], [/beach/i, "🏖️"], [/camp/i, "🏕️"], [/cruise/i, "🚢"], [/road ?trip/i, "🚗"],
+  [/dentist|orthodont/i, "🦷"], [/optom|eye test/i, "👓"], [/doctor|\bgp\b|paed/i, "🩺"], [/hospital/i, "🏥"], [/vaccin|injection/i, "💉"],
+  [/hair ?cut|hairdress/i, "💇"], [/\bvet\b/i, "🐶"], [/exam/i, "📝"], [/hockey/i, "🏑"], [/rugby/i, "🏉"], [/cricket/i, "🏏"],
+  [/soccer|football/i, "⚽"], [/tennis/i, "🎾"], [/swim|gala/i, "🏊"], [/golf/i, "⛳"], [/ballet|dance/i, "🩰"], [/drama|play\b|theatre/i, "🎭"],
+  [/concert|choir/i, "🎤"], [/music|piano|guitar|drum/i, "🎵"], [/movie|cinema|film/i, "🎬"], [/braai/i, "🍖"], [/dinner|lunch|restaurant/i, "🍽️"],
+  [/church/i, "⛪"], [/memorial|funeral/i, "🕯️"], [/ski\b|skiing/i, "❄️"], [/election|vote/i, "🗳️"],
+];
+const emojiRecent = () => { try { return JSON.parse(localStorage.getItem("cal.emojis") || "[]"); } catch { return []; } };
+const emojiStart = (t) => /^\p{Extended_Pictographic}|^\p{Regional_Indicator}/u.test(t.trim());
+function emojiField(input) {
+  const wrap = input.closest(".emo-field"), btn = wrap.querySelector(".emo-btn"), pick = wrap.querySelector(".emo-pick"), hint = wrap.querySelector(".emo-hint");
+  let dismissed = "";
+  const put = (em) => {
+    const t = input.value.trim();
+    if (!t.startsWith(em)) input.value = `${em} ${t}`.trim() + (t ? "" : " ");
+    try { localStorage.setItem("cal.emojis", JSON.stringify([em, ...emojiRecent().filter((x) => x !== em)].slice(0, 10))); } catch {}
+    pick.hidden = true; showHint(); input.focus();
+  };
+  const grid = (list) => list.length ? `<div class="emo-grid">${list.map((em) => `<button type="button" data-em="${em}">${em}</button>`).join("")}</div>`
+    : `<p class="meta" style="margin:6px 2px">Nothing found – try another word (or Windows key + . for every emoji)</p>`;
+  const draw = (q = "") => {
+    const words = q.trim().toLowerCase(), found = EMOJIS.filter(([, w]) => !words || w.split(" ").some((x) => x.startsWith(words)) || w.includes(words)).map(([em]) => em);
+    const recent = emojiRecent();
+    pick.querySelector(".emo-list").innerHTML = (!words && recent.length ? `<div class="emo-h">Recent</div>${grid(recent)}<div class="emo-h">All</div>` : "") + grid(found);
+  };
+  const showHint = () => {
+    const t = input.value, m = EMOJI_HINTS.find(([re]) => re.test(t)), em = m?.[1];
+    hint.hidden = !em || emojiStart(t) || t.includes(em) || dismissed === em;
+    if (!hint.hidden) hint.innerHTML = `<button type="button" class="ackbtn" data-em="${em}">Add ${em}</button><button type="button" class="emo-x" title="No thanks" aria-label="No thanks">×</button>`;
+  };
+  pick.innerHTML = `<input class="emo-q" type="search" placeholder="Search, e.g. santa, dentist" aria-label="Search emojis"><div class="emo-list"></div>`;
+  btn.onclick = () => { pick.hidden = !pick.hidden; if (!pick.hidden) { draw(); pick.querySelector(".emo-q").value = ""; pick.querySelector(".emo-q").focus(); } };
+  pick.querySelector(".emo-q").oninput = (e) => draw(e.target.value);
+  pick.onclick = (e) => { const b = e.target.closest("[data-em]"); if (b) put(b.dataset.em); };
+  pick.onkeydown = (e) => { if (e.key === "Escape") { e.preventDefault(); e.stopPropagation(); pick.hidden = true; input.focus(); }
+    if (e.key === "Enter") { e.preventDefault(); const first = pick.querySelector("[data-em]"); if (first) put(first.dataset.em); } };
+  hint.onclick = (e) => { const b = e.target.closest("[data-em]"); if (b) return put(b.dataset.em); if (e.target.closest(".emo-x")) { dismissed = EMOJI_HINTS.find(([re]) => re.test(input.value))?.[1] || ""; hint.hidden = true; } };
+  input.addEventListener("input", showHint);
+  document.addEventListener("pointerdown", function away(e) { if (!wrap.isConnected) return document.removeEventListener("pointerdown", away); if (!wrap.contains(e.target)) pick.hidden = true; });
+  showHint();
+}
+
 function eventForm(ev, preset = {}) {
   const e = ev || (preset.copy ? { ...preset.copy } : { start: preset.date || todayISO(), end: "", who: preset.who || "", title: "", category: "General",
                     status: "Confirmed", important: 0, notes: "" });
@@ -780,7 +846,9 @@ function eventForm(ev, preset = {}) {
     + (!ev && state.data.me.canEditAll ? `<option value="__holiday">🌿 School holiday (shades the column)</option>` : "");
   openDialog(`<form class="form" id="f" autocomplete="off">
     <h2>${preset.title || (ev ? "Edit event" : preset.copy ? "Add a copy" : "Add event")}</h2>
-    <label>What<input name="title" value="${esc(e.title)}" placeholder="e.g. Dentist" required></label>
+    <div class="emo-field"><label>What<input name="title" value="${esc(e.title)}" placeholder="e.g. Dentist" required></label>
+      <button type="button" class="emo-btn" title="Add an emoji" aria-label="Add an emoji">😀</button>
+      <div class="emo-hint" hidden></div><div class="emo-pick" hidden></div></div>
     <div class="two"><label>From<input type="date" name="start" value="${e.start}" required></label>
       <label>To (optional)<input type="date" name="end" value="${e.end !== e.start ? e.end || "" : ""}"></label></div>
     <div class="two"><label>Time (optional)<input type="time" name="start_time" value="${esc(e.start_time || "")}"></label>
@@ -820,6 +888,13 @@ function eventForm(ev, preset = {}) {
       ${ev && state.data.inviteTo?.length ? `<button type="button" id="invite">📅 Send invite</button>` : ""}
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
+    emojiField(f.elements.title);
+    // "To" can't be before "From", and an empty "To" opens its date picker on the From date (not today)
+    const from = f.elements.start, to = f.elements.end;
+    const keepTo = () => { to.min = from.value || ""; if (to.value && from.value && to.value < from.value) to.value = from.value; };
+    keepTo(); from.addEventListener("change", keepTo);
+    const toFrom = () => { if (!to.value && from.value) to.value = from.value; };
+    to.addEventListener("pointerdown", toFrom); to.addEventListener("focus", toFrom);
     $("#invite")?.addEventListener("click", () => inviteForm(ev));
     const fam = CalendarRules.familyMembers(state.data);
     const paint = () => f.querySelectorAll("[data-who]").forEach((c) => c.classList.toggle("on", who.has(c.dataset.who)));

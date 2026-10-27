@@ -2,6 +2,12 @@
 
 ## Next version (not released yet)
 
+## 1.0.36
+- 📅 Dates in the entry form: the "To" date picker opens on the "From" date (not today), can't go before it, and moves along if "From" is moved past it.
+- 😀 Emojis in "What" (on a computer): a 😀 button at the end of the box opens a picker – seasonal and family favourites, a search
+  ("santa", "dentist") and your recent ones; the emoji goes at the start of the title. Typing e.g. "Halloween", "Christmas", "Birthday" or
+  "Dentist" offers "Add 🎃" / 🎄 / 🎂 / 🦷 – tap to add it, × for no thanks. Phones use their own emoji keyboard, so it isn't shown there.
+
 ## 1.0.35
 - 🏠 House-sitting bar: on a computer the name now shows under every column (like a Family entry); phones still show it once.
 
