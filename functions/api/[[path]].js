@@ -177,6 +177,9 @@ function cleanEvent(b, people) {
     important: b.important ? 1 : 0,
     location: PLACE_KEY.test(b.location || "") ? b.location : null,
     house_off: PLACE_KEY.test(b.house_off || "") ? b.house_off : null,   // "nobody needed at this house" on these days
+    // 🏠 someone staying who isn't set up as a helper (typed name, e.g. "Granny Chris") - only with a place (rules.js whereOn)
+    alone_ok: PLACE_KEY.test(b.location || "") && (b.alone_ok === true || b.alone_ok === 1) ? 1 : 0,   // 🏡 a child left home alone on purpose
+    guest: PLACE_KEY.test(b.location || "") ? String(b.guest || "").replace(/\s+/g, " ").trim().slice(0, 60) || null : null,
     notes: String(b.notes || "").trim() || null,
     source: String(b.source || "").trim() || null,
     share: ["show", "busy", "hide"].includes(b.share) ? b.share : null,

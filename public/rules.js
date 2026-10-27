@@ -74,11 +74,37 @@
       const loc = person.child && person.boards ? (holidayOf(data, p, key) ? "unknown" : schoolPlace(data)) : person.home || null;
       where[p] = { loc, set: [], explicit: false, tentative: false };
     }
+    // 🏠 someone staying who isn't set up as a helper (a name typed in, events.guest): at that house, like a helper
+    for (const e of data.events) {
+      if (!e.guest || !e.location || ["Cancelled", "Unavailable"].includes(e.status) || !on(e, key) || where[e.guest]?.explicit) continue;
+      where[e.guest] = { loc: e.location, set: [{ loc: e.location, ev: e }], explicit: true, tentative: e.status === "Tentative", guest: true };
+    }
     return where;
   }
 
+  // 🏠 a stay: a helper (or someone typed in) staying with a child or at a house. stayOf = who's staying (or null);
+  // stayText = how it reads: short in a Month column ("✅ Mia"), else in full ("✅ Mia staying with Emma")
+  const stayOf = (data, e) => !e || !e.location ? null : e.guest || whoList(e.who).find((p) => helpers(data).includes(p)) || null;
+  const stayIcon = (e) => e.status === "Tentative" ? "⏳" : e.status === "Unavailable" ? "🚫" : "✅";
+  const aloneOk = (e) => !!(e && e.alone_ok && e.location && !["Cancelled", "Unavailable"].includes(e.status));
+  const stayLike = (data, e) => !!stayOf(data, e) || aloneOk(e);
+  function stayText(data, e, short = false) {
+    if (aloneOk(e)) return short ? "🏡 Alone (OK)" : `🏡 ${whoList(e.who).join(" & ")} home alone (OK)`;
+    const name = stayOf(data, e);
+    if (!name) return e.title;
+    if (short) return `${stayIcon(e)} ${name}`;
+    const with_ = whoList(e.who).filter((p) => p !== name), and = (l) => l.length > 1 ? `${l.slice(0, -1).join(", ")} & ${l.at(-1)}` : l[0];
+    const pl = places(data)[e.location];
+    if (!with_.length) {   // house-sitting
+      const at = pl ? `the ${pl.label}` : "the house";
+      return e.status === "Tentative" ? `⏳ ${name} asked to house-sit ${at}` : e.status === "Unavailable" ? `🚫 ${name} can't house-sit ${at}` : `✅ ${name} house-sitting ${at}`;
+    }
+    return e.status === "Tentative" ? `⏳ ${name} asked to stay with ${and(with_)}` : e.status === "Unavailable" ? `🚫 ${name} can't stay with ${and(with_)}`
+      : `✅ ${name} staying with ${and(with_)}`;
+  }
+
   // ✏️ pencilled in (might not happen): a Tentative entry - except a helper's requested stay ("asked, not confirmed")
-  const pencilled = (data, e) => e.status === "Tentative" && !(e.location && whoList(e.who).some((p) => helpers(data).includes(p)));
+  const pencilled = (data, e) => e.status === "Tentative" && !stayOf(data, e);
   const pencilsOn = (data, key) => data.events.filter((e) => on(e, key) && pencilled(data, e));
   const plainTitle = (t) => String(t || "").replace(/\s*\?+\s*$/, "");
   // an entry's time as it reads on day `key` (no key = its first day): "10:30", "10:30–11:30", on the last day of a
@@ -174,12 +200,16 @@
     const where = whereOn(data, key), grown = adults(data), children = kids(data), LOC = places(data), out = [];
     const at = (house) => Object.keys(where).filter((p) => where[p].loc === house);
     for (const house of homePlaces(data)) {
-      const grownUps = at(house).filter((p) => grown.includes(p));
+      const grownUps = at(house).filter((p) => grown.includes(p) || where[p].guest);
       const confirmed = grownUps.filter((p) => !where[p].tentative);
       for (const k of at(house).filter((p) => children.includes(p))) {
-        if (!grownUps.length) {
+        const okAlone = data.events.some((e) => aloneOk(e) && e.location === house && on(e, key) && expandWho(data, e.who).includes(k));
+        if (!grownUps.length && okAlone) {
+          const ride = data.events.some((e) => e.category === "Transport" && on(e, key) && expandWho(data, e.who).includes(k));
+          if (isSchoolDay(data, k, key) && !ride) out.push(`${k} home alone (OK) – it's a school day (lifts?)`);
+        } else if (!grownUps.length) {
           const cant = [...new Set(data.events.filter((e) => e.status === "Unavailable" && on(e, key) && expandWho(data, e.who).includes(k))
-            .flatMap((e) => whoList(e.who).filter((p) => grown.includes(p))))];
+            .flatMap((e) => [...whoList(e.who).filter((p) => grown.includes(p)), ...(e.guest ? [e.guest] : [])]))];
           // a "Transport" entry (e.g. 🚕 Uber to school) means the school run is sorted
           const ride = data.events.some((e) => e.category === "Transport" && on(e, key) && expandWho(data, e.who).includes(k));
           out.push(`${k} is at the ${LOC[house].label} with no adult there${cant.length ? ` – ${cant.join(" & ")} can't stay` : ""}` +
@@ -194,7 +224,7 @@
       if (data.events.some((e) => e.house_off === pl.key && e.status !== "Cancelled" && on(e, key))) continue;
       const there = at(pl.key);
       if (!there.length) {
-        const cant = [...new Set(data.events.filter((e) => e.status === "Unavailable" && e.location === pl.key && on(e, key)).flatMap((e) => whoList(e.who)))];
+        const cant = [...new Set(data.events.filter((e) => e.status === "Unavailable" && e.location === pl.key && on(e, key)).flatMap((e) => [...whoList(e.who), ...(e.guest ? [e.guest] : [])]))];
         out.push(`Nobody is staying at the ${pl.label} (${pl.needs})${cant.length ? ` – ${cant.join(" & ")} can't stay` : ""}`);
       } else if (there.every((p) => where[p].tentative)) {
         out.push(`${there.join(" & ")} asked to stay at the ${pl.label} – not confirmed yet`);
@@ -288,5 +318,5 @@
   const expiries = (fields) => (fields || []).filter((f) => !f.hide && EXPIRY_LABEL.test(f.k || ""))
     .map((f) => ({ k: f.k, date: expiryDate(f.v) })).filter((x) => x.date).sort((a, b) => a.date.localeCompare(b.date));
 
-  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle, timeText, timeKey, closesAt, sharedKids, shareMode, sharedDays };
+  globalThis.CalendarRules = { EXPIRY_LABEL, expiryDate, expiries, REC_ICON, ordinal, recDetail, recText, places, placeList, homePlaces, schoolPlace, kids, adults, helpers, onLeave, helpersFree, stayOf, stayText, aloneOk, stayLike, tracked, homeOf, houseNeeds, whoList, familyMembers, expandWho, holidayOf, isSchoolDay, whereOn, clashesFor, clashRuns, isAcked, pencilled, maybesFor, pencilNudges, justConfirmed, plainTitle, timeText, timeKey, closesAt, sharedKids, shareMode, sharedDays };
 })();

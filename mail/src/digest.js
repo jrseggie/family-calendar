@@ -83,9 +83,10 @@ export function buildDigest(data, from, to, site, opts = {}) {
     const range = e.end !== e.start ? ` (${e.start < from ? "since " + short(e.start) + ", " : ""}to ${short(e.end)})` : "";
     const pen = clashRules.pencilled(data, e);
     const tm = clashRules.timeText(e) ? clashRules.timeText(e) + " " : "";
-    return { text: `${e.important ? "⭐ " : ""}${who.join(" & ")}: ${tm}${loc}${e.title}${pen ? " ✏️ (maybe)" : e.status === "Tentative" ? " (not confirmed)" : ""}${range}`,
-             html: `<span style="color:${color[who[0]] || "#495057"};font-weight:700">${esc(who.join(" & "))}</span> ${tm ? `<b>${esc(tm)}</b>` : ""}${loc}${esc(e.title)}`
-               + `${pen ? ' ✏️ <i style="color:#868e96">(maybe)</i>' : e.status === "Tentative" ? ' <i style="color:#868e96">(not confirmed)</i>' : ""}<span style="color:#868e96">${esc(range)}</span>`,
+    const stay = clashRules.stayLike(data, e), title = clashRules.stayText(data, e), place = stay ? "" : loc;
+    return { text: `${e.important ? "⭐ " : ""}${who.join(" & ")}: ${tm}${place}${title}${pen ? " ✏️ (maybe)" : e.status === "Tentative" && !stay ? " (not confirmed)" : ""}${range}`,
+             html: `<span style="color:${color[who[0]] || "#495057"};font-weight:700">${esc(who.join(" & "))}</span> ${tm ? `<b>${esc(tm)}</b>` : ""}${place}${esc(title)}`
+               + `${pen ? ' ✏️ <i style="color:#868e96">(maybe)</i>' : e.status === "Tentative" && !stay ? ' <i style="color:#868e96">(not confirmed)</i>' : ""}<span style="color:#868e96">${esc(range)}</span>`,
              important: !!e.important };
   };
 
@@ -131,7 +132,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
         const loc = e.location && LOC[e.location] ? LOC[e.location].icon + " " : "";
         const range = e.end !== e.start ? ` (${e.start < from ? "since " + short(e.start) + ", " : ""}to ${short(e.end)})` : "";
         return { who: tags(e.who), important: !!e.important,
-                 text: `${e.important ? "⭐ " : ""}${clashRules.timeText(e, d.key) ? `<b>${esc(clashRules.timeText(e, d.key))}</b> ` : ""}${loc}${esc(e.title)}${clashRules.pencilled(data, e) ? " ✏️ " + grey("(maybe)") : e.status === "Tentative" ? " " + grey("(not confirmed)") : e.status === "Unavailable" ? " " + grey("(can't)") : ""}${range ? " " + grey(range.trim()) : ""}` };
+                 text: `${e.important ? "⭐ " : ""}${clashRules.timeText(e, d.key) ? `<b>${esc(clashRules.timeText(e, d.key))}</b> ` : ""}${clashRules.stayLike(data, e) ? esc(clashRules.stayText(data, e)) : `${loc}${esc(e.title)}`}${clashRules.stayLike(data, e) ? "" : clashRules.pencilled(data, e) ? " ✏️ " + grey("(maybe)") : e.status === "Tentative" ? " " + grey("(not confirmed)") : e.status === "Unavailable" ? " " + grey("(can't)") : ""}${range ? " " + grey(range.trim()) : ""}` };
       })];
     body += dayBlock(nice(d.key), wd === 0 || wd === 6, rows);
   }

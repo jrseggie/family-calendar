@@ -705,3 +705,33 @@ test("child logins: own entries vs entries with other people; only their own can
   assert.equal(ownEntry(kid, { created_login: null, created_by: "Emma Smith" }), true);   // older entries: by name
   assert.equal(ownEntry(kid, { created_login: null, created_by: "Anna" }), false);
 });
+
+// 🏠 stays: "✅ Nomsa" in a Month column, the full sentence elsewhere; someone typed in (events.guest) counts as an adult once confirmed
+test("rules: stays read '✅ name' short and in full, and a typed-in guest counts as an adult", () => {
+  const away = ev("2026-10-14", "2026-10-15", "Anna, Tom", "beach", { location: "beach" });
+  const asked = ev("2026-10-14", "2026-10-14", "Emma, Nomsa", "Nomsa staying with Emma", { location: "town", status: "Tentative" });
+  const cant = ev("2026-10-14", "2026-10-14", "Emma, Nomsa", "Nomsa staying with Emma", { location: "town", status: "Unavailable" });
+  assert.equal(R.stayText(data([]), asked, true), "⏳ Nomsa");
+  assert.equal(R.stayText(data([]), cant), "🚫 Nomsa can't stay with Emma");
+  assert.equal(R.stayText(data([]), { ...asked, status: "Confirmed" }), "✅ Nomsa staying with Emma");
+  assert.equal(R.pencilled(data([]), asked), false);   // a stay that's asked isn't "pencilled in"
+  const gran = ev("2026-10-14", "2026-10-14", "Emma", "Gran staying with Emma", { location: "town", guest: "Gran" });
+  assert.equal(R.stayOf(data([]), gran), "Gran");
+  assert.equal(R.stayText(data([]), gran, true), "✅ Gran");
+  assert.deepEqual(R.clashesFor(data([away, gran]), "2026-10-14"), []);   // Gran there: Emma isn't alone
+  assert.deepEqual(R.clashesFor(data([away, { ...gran, status: "Tentative" }]), "2026-10-14"), ["Gran asked to stay with Emma – not confirmed yet"]);
+  assert.deepEqual(R.clashesFor(data([away, { ...gran, status: "Unavailable" }]), "2026-10-14"),
+    ["Emma is at the Town House with no adult there – Gran can't stay – it's a school day (lifts!)"]);
+});
+
+// 🏡 a child left home alone on purpose: no "no adult there" - only a school day without a lift booked gets a reminder
+test("rules: 'OK alone' clears the no-adult warning; a school day still asks about lifts", () => {
+  const away = ev("2026-10-17", "2026-10-19", "Anna, Tom", "beach", { location: "beach" });   // Sat 17 – Mon 19 Oct
+  const alone = ev("2026-10-17", "2026-10-19", "Emma", "Emma home alone (OK)", { location: "town", alone_ok: 1 });
+  assert.deepEqual(R.clashesFor(data([away, alone]), "2026-10-17"), []);   // Saturday: nothing to sort
+  assert.deepEqual(R.clashesFor(data([away, alone]), "2026-10-19"), ["Emma home alone (OK) – it's a school day (lifts?)"]);
+  const uber = ev("2026-10-19", "2026-10-19", "Emma", "🚕 Uber to school 🚕", { category: "Transport" });
+  assert.deepEqual(R.clashesFor(data([away, alone, uber]), "2026-10-19"), []);
+  assert.equal(R.stayText(data([]), alone, true), "🏡 Alone (OK)");
+  assert.equal(R.stayText(data([]), alone), "🏡 Emma home alone (OK)");
+});

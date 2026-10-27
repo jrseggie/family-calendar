@@ -235,6 +235,18 @@ function buildDays(from, to) {
       days[key].items.push({ kind: "birthday", rec: r, who: ["Family"], text });
     }
   }
+  // 🏠 the same person staying with the same child twice on a day (overlapping entries): only the latest answer shows
+  for (const k in days) {
+    const latest = {};
+    for (const it of days[k].items) {
+      const who = it.ev && CalendarRules.stayOf(state.data, it.ev);
+      if (!who) continue;
+      const g = `${who}|${whoList(it.ev.who).filter((p) => p !== who).sort().join(",")}`, t = (e) => `${e.updated_at || e.created_at || ""}|${String(e.id).padStart(9, "0")}`;
+      if (!latest[g] || t(it.ev) > t(latest[g].ev)) latest[g] = it;
+    }
+    days[k].items = days[k].items.filter((it) => { const who = it.ev && CalendarRules.stayOf(state.data, it.ev);
+      return !who || latest[`${who}|${whoList(it.ev.who).filter((p) => p !== who).sort().join(",")}`] === it; });
+  }
   const tk = (it, k) => it.ev ? CalendarRules.timeKey(it.ev, k) : "";
   for (const k in days) days[k].items.sort((a, b) => (b.kind === "birthday") - (a.kind === "birthday") ||
     (!!tk(a, k)) - (!!tk(b, k)) || tk(a, k).localeCompare(tk(b, k)) || (b.ev?.important || 0) - (a.ev?.important || 0));
@@ -252,7 +264,7 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(e.title)}${typeof isHelperStay === "function" && isHelperStay(e) ? stayStatus(e) : ""}${loc}${
+          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(CalendarRules.stayText(state.data, e))}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
             CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
@@ -780,9 +792,9 @@ function eventForm(ev, preset = {}) {
       ${CalendarRules.placeList(state.data).filter((v) => v.active !== 0 || e.location === v.key).map((v) => `<option value="${esc(v.key)}" ${e.location === v.key ? "selected" : ""}>${v.icon} ${esc(v.label)}</option>`).join("")}
     </select></label>
     ${CalendarRules.tracked(state.data).length ? `<div class="meta" style="margin-top:-6px">For ${esc(CalendarRules.tracked(state.data).join(" / "))}'s plans, also tick the child they're for.</div>` : ""}
-    ${ev && isHelperStay(e) ? `<div class="seg"><label><input type="radio" name="stay" value="Tentative" ${e.status === "Tentative" ? "checked" : ""}> ⏳ Requested</label>
-      <label><input type="radio" name="stay" value="Confirmed" ${!["Tentative", "Unavailable"].includes(e.status) ? "checked" : ""}> ✅ Confirmed</label>
-      <label><input type="radio" name="stay" value="Unavailable" ${e.status === "Unavailable" ? "checked" : ""}> 🚫 Can't stay</label></div>` : ""}
+    ${ev && isHelperStay(e) ? `<div class="seg"><label><input type="radio" name="stay" value="Tentative" ${e.status === "Tentative" ? "checked" : ""}> ⏳ Asked</label>
+      <label><input type="radio" name="stay" value="Confirmed" ${!["Tentative", "Unavailable"].includes(e.status) ? "checked" : ""}> ✅ Staying</label>
+      <label><input type="radio" name="stay" value="Unavailable" ${e.status === "Unavailable" ? "checked" : ""}> 🚫 Can't</label></div>` : ""}
     <div class="checks"><label><input type="checkbox" name="important" ${e.important ? "checked" : ""}> ⭐ Important</label>
       ${ev && isHelperStay(e) ? "" : `<label><input type="checkbox" name="tentative" ${e.status === "Tentative" ? "checked" : ""}> ✏️ Pencilled in – might not happen</label>`}</div>
     ${state.data.me.role === "child" && (!ev || canEditEvent(ev)) ? `<div class="meta" style="margin-top:-6px">If it includes anyone besides you, it goes on ✏️ pencilled in until a parent confirms it – your parents get an email about it.</div>` : ""}
@@ -850,7 +862,7 @@ function eventForm(ev, preset = {}) {
                      school_open: fd.get("school_open") === "on" && fd.get("category") === "School",
                      start_time: fd.get("start_time") || null, end_time: fd.get("start_time") ? fd.get("end_time") || null : null,
                      important: fd.get("important") === "on", status: fd.get("stay") || (fd.get("tentative") === "on" ? "Tentative" : "Confirmed"),
-                     source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null };
+                     source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null, guest: ev?.guest ?? e.guest ?? null, alone_ok: !!(ev?.alone_ok ?? e.alone_ok) };   // a typed-in stayer keeps their name; "OK alone" stays so
       if (f.elements.share) body.share = fd.get("share") || null;
       if (preset.onSave) return preset.onSave(body);
       if (fd.get("repeat")) body.repeat = { every: fd.get("repeat"), until: fd.get("until"), days: fd.getAll("rday").map(Number) };
@@ -1800,9 +1812,9 @@ function renderInfoView() {
   const groups = sections.filter((s) => shown.some((it) => it.section === s));
   const who = [...new Set(items.map((it) => it.person || "–"))].sort((x, y) => (x === "–") - (y === "–") || az(x, y));
   const chip = (kind, v, label, c) => `<button type="button" class="chip ${vf[kind] === v ? "on" : ""}" ${c ? `style="--c:${c}"` : ""} data-vf="${kind}|${esc(v)}">${label}</button>`;
-  const filters = items.length ? `<div class="vfilters"><span class="lbl">Person</span>${chip("person", "", "All")}${who.map((p) =>
+  const filters = items.length ? `<div class="vfilters"><span class="lbl">Person</span>${chip("person", "", "Everyone")}${who.map((p) =>
       chip("person", p, p === "–" ? "General" : esc(p), COLORS[p])).join("")}</div>
-    <div class="vfilters"><span class="lbl">Type</span>${chip("section", "", "All")}${sections.filter((s) => items.some((it) => it.section === s)).map((s) =>
+    <div class="vfilters"><span class="lbl">Type</span>${chip("section", "", "All types")}${sections.filter((s) => items.some((it) => it.section === s)).map((s) =>
       chip("section", s, `${VAULT_ICON[s]} ${s}`)).join("")}</div>` : "";
   $("#main").innerHTML = `${pageHead("🔒 Info", `<button class="btn-add" id="add-vault">+ Add</button>`)}<div class="vintro">🔒 Only ${esc(adminNames())} can open this page. It's stored scrambled (encrypted) – the backups and
       the inbox check can't read it. Hidden numbers show for 30 seconds when you tap <b>Show</b>. Don't keep passwords, PINs or card numbers here.</div>
@@ -1810,7 +1822,7 @@ function renderInfoView() {
     ${groups.length ? groups.map((s) => { const list = shown.filter((it) => it.section === s);
       return `<div class="card vsec ${folded.has(s) ? "folded" : ""}"><h3 data-vfold="${s}"><span>${VAULT_ICON[s]} ${s} <small class="muted">(${list.length})</small></span>
         <span class="vfold">${folded.has(s) ? "▸ Show" : "▾ Hide"}</span></h3>${list.map(card).join("")}</div>`; }).join("")
-      : items.length ? `<div class="card pad"><p class="muted">Nothing matches – tap <b>All</b>.</p></div>`
+      : items.length ? `<div class="card pad"><p class="muted">Nothing matches – tap <b>Everyone</b> and <b>All types</b>.</p></div>`
       : `<div class="card pad"><p>Nothing here yet. Tap <b>+ Add</b> for e.g. the medical aid (member number, plan, emergency line), doctors, allergies,
          school contacts, insurance policies or car registrations.</p></div>`}`;
   $("#add-vault").onclick = () => vaultForm();

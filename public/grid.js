@@ -24,20 +24,36 @@ const gridColumns = () => {
 const adults = () => CalendarRules.adults(state.data);
 // "<helper> staying with <child>" entries: a helper and a kid sleeping at a house - show whether it's confirmed
 // (also "<helper> house-sitting": a helper at a house on their own)
-const isHelperStay = (e) => e.location && whoList(e.who).some((p) => helpers().includes(p));
-const stayStatus = (e) => !isHelperStay(e) ? "" : e.status === "Tentative" ? ` <span class="stay req">⏳ requested</span>`
-  : e.status === "Unavailable" ? ` <span class="stay no">🚫 can't stay</span>` : ` <span class="stay ok">✅ confirmed</span>`;
+// (or someone typed in, events.guest) - in a Month column just the answer and the name: "✅ Mia", "⏳ Mia", "🚫 Mia" (rules.js stayText)
+const isHelperStay = (e) => !!CalendarRules.stayOf(state.data, e);
+const stayClass = (e) => CalendarRules.aloneOk(e) ? "salone" : !isHelperStay(e) ? "" : e.status === "Tentative" ? "sreq" : e.status === "Unavailable" ? "sno" : "sok";
 // ✏️ at the end of a pencilled-in entry (the location icon keeps the front), ✅ for 3 days once it's confirmed
 const pencilMark = (e) => CalendarRules.pencilled(state.data, e) ? ` <span class="pmark" title="Pencilled in – might not happen">✏️</span>`
   : CalendarRules.justConfirmed(e) && !isHelperStay(e) ? ` <span class="pmark" title="Confirmed by ${esc(e.confirmed_by || "")}">✅</span>` : "";
 // Setup type "Helper": au pair / nanny / gardener / house-sitter who can stay over with the kids or look after a house
 const helpers = () => CalendarRules.helpers(state.data);
 // the helpers free on `key` (not on 🌴 leave) as a pick-list for the one-tap buttons ("@" in data-quickstay / data-housesit = the picked one)
-function helperPick(key, first = null) {
+function helperPick(key, first = null, kid = "") {
   const free = CalendarRules.helpersFree(state.data, key).sort((a, b) => (b === first) - (a === first));
-  if (free.length < 2) return free.length ? `<b class="hpick" data-h="${esc(free[0])}">${esc(free[0])}</b>` : "";
-  return `<select class="hpick" title="Who">${free.map((h) => `<option>${esc(h)}</option>`).join("")}</select>`;
+  return `<select class="hpick" title="Who">${free.map((h) => `<option>${esc(h)}</option>`).join("")}<option value="${OTHER}">Someone else…</option>${
+    kid ? `<option value="${ALONE}">Nobody – ${esc(kid)}'s OK alone</option>` : ""}</select>`;
 }
+const OTHER = "__someone_else", ALONE = "__alone";
+const qdates = (from, to) => `<span class="qdates"><input type="date" class="qfrom" value="${from}" aria-label="From"> – <input type="date" class="qto" value="${to}" aria-label="To (last night)"></span>`;
+// the dates picked on a stay row (From / To), or the whole stretch
+const rangeOf = (btn, key, to) => { const q = btn.closest(".qstay"), f = q?.querySelector(".qfrom")?.value || key, t = q?.querySelector(".qto")?.value || to;
+  return { from: f, to: t < f ? f : t }; };
+// picking "Nobody – <child>'s OK alone" swaps the ⏳ / ✅ / 🚫 buttons for one "✅ Save" (there's nothing to ask or refuse); back again otherwise
+document.addEventListener("change", (e) => {
+  const sel = e.target.closest?.(".qstay .hpick"); if (!sel) return;
+  const box = sel.closest(".qstay"), alone = sel.value === ALONE;
+  box.querySelectorAll("[data-quickstay], [data-helper]").forEach((b) => { b.hidden = alone; });
+  box.querySelector(".asave")?.remove();
+  if (alone) {
+    const kid = box.querySelector("[data-quickstay]")?.dataset.quickstay.split("|")[1] || "";
+    box.insertAdjacentHTML("beforeend", `<button type="button" class="ackbtn asave" data-quickstay="${esc(box.querySelector("[data-quickstay]").dataset.quickstay.replace(/\|[^|]*$/, "|Confirmed"))}">✅ Save – ${esc(kid)}'s OK alone</button>`);
+  }
+});
 const picked = (btn) => { const p = btn.closest(".qstay")?.querySelector(".hpick"); return p ? p.value || p.dataset.h : ""; };
 const allOnLeave = (key) => helpers().length && !CalendarRules.helpersFree(state.data, key).length
   ? `<span class="qstay muted">🌴 ${helpers().length > 1 ? "All the helpers are" : `${esc(helpers()[0])} is`} on leave</span>` : "";
@@ -91,19 +107,21 @@ function renderGrid(keepAnchor) {
 
 // one coloured bar for an entry; the location icon sits at the front, so you can see where people sleep
 // repeat > 0: one bar across the whole day with the label repeated (centred) under each of `repeat` columns
-function barHTML(it, key, n, person, label, repeat = 0) {
+// wide: one full-width bar with the label once (a helper house-sitting: "✅ Emma house-sitting")
+function barHTML(it, key, n, person, label, repeat = 0, wide = false) {
   if (it.kind === "birthday") return `<div class="gi bday ${it.rec.type === "Memorial" ? "memorial" : ""}" data-rec="${it.rec.id}">${esc(it.text)}</div>`;
   const e = it.ev, multi = e.end !== e.start;
   const visitor = visitorOf(e), visit = !!visitor && person !== visitor;   // striped: a visitor's plan shown in a child's column
-  const icon = e.location && LOC()[e.location] && e.status !== "Unavailable" ? `<span class="li">${LOC()[e.location].icon}</span>` : "";
-  let title = e.title;
+  const stay = CalendarRules.stayLike(state.data, e);
+  const icon = e.location && LOC()[e.location] && e.status !== "Unavailable" && !stay ? `<span class="li">${LOC()[e.location].icon}</span>` : "";
+  let title = wide ? CalendarRules.stayText(state.data, e).replace(/ the .+$/, "") : stay ? CalendarRules.stayText(state.data, e, true) : e.title;
   if (e.location && person) title = title.replace(new RegExp(`^${person}\\s+at\\s+(the\\s+)?`, "i"), "");   // "Emma at Beach House" -> "Beach House" (not "Emma with Mark")
   const pen = CalendarRules.pencilled(state.data, e);
-  const cls = ["gi", pen ? "pencil" : "", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", !pen && ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
-               multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : ""].join(" ");
+  const cls = ["gi", stayClass(e), pen ? "pencil" : "", e.category === "Leave" ? "leave" : "", whoList(e.who).includes("Family") ? "fam" : "", e.important ? "imp" : "", !pen && !stay && ["Tentative", "Unavailable"].includes(e.status) ? "tent" : "", visit ? "visit" : "",
+               multi ? "multi" : "", multi && key !== e.start ? "cont" : "", multi && key !== e.end ? "open" : "", wide ? "hsit" : ""].join(" ");
   const who = label ? `<b>${esc(label)}:</b> ` : visit && !new RegExp(`\\b${visitor}\\b`, "i").test(title) ? `${esc(visitor)}: ` : "";   // "Mark: dinner", not "Mark: Emma with Mark"
   const tm = CalendarRules.timeText(e, key);   // "10:30" in front of the title (on the first day; "until 14:00" on the last)
-  const text = `${icon}${who}${tm ? `<span class="tm">${esc(tm)}</span> ` : ""}${esc(title)}${stayStatus(e)}${pencilMark(e)}`;
+  const text = `${icon}${who}${tm ? `<span class="tm">${esc(tm)}</span> ` : ""}${esc(title)}${stay ? "" : pencilMark(e)}`;
   const body = repeat ? Array(repeat).fill(`<span>${text}</span>`).join("") : text;
   return `<div class="${cls}${repeat ? " across" : ""}" style="--c:${COLORS[visit ? visitor : person || whoList(e.who)[0]]}${repeat ? `;grid-template-columns:repeat(${repeat},minmax(0,1fr))` : ""}" data-ev="${e.id}">${body}</div>`;   // label on every day, so each square makes sense on its own
 }
@@ -135,6 +153,7 @@ function gridMonth(m, days, where, cols, showClashes) {
           Array(cols.length).fill(`<span>${info.phFlag} ${esc(info.ph)}</span>`).join("")}</div>` : ""}${phx}${strip.map((it) => {
         const p = it.who.filter((x) => x !== "Family");
         if (it.kind === "event" && it.who.includes("Family")) return barHTML(it, key, n, null, "", cols.length);   // Family: label in every column
+        if (it.kind === "event" && CalendarRules.stayOf(state.data, it.ev) && whoList(it.ev.who).length === 1) return barHTML(it, key, n, null, "", 0, true);   // house-sitting: one bar, the name once
         return barHTML(it, key, n, null, p.length && !it.who.includes("Family") ? p.join(" & ") : "");
       }).join("")}</div>`;
     }
@@ -212,13 +231,9 @@ function dayWarnings(key) {
     !Object.keys(wh).some((p) => adults().includes(p) && wh[p].loc === wh[k].loc));   // nobody at all, not even requested
   const asked = (k) => state.data.events.find((e) => e.status === "Tentative" && e.location && e.start <= key && e.end >= key && whoList(e.who).includes(k)
     && whoList(e.who).some((p) => helpers().includes(p)))?.who;
-  const pickFor = (k) => helperPick(key, whoList(asked(k) || "").find((p) => helpers().includes(p)));
+  const pickFor = (k) => helperPick(key, whoList(asked(k) || "").find((p) => helpers().includes(p)), k);
   const pick = helperPick(key);
-  const buttons = canAdd() ? (pick ? alone.map((k) =>
-    `<span class="qstay">${pickFor(k)} with ${esc(k)}:
-      <button type="button" data-quickstay="@|${esc(k)}|${key}|Tentative">⏳ Requested</button>
-      <button type="button" data-quickstay="@|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
-      <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button></span>`).join("") : alone.length ? allOnLeave(key) : "")
+  const buttons = canAdd() ? alone.map((k) => `<span class="qstay"><button type="button" class="ackbtn" data-clash="${key}">🏠 Sort out who's with ${esc(k)}</button></span>`).join("")
     + alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay"><button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")
     + houseButtons(key) : "";
   return `<div class="dwarn">${clashes.map((c) => `<div data-clash="${key}">⚠ ${esc(c)}</div>`).join("")}${buttons}</div>`
@@ -248,21 +263,38 @@ function uberForm(kid, key) {
   });
 }
 
+// s: { person (helper / typed name) | alone, kid | house, from, to, status, title, who, guest, location }
+const stayMatch = (e, s) => e.location && e.status !== "Cancelled" && (s.alone ? !!e.alone_ok && whoList(e.who).includes(s.kid)
+  : !e.alone_ok && (e.guest === s.person || whoList(e.who).includes(s.person)) && (s.kid ? whoList(e.who).includes(s.kid) : e.location === s.house));
+const dayStep = (d, n) => iso(addDays(parse(d), n));
+async function putStay(s) {
+  const keep = (o) => ({ title: o.title, who: whoList(o.who), category: o.category, status: o.status, location: o.location, guest: o.guest, alone_ok: !!o.alone_ok,
+    important: o.important, notes: o.notes });
+  let reuse = null;
+  for (const o of state.data.events.filter((e) => stayMatch(e, s) && e.start <= s.to && e.end >= s.from)) {
+    const before = o.start < s.from, after = o.end > s.to, put = (x) => api("PUT", `events/${o.id}`, { ...o, who: whoList(o.who), ...x, loaded_at: o.updated_at || "" });
+    if (!before && !after) { if (!reuse) reuse = o; else await api("DELETE", `events/${o.id}`); continue; }
+    if (before) await put({ end: dayStep(s.from, -1) });
+    if (after) await (before ? api("POST", "events", { ...keep(o), start: dayStep(s.to, 1), end: o.end }) : put({ start: dayStep(s.to, 1) }));
+  }
+  const rec = { title: s.title, start: s.from, end: s.to, who: s.who, guest: s.guest || null, alone_ok: !!s.alone, category: "Household", location: s.location, status: s.status };
+  return reuse ? api("PUT", `events/${reuse.id}`, { ...reuse, ...rec, loaded_at: reuse.updated_at || "" }) : api("POST", "events", rec);
+}
+const rangeTxt = (r) => `${fmtShort(r.from)}${r.to !== r.from ? " – " + fmtShort(r.to) : ""}`;
+
 // an existing stay for helper+kid (or the helper house-sitting at h) covering `key`, e.g. the ⏳ requested one
-const existingStay = (helper, kid, key, h = null) => state.data.events.find((e) => e.location && e.start <= key && e.end >= key && e.status !== "Cancelled"
-  && whoList(e.who).includes(helper) && (kid ? whoList(e.who).includes(kid) : e.location === h));
+const isStayBy = (e, person) => e.location && e.status !== "Cancelled" && (e.guest === person || whoList(e.who).includes(person));
+const existingStay = (helper, kid, key, h = null, to = key) => state.data.events.filter((e) => isStayBy(e, helper) && e.start <= to && e.end >= key
+  && (kid ? whoList(e.who).includes(kid) : e.location === h)).sort((a, b) => (b.updated_at || "").localeCompare(a.updated_at || ""))[0];
 const setStatus = (e, status, msg) => submit(() => api("PUT", `events/${e.id}`, { ...e, who: whoList(e.who), status, loaded_at: e.updated_at || "" }), msg);
 
-function quickStay(helper, kid, key, status) {
-  const label = { Tentative: "requested", Unavailable: "can't stay" }[status] || "confirmed";
-  const was = existingStay(helper, kid, key);
-  if (was) return setStatus(was, status, `${helper} staying with ${kid}: ${label}`);   // ⏳ requested -> ✅ / 🚫: the same entry
-  const end = aloneUntil(kid, key);
+function quickStay(helper, kid, key, status, guest = false, r = null) {
+  r ||= { from: key, to: aloneUntil(kid, key) };
+  const label = { Tentative: "asked", Unavailable: "can't stay" }[status] || "staying";
   // "Can't" on a school day: show the day again so the 🚕 Uber option is right there
   const next = () => { if (status === "Unavailable" && isSchoolDay(kid, key)) clashSheet(key); };
-  submit(() => api("POST", "events", { title: `${helper} staying with ${kid}`, start: key, end, who: [kid, helper],
-    category: "Household", location: stayPlace(kid, key), status }),
-    `${helper} staying with ${kid} ${fmtShort(key)}${end !== key ? " – " + fmtShort(end) : ""} (${{ Tentative: "requested", Unavailable: "can't stay" }[status] || "confirmed"})`).then(next);
+  return submit(() => putStay({ person: helper, kid, from: r.from, to: r.to, status, title: `${helper} staying with ${kid}`, who: guest ? [kid] : [kid, helper],
+    guest: guest ? helper : null, location: stayPlace(kid, r.from) }), `${helper} with ${kid} ${rangeTxt(r)}: ${label}`).then(next);
 }
 
 // ---------- taps
@@ -294,6 +326,13 @@ function cellSheet(key, person) {
   });
 }
 
+// 🏡 "Nobody – <child>'s OK alone": one entry for the stretch they'd be alone (from the picker; any of ✅ / ⏳ / 🚫 = yes, they're fine)
+function aloneOk(kid, key, r = null) {
+  r ||= { from: key, to: aloneUntil(kid, key) };
+  submit(() => putStay({ alone: true, kid, from: r.from, to: r.to, status: "Confirmed", title: `${kid} home alone (OK)`, who: [kid], location: stayPlace(kid, r.from) }),
+    `🏡 ${kid} home alone (OK) ${rangeTxt(r)}`);
+}
+
 // the run of days from `key` on which `kid` is at the same house with no confirmed adult (to prefill the dates)
 function aloneUntil(kid, key) {
   const house = stayPlace(kid, key);
@@ -309,27 +348,38 @@ function aloneUntil(kid, key) {
 }
 
 // "<helper> staying with <child>": an entry for both of them at the child's house (Tentative = asked, not confirmed yet)
-function helperForm(helper, kid, from, to) {
+function helperForm(helper, kid, from, to, opt = {}) {
   const free = CalendarRules.helpersFree(state.data, from);
-  if (!helper && free.length === 1) helper = free[0];
-  openDialog(`<form class="form" id="f"><h2>${helper ? esc(helper) : "🏠 Someone"} staying with ${esc(kid)}</h2>
-    ${helper ? "" : `<label>Who<select name="helper">${free.map((h) => `<option>${esc(h)}</option>`).join("")}</select></label>`}
+  if (!helper && free.length === 1 && !opt.other) helper = free[0];
+  openDialog(`<form class="form" id="f"><h2>🏠 ${helper ? esc(helper) : "Someone"} staying with ${esc(kid)}</h2>
+    ${helper ? "" : `<label>Who<select name="helper">${free.map((h) => `<option>${esc(h)}</option>`).join("")}<option value="${OTHER}" ${opt.other ? "selected" : ""}>Someone else…</option></select></label>
+      <div id="guestbox"><label>Their name<input name="guest" placeholder="e.g. Granny Chris" maxlength="60"></label>
+        ${state.data.me.isAdmin ? `<div class="checks"><label><input type="checkbox" name="savehelper"> Save them as a helper for next time (Settings › Family)</label></div>` : ""}</div>`}
     <div class="two"><label>From<input type="date" name="start" value="${from}" required></label>
       <label>To (last night)<input type="date" name="end" value="${to}" required></label></div>
     <label>Note (optional)<input name="note" placeholder="e.g. parents away for the weekend"></label>
-    <div class="seg seg-loc"><label><input type="radio" name="stay" value="Tentative" checked> ⏳ Requested</label>
-      <label><input type="radio" name="stay" value="Confirmed"> ✅ Confirmed</label>
-      <label><input type="radio" name="stay" value="Unavailable"> 🚫 Can't stay</label></div>
-    <div class="meta">Shows in ${esc(kid)}'s column as ${LOC()[stayPlace(kid, from)]?.icon || "🏠"} ${esc(helper || "…")} staying with ${esc(kid)}. Until it's confirmed the ⚠ stays.</div>
+    <div class="seg seg-loc"><label><input type="radio" name="stay" value="Tentative" ${(opt.status || "Tentative") === "Tentative" ? "checked" : ""}> ⏳ Asked</label>
+      <label><input type="radio" name="stay" value="Confirmed" ${opt.status === "Confirmed" ? "checked" : ""}> ✅ Staying</label>
+      <label><input type="radio" name="stay" value="Unavailable" ${opt.status === "Unavailable" ? "checked" : ""}> 🚫 Can't</label></div>
+    <div class="meta">Shows in ${esc(kid)}'s column as "✅ name" (staying), "⏳ name" (asked) or "🚫 name" (can't). Until it's ✅ the ⚠ stays.</div>
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;
-    $("#f").onsubmit = (e) => {
+    const f = $("#f"), other = () => !helper && f.elements.helper.value === OTHER;
+    const sync = () => { if ($("#guestbox")) $("#guestbox").hidden = !other(); };
+    if (!helper) { f.elements.helper.onchange = sync; sync(); if (opt.other) f.elements.guest.focus(); }
+    f.onsubmit = (e) => {
       e.preventDefault();
-      const fd = new FormData($("#f")), who = helper || fd.get("helper");
-      submit(() => api("POST", "events", { title: `${who} staying with ${kid}` + (fd.get("note") ? ` – ${fd.get("note")}` : ""),
-        start: fd.get("start"), end: fd.get("end") || fd.get("start"), who: [kid, who], category: "Household", location: stayPlace(kid, from),
-        status: fd.get("stay") || "Tentative" }), "Saved");
+      const fd = new FormData(f), guest = other() ? String(fd.get("guest") || "").trim() : "", who = guest || helper || fd.get("helper");
+      if (other() && !guest) { $("#f .err").textContent = "Type their name"; return; }
+      const asHelper = guest && fd.get("savehelper") === "on";
+      submit(async () => {
+        // saved as a helper: they're a person from now on (no column, sleeps nowhere unless an entry says) and go in Who like Mia
+        if (asHelper) await api("POST", "setup/people", { name: guest, type: "helper", color: "#868e96", active: true, grid_column: false });
+        const start = fd.get("start"), end = fd.get("end") < start ? start : fd.get("end") || start;
+        await putStay({ person: who, kid, from: start, to: end, status: fd.get("stay") || "Tentative", title: `${who} staying with ${kid}` + (fd.get("note") ? ` – ${fd.get("note")}` : ""),
+          who: guest && !asHelper ? [kid] : [kid, who], guest: guest && !asHelper ? guest : null, location: stayPlace(kid, start) });
+      }, asHelper ? `Saved – ${guest} is a helper now` : "Saved");
     };
   });
 }
@@ -483,9 +533,9 @@ function houseButtons(key) {
   return CalendarRules.houseNeeds(state.data, key).map((h) => {
     const pl = LOC()[h];
     const pick = helperPick(key);
-    return (pick ? `<span class="qstay">${pick} house-sitting ${esc(pl.label)}:
-        <button type="button" data-housesit="@|${esc(h)}|${key}|Tentative">⏳ Requested</button>
-        <button type="button" data-housesit="@|${esc(h)}|${key}|Confirmed">✅ Confirmed</button>
+    return (pick ? `<span class="qstay">${pick} house-sitting ${esc(pl.label)} ${qdates(key, emptyUntil(h, key))}
+        <button type="button" data-housesit="@|${esc(h)}|${key}|Tentative">⏳ Asked</button>
+        <button type="button" data-housesit="@|${esc(h)}|${key}|Confirmed">✅ House-sitting</button>
         <button type="button" data-housesit="@|${esc(h)}|${key}|Unavailable">🚫 Can't</button></span>` : allOnLeave(key))
       + `<span class="qstay"><button type="button" data-housenot="${esc(h)}|${key}" title="Nobody needs to be there these days (e.g. ${esc(pl.needs)} with you)">👌 ${esc(pl.label)}: not required</button></span>`;
   }).join("");
@@ -499,12 +549,11 @@ function emptyUntil(h, key) {
   }
   return end;
 }
-function houseSit(helper, h, key, status) {
-  const was = existingStay(helper, null, key, h);
-  if (was) return setStatus(was, status, `${helper} house-sitting: ${{ Tentative: "requested", Unavailable: "can't" }[status] || "confirmed"}`);
-  const end = emptyUntil(h, key), pl = LOC()[h];
-  submit(() => api("POST", "events", { title: `${helper} house-sitting`, start: key, end, who: [helper], category: "Household", location: h, status }),
-    `${helper} house-sitting ${pl.label} ${fmtShort(key)}${end !== key ? " – " + fmtShort(end) : ""} (${{ Tentative: "requested", Unavailable: "can't" }[status] || "confirmed"})`);
+function houseSit(helper, h, key, status, r = null) {
+  r ||= { from: key, to: emptyUntil(h, key) };
+  const pl = LOC()[h], label = { Tentative: "asked", Unavailable: "can't" }[status] || "house-sitting";
+  submit(() => putStay({ person: helper, house: h, from: r.from, to: r.to, status, title: `${helper} house-sitting`, who: [helper], location: h }),
+    `${helper} at the ${pl.label} ${rangeTxt(r)}: ${label}`);
 }
 // "not required": an entry across the family strip saying the house can stay empty those days; deleting it brings the ⚠ back
 function houseNotForm(h, key) {
@@ -550,28 +599,140 @@ function clashSheet(key) {
   // houses and "away" always listed; school / friend's only when someone is there
   const placesTxt = activePlaces().filter((p) => p.kind === "home" || p.kind === "away" || list(p.key) !== "nobody")
     .map((p) => `${p.icon} ${p.kind === "school" ? "At school" : p.kind === "friend" ? "At a friend's" : p.kind === "away" ? "Away" : esc(p.label)}: <b>${esc(list(p.key))}</b>`).join("<br>");
-  openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h2>
+  const sort = canAdd() && alone.length;
+  openDialog(`<form class="form" id="f"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h2>
     ${clashes.length ? `<div class="clashes">${clashes.map((c) => `<div>⚠ ${esc(c)}${ackBy(key, c) ? ` <small class="muted">· 👍 noted by ${esc(ackBy(key, c))}</small>` : ""}</div>`).join("")}</div>` : `<p class="muted">No clashes 👍</p>`}
     ${CalendarRules.maybesFor(state.data, key).map((c) => `<div class="dmaybe">❔ ${esc(c)}</div>`).join("")}
     <div class="meta">${placesTxt}</div>
-    ${canAdd() && alone.length ? `<div class="dwarn" style="border-radius:10px;border:0">${helperPick(key) ? alone.map((k) =>
-      `<span class="qstay">${helperPick(key)} with ${esc(k)}:
-        <button type="button" data-quickstay="@|${esc(k)}|${key}|Tentative">⏳ Requested</button>
-        <button type="button" data-quickstay="@|${esc(k)}|${key}|Confirmed">✅ Confirmed</button>
-        <button type="button" data-quickstay="@|${esc(k)}|${key}|Unavailable">🚫 Can't</button>
-        <button type="button" data-helper="@" data-kid="${esc(k)}">Other dates…</button></span>`).join("") : allOnLeave(key)}
-      ${alone.filter((k) => isSchoolDay(k, key)).map((k) => `<span class="qstay">${esc(k)} to school:
-        <button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></span>`).join("")}</div>` : ""}
+    ${canAdd() && alone.length ? stayFields(key, alone) : ""}
+    ${canAdd() && !sort ? alone.filter((k) => isSchoolDay(k, key)).map((k) => `<div class="qstay">${esc(k)} to school:
+        <button type="button" data-uber="${esc(k)}|${key}">🚕 Uber to school</button></div>`).join("") : ""}
     ${canAdd() && CalendarRules.houseNeeds(state.data, key).length ? `<div class="dwarn" style="border-radius:10px;border:0">${houseButtons(key)}</div>` : ""}
     ${KIDS().filter((k) => wh[k]?.loc === "unknown" && holidayOn(k, key)).map((k) =>
       `<div class="qstay"><button type="button" class="go" data-plan="${esc(k)}|${key}">🗓 Plan ${esc(k)}'s ${esc(holidayOn(k, key).name)}</button></div>`).join("")}
+    <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Close</button>
-      <button class="primary" id="seeday">See the day</button></div></div>`, () => {
+      <button type="button" id="seeday" ${sort ? "" : 'class="primary"'}>See the day</button>${sort ? `<button class="primary">Save</button>` : ""}</div></form>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#seeday").onclick = () => daySheet(key);
-    document.querySelectorAll("#dlg [data-helper]").forEach((b) => b.onclick = () =>
-      helperForm(picked(b), b.dataset.kid, key, aloneUntil(b.dataset.kid, key)));
+    if (sort) wireStayFields(key);
+    $("#f").onsubmit = (e) => { e.preventDefault(); if (sort) saveStayFields(key); };
   });
+}
+
+// "Who's with <child>?" on the ⚠ sheet: one line per night of the stretch they'd be without a parent, each with its own answer
+// (✅ / ⏳ / 🚫 a helper or someone typed in, 🏡 OK alone, or not sorted), starting from what's on the calendar now;
+// "Set all nights to" fills every line; one Save. Nights with the same answer are kept together as one entry.
+const parents = () => state.data.people.filter((p) => p.type === "household" && !p.child && p.active).map((p) => p.name);
+// the nights around `key` that `kid` is at the same house with no parent there (helpers / OK-alone don't end it), at most 3 weeks
+function nightsOf(kid, key) {
+  const house = stayPlace(kid, key), from = iso(addDays(parse(key), -21)), to = iso(addDays(parse(key), 21)), idx = whereIndex(from, to);
+  const open = (d) => idx[d]?.[kid]?.loc === house && !parents().some((p) => idx[d][p]?.loc === house && !idx[d][p].tentative);
+  let a = key, b = key;
+  while (a > from && open(dayStep(a, -1))) a = dayStep(a, -1);
+  while (b < to && open(dayStep(b, 1))) b = dayStep(b, 1);
+  const out = []; for (let d = a; d <= b; d = dayStep(d, 1)) out.push(d);
+  return out;
+}
+// what's on the calendar for `kid` on night `d`: "alone", "<status>|<name>" (the latest stay), or ""
+function nightAnswer(kid, d) {
+  const on = state.data.events.filter((e) => e.location && e.status !== "Cancelled" && e.start <= d && e.end >= d && whoList(e.who).includes(kid)
+    && (e.alone_ok || CalendarRules.stayOf(state.data, e))).sort((x, y) => (y.updated_at || "").localeCompare(x.updated_at || "") || y.id - x.id);
+  const e = on[0];
+  return !e ? "" : e.alone_ok ? ALONE : `${e.status}|${CalendarRules.stayOf(state.data, e)}`;
+}
+const ANS = { Confirmed: "✅", Tentative: "⏳", Unavailable: "🚫" };
+const answerLabel = (v) => !v ? "— not sorted" : v === ALONE ? "🏡 OK alone" : (([st, n]) => `${ANS[st]} ${n}${st === "Tentative" ? " asked" : st === "Unavailable" ? " can't" : ""}`)(v.split("|"));
+// 🚕 the Uber-to-school entries for `kid` on day `d` (Transport, made by the 🚕 tick box / "Uber to school")
+const ubersOn = (kid, d) => state.data.events.filter((e) => e.category === "Transport" && e.start <= d && e.end >= d && whoList(e.who).includes(kid) && /uber/i.test(e.title));
+const uberOn = (kid, d) => ubersOn(kid, d).length > 0;
+function nightOptions(names, value, blank = "— not sorted") {
+  const vals = [...names.flatMap((n) => ["Confirmed", "Tentative", "Unavailable"].map((st) => `${st}|${n}`)), ALONE];
+  if (value && !vals.includes(value)) vals.unshift(value);
+  return `<option value="">${blank}</option>${vals.map((v) => `<option value="${esc(v)}" ${v === value ? "selected" : ""}>${esc(answerLabel(v))}</option>`).join("")}`;
+}
+function stayFields(key, alone) {
+  const kid = alone[0];
+  return `<div class="sortbox" id="sortbox" data-kid="${esc(kid)}">${alone.length > 1 ? `<label>Child<select name="kid">${alone.map((k) => `<option>${esc(k)}</option>`).join("")}</select></label>` : ""}<div id="nights"></div></div>`;
+}
+function drawNights(key, kid) {
+  const nights = nightsOf(kid, key), now = Object.fromEntries(nights.map((d) => [d, nightAnswer(kid, d)]));
+  const typed = [...new Set(Object.values(now).filter((v) => v && v !== ALONE).map((v) => v.split("|")[1]))];
+  const names = [...new Set([...CalendarRules.helpersFree(state.data, key), ...typed, ...(drawNights.extra || [])])];
+  const box = $("#nights");
+  box.dataset.kid = kid;
+  box.innerHTML = `<h3>🏠 Who's with ${esc(kid)}?</h3>
+    <div class="nset"><span>Set all nights to</span><select id="nall">${nightOptions(names, "", "– choose –")}</select></div>
+    <div class="nlist">${nights.map((d) => { const school = isSchoolDay(kid, d), uber = uberOn(kid, d);
+      return `<div class="nrow ${d === key ? "today" : ""}"><span>${esc(fmtDay(d))}${school ? `<small class="nschool">school</small>` : ""}</span>
+      <select data-night="${d}" data-was="${esc(now[d])}" aria-label="${esc(fmtDay(d))}">${nightOptions(names, now[d])}</select>
+      ${school ? `<span class="nuber"><input type="checkbox" id="u${d}" data-uber="${d}" data-was="${uber ? 1 : ""}" ${uber ? "checked" : ""}><label for="u${d}">🚕 Uber</label></span>` : "<span></span>"}</div>`; }).join("")}</div>
+    <div class="nadd"><input id="nname" maxlength="60" placeholder="Someone else? Type their name"><button type="button" class="ackbtn" id="naddb">+ Add</button>
+      ${state.data.me.isAdmin ? `<span class="nhelper"><input type="checkbox" id="nsave"><label for="nsave">save as a helper</label></span>` : ""}</div>
+    <p class="meta" style="margin:6px 0 0">✅ someone staying or 🏡 OK alone clears the ⚠ for that night; ⏳ asked and 🚫 can't keep it.</p>`;
+  $("#nall").onchange = (e) => { if (e.target.value) box.querySelectorAll("[data-night]").forEach((s) => { s.value = e.target.value; }); e.target.value = ""; };
+  $("#naddb").onclick = () => {
+    const n = $("#nname").value.trim(); if (!n) return;
+    (drawNights.extra ||= []).push(n); drawNights.save = $("#nsave")?.checked ? [...(drawNights.save || []), n] : drawNights.save;
+    const keep = Object.fromEntries([...box.querySelectorAll("[data-night]")].map((s) => [s.dataset.night, s.value]));
+    const ticks = Object.fromEntries([...box.querySelectorAll("[data-uber]")].map((c) => [c.dataset.uber, c.checked]));
+    drawNights(key, kid);
+    box.querySelectorAll("[data-night]").forEach((s) => { if (keep[s.dataset.night] !== undefined) s.value = keep[s.dataset.night]; });
+    box.querySelectorAll("[data-uber]").forEach((c) => { if (ticks[c.dataset.uber] !== undefined) c.checked = ticks[c.dataset.uber]; });
+    toast(`${n} added – pick them for the nights they're there`);
+  };
+}
+function wireStayFields(key) {
+  drawNights.extra = []; drawNights.save = [];
+  const f = $("#f");
+  drawNights(key, f.elements.kid?.value || $("#sortbox").dataset.kid);
+  if (f.elements.kid) f.elements.kid.onchange = () => drawNights(key, f.elements.kid.value);
+}
+// every stay-like entry for `kid` (helpers / someone typed in / OK alone) cut back so it doesn't cover from..to
+async function clearNights(kid, from, to) {
+  const keep = (o) => ({ title: o.title, who: whoList(o.who), category: o.category, status: o.status, location: o.location, guest: o.guest, alone_ok: !!o.alone_ok,
+    important: o.important, notes: o.notes });
+  for (const o of state.data.events.filter((e) => e.location && e.status !== "Cancelled" && whoList(e.who).includes(kid) && (e.alone_ok || CalendarRules.stayOf(state.data, e))
+    && e.start <= to && e.end >= from)) {
+    const before = o.start < from, after = o.end > to, put = (x) => api("PUT", `events/${o.id}`, { ...o, who: whoList(o.who), ...x, loaded_at: o.updated_at || "" });
+    if (!before && !after) { await api("DELETE", `events/${o.id}`); continue; }
+    if (before) await put({ end: dayStep(from, -1) });
+    if (after) await (before ? api("POST", "events", { ...keep(o), start: dayStep(to, 1), end: o.end }) : put({ start: dayStep(to, 1) }));
+  }
+}
+async function saveStayFields(key) {
+  const box = $("#nights"), kid = box.dataset.kid, rows = [...box.querySelectorAll("[data-night]")].map((s) => ({ d: s.dataset.night, v: s.value, was: s.dataset.was }));
+  const changed = rows.filter((r) => r.v !== r.was);
+  const ubers = [...box.querySelectorAll("[data-uber]")].map((c) => ({ d: c.dataset.uber, on: c.checked, was: !!c.dataset.was })).filter((u) => u.on !== u.was);
+  if (!changed.length && !ubers.length) return closeDialog();
+  // the changed nights, in runs of consecutive nights with the same new answer
+  const runs = [];
+  for (const r of changed) { const last = runs.at(-1); if (last && last.v === r.v && dayStep(last.to, 1) === r.d) last.to = r.d; else runs.push({ v: r.v, from: r.d, to: r.d }); }
+  const helpersNow = helpers(), house = stayPlace(kid, key);
+  submit(async () => {
+    for (const n of drawNights.save || []) if (!helpersNow.includes(n)) await api("POST", "setup/people", { name: n, type: "helper", color: "#868e96", active: true, grid_column: false });
+    const isHelper = (n) => helpersNow.includes(n) || (drawNights.save || []).includes(n);
+    for (const r of runs) {
+      await clearNights(kid, r.from, r.to); await refresh();
+      if (!r.v) continue;
+      if (r.v === ALONE) { await api("POST", "events", { title: `${kid} home alone (OK)`, start: r.from, end: r.to, who: [kid], category: "Household", location: house, alone_ok: true, status: "Confirmed" }); continue; }
+      const [status, name] = r.v.split("|"), helper = isHelper(name);
+      await api("POST", "events", { title: `${name} staying with ${kid}`, start: r.from, end: r.to, who: helper ? [kid, name] : [kid], guest: helper ? null : name,
+        category: "Household", location: house, status });
+    }
+    // 🚕 ticked: an "Uber to school" entry that day; unticked: that day's Uber entry goes (a longer one is cut around the day)
+    for (const u of ubers) {
+      if (u.on) { await api("POST", "events", { title: "🚕 Uber to school 🚕", who: [kid], start: u.d, end: u.d, category: "Transport", notes: "Uber to and from school" }); continue; }
+      for (const o of ubersOn(kid, u.d)) {
+        if (o.start === o.end) { await api("DELETE", `events/${o.id}`); continue; }
+        const put = (x) => api("PUT", `events/${o.id}`, { ...o, who: whoList(o.who), ...x, loaded_at: o.updated_at || "" });
+        if (o.start === u.d) await put({ start: dayStep(u.d, 1) }); else if (o.end === u.d) await put({ end: dayStep(u.d, -1) });
+        else { await put({ end: dayStep(u.d, -1) }); await api("POST", "events", { title: o.title, who: whoList(o.who), start: dayStep(u.d, 1), end: o.end, category: o.category, notes: o.notes }); }
+      }
+    }
+  }, `${kid}'s nights saved` + (runs.length ? ` – ${runs.map((r) => `${answerLabel(r.v)} ${fmtShort(r.from)}${r.to !== r.from ? "–" + fmtShort(r.to) : ""}`).join(", ")}` : "")
+    + (ubers.length ? ` · 🚕 ${[ubers.some((u) => u.on) && `Uber booked ${ubers.filter((u) => u.on).map((u) => fmtShort(u.d)).join(", ")}`,
+      ubers.some((u) => !u.on) && `Uber off ${ubers.filter((u) => !u.on).map((u) => fmtShort(u.d)).join(", ")}`].filter(Boolean).join(" · ")}` : ""));
 }
 
 document.addEventListener("click", (e) => {
@@ -587,10 +748,20 @@ document.addEventListener("click", (e) => {
   const ub = e.target.closest("[data-uber]");
   if (ub) { e.stopPropagation(); const [k, key] = ub.dataset.uber.split("|"); return uberForm(k, key); }
   const hs = e.target.closest("[data-housesit]"), hn = e.target.closest("[data-housenot]");
-  if (hs) { e.stopPropagation(); const [x, h, key, st] = hs.dataset.housesit.split("|"); return houseSit(x === "@" ? picked(hs) : x, h, key, st); }
+  if (hs) { e.stopPropagation(); const [x, h, key, st] = hs.dataset.housesit.split("|"), who = x === "@" ? picked(hs) : x;
+    // someone else house-sitting: a house-sit has no child to go with, so they're added as a helper first (admins), then booked
+    if (who === OTHER) {
+      const name = prompt("Who's house-sitting? (their name)")?.trim(); if (!name) return;
+      if (!state.data.me.isAdmin) return toast("Ask an admin to add them as a helper on Settings › Family first");
+      if (!confirm(`Add ${name} as a helper (Settings › Family), so they can house-sit?`)) return;
+      return api("POST", "setup/people", { name, type: "helper", color: "#868e96", active: true, grid_column: false })
+        .then(() => refresh()).then(() => houseSit(name, h, key, st, rangeOf(hs, key, emptyUntil(h, key)))).catch((x) => toast(x.message));
+    }
+    return houseSit(who, h, key, st, rangeOf(hs, key, emptyUntil(h, key))); }
   if (hn) { e.stopPropagation(); const [h, key] = hn.dataset.housenot.split("|"); return houseNotForm(h, key); }
   const qs = e.target.closest("[data-quickstay]");
-  if (qs) { e.stopPropagation(); const [h, k, key, st] = qs.dataset.quickstay.split("|"); return quickStay(h === "@" ? picked(qs) : h, k, key, st); }
+  if (qs) { e.stopPropagation(); const [h, k, key, st] = qs.dataset.quickstay.split("|"), who = h === "@" ? picked(qs) : h, r = rangeOf(qs, key, aloneUntil(k, key));
+    return who === ALONE ? aloneOk(k, key, r) : who === OTHER ? helperForm(null, k, r.from, r.to, { other: true, status: st }) : quickStay(who, k, key, st, false, r); }
   const clash = e.target.closest("[data-clash]");
   if (cell && !ev && !e.target.closest("[data-sh]")) { e.stopPropagation(); const [k, p] = cell.dataset.cell.split("|"); cellSheet(k, p); }
   else if (clash) { e.stopPropagation(); clashSheet(clash.dataset.clash); }

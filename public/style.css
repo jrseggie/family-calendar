@@ -454,12 +454,26 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .stay.req { color: #e67700; }
 .stay.ok { color: #2f9e44; }
 .stay.no { color: #e03131; }
+/* 🏠 a stay in a Month column: "✅ Mia" green, "⏳ Mia" amber + dashed (asked), "🚫 Mia" light red (can't) */
+.gi.sok { background: color-mix(in srgb, #2f9e44 16%, var(--card)); color: color-mix(in srgb, #2f9e44 70%, var(--text)); font-weight: 600; }
+.gi.sreq { background: color-mix(in srgb, #f08c00 14%, var(--card)); color: color-mix(in srgb, #e67700 75%, var(--text)); outline: 1.5px dashed #f08c00; outline-offset: -1.5px; font-weight: 600; }
+.gi.sno { background: color-mix(in srgb, #e03131 12%, var(--card)); color: color-mix(in srgb, #c92a2a 80%, var(--text)); font-weight: 600; }
+.gi.salone { background: color-mix(in srgb, #1971c2 10%, var(--card)); color: color-mix(in srgb, #1864ab 75%, var(--text)); font-weight: 600; }   /* 🏡 Alone (OK): a decision, calm blue */
 
 /* ⚠ on a day in Upcoming */
 .dwarn { background: color-mix(in srgb, #e03131 10%, var(--card)); border-top: 1px solid color-mix(in srgb, #e03131 30%, var(--line));
   padding: 6px 12px; font-size: 14px; color: color-mix(in srgb, #c92a2a 85%, var(--text)); display: grid; gap: 4px; }
 .dwarn [data-clash] { cursor: pointer; font-weight: 600; }
 .qstay { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; color: var(--text); font-size: 13px; }
+.sortbox { border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px 4px; margin: 6px 0; background: var(--card); } .sortbox h3 { margin: 0 0 8px; font-size: 16px; } .sortbox h3 select { font: inherit; width: auto; display: inline; padding: 2px 6px; margin: 0; }   /* the ⚠ sheet's "Who's with …?" form */
+/* the ⚠ sheet's night list: one line per night, its own answer */
+.nset { display: flex; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 13px; color: var(--muted); } .nset select { width: auto; flex: 1; margin: 0; }
+.nlist { display: grid; gap: 4px; } .nrow { display: grid; grid-template-columns: 7.5em 1fr 5.2em; align-items: center; gap: 8px; margin: 0; font-size: 14px; }
+.nschool { display: block; font-size: 11px; color: var(--muted); } .nuber { display: inline-flex; gap: 4px; align-items: center; font-size: 13px; white-space: nowrap; }
+.nuber input { width: 16px !important; height: 16px; margin: 0; flex: none; } .nuber label { margin: 0; display: inline !important; color: var(--text); }
+.nrow.today span { font-weight: 700; } .nrow select { margin: 0; padding: 6px 8px; }
+.nadd { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; margin-top: 10px; } .nadd #nname { flex: 1; min-width: 160px; margin: 0; } .nhelper { font-size: 13px; display: inline-flex; gap: 6px; align-items: center; white-space: nowrap; } .nhelper input { width: 16px !important; height: 16px; margin: 0; flex: none; } .nhelper label { margin: 0; display: inline !important; color: var(--text); }
+.qdates { display: inline-flex; align-items: center; gap: 4px; } .qdates input { font: inherit; font-size: 13px; padding: 3px 6px; border-radius: 8px; border: 1px solid var(--line); background: var(--card); color: var(--text); width: auto; margin: 0; }   /* the dates a stay answer is for */
 .qstay button { border: 1px solid var(--act-line); background: var(--act-bg); color: var(--act-text); border-radius: 999px; padding: 4px 11px;
   font-size: 13px; font-weight: 600; cursor: pointer; }
 .qstay button:hover { background: var(--act-bg2); }
@@ -509,6 +523,12 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
   background: color-mix(in srgb, var(--brand) 22%, var(--card)) !important; border-left: 4px solid var(--brand); box-shadow: none; padding: 3px 8px; border-radius: 4px; }
 .gf .gi.fam.imp { background: var(--important) !important; border-left-color: #f08c00; }
 .gf .gi.fam.cont { margin-top: -3px; }
+/* a helper house-sitting: one full-width bar, the words once in the middle, green / amber / red like every stay */
+.gf .gi.hsit { flex: 1 1 100%; align-self: stretch; text-align: center; font-size: 12px; border-radius: 4px; padding: 3px 8px; box-shadow: none; }
+.gf .gi.hsit.sok { background: color-mix(in srgb, #2f9e44 16%, var(--card)) !important; border-left: 4px solid #2f9e44; }
+.gf .gi.hsit.sreq { background: color-mix(in srgb, #f08c00 14%, var(--card)) !important; border-left: 4px solid #f08c00; }
+.gf .gi.hsit.sno { background: color-mix(in srgb, #e03131 12%, var(--card)) !important; border-left: 4px solid #e03131; }
+.gf .gi.hsit.cont { margin-top: -3px; }
 .gf .gi.across { display: grid; padding: 3px 0; -webkit-line-clamp: unset; }
 .gf .gi.across > span { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; }
 .gf .gi.phbar { flex: 1 1 100%; align-self: stretch; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: none;

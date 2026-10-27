@@ -2,6 +2,23 @@
 
 ## Next version (not released yet)
 
+## 1.0.34
+- 🏠 A helper house-sitting shows as one full-width bar across the day ("✅ Mia house-sitting", ⏳ asked / 🚫 can't in amber / red),
+  instead of a small "Mia: ✅ Mia" pill.
+- 🏠 Stays read clearly: in a Month column just the answer and the name – "✅ Mia" (staying, green), "⏳ Mia" (asked, amber dashed),
+  "🚫 Mia" (can't, light red); elsewhere in full ("🚫 Mia can't stay with Emma"). Each person shows once a day (their latest answer),
+  and pressing ✅ / ⏳ / 🚫 again updates the entry instead of adding another.
+- 🏠 The ⚠ sheet: "Who's with <child>?" lists every night they'd be without a parent, one line each, starting with what's on the
+  calendar - ✅ / ⏳ / 🚫 a helper, someone you type in, 🏡 OK alone, or not sorted. "Set all nights to" fills them all; one Save at the
+  bottom. So e.g. a helper the first and last night and on their own in between is one screen. Upcoming: "🏠 Sort out who's with …".
+  School days are marked "school" and have a 🚕 Uber tick box (ticked = an Uber-to-school entry that day; untick to take it off).
+- 🏡 "Nobody – <child>'s OK alone" in the stay picker: a child left at home on purpose shows "🏡 Alone (OK)" and the "no adult there"
+  ⚠ goes for those days (a school day without a lift booked still reminds you about lifts).
+- 🏠 "Someone else…" in the stay picker: type a name (e.g. a grandparent) for someone who isn't set up as a helper – once ✅ they count
+  as an adult at the house; optionally save them as a helper for next time.
+
+- Filters use the same words everywhere: 🔒 Info's filters now read "Everyone" (people) and "All types", like the calendar.
+
 ## 1.0.33
 - 🔐 Limited logins: "Can add / change entries for" is now a tick box per person they can see (none ticked = view only), with a line
   that says it in words, e.g. "Mia can see Emma and Mia, and add or change entries for Mia only." (Replaces the "… only for" chips.)
