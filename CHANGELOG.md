@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.35
+- 🏠 House-sitting bar: on a computer the name now shows under every column (like a Family entry); phones still show it once.
+
 ## 1.0.34
 - 🏠 A helper house-sitting shows as one full-width bar across the day ("✅ Mia house-sitting", ⏳ asked / 🚫 can't in amber / red),
   instead of a small "Mia: ✅ Mia" pill.

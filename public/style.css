@@ -529,6 +529,7 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .gf .gi.hsit.sreq { background: color-mix(in srgb, #f08c00 14%, var(--card)) !important; border-left: 4px solid #f08c00; }
 .gf .gi.hsit.sno { background: color-mix(in srgb, #e03131 12%, var(--card)) !important; border-left: 4px solid #e03131; }
 .gf .gi.hsit.cont { margin-top: -3px; }
+@media (max-width: 699px) { .gf .gi.hsit.across { display: block; padding: 3px 8px; } .gf .gi.hsit.across > span:not(:first-child) { display: none; } }   /* phones: the words once */
 .gf .gi.across { display: grid; padding: 3px 0; -webkit-line-clamp: unset; }
 .gf .gi.across > span { text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding: 0 6px; }
 .gf .gi.phbar { flex: 1 1 100%; align-self: stretch; font-size: 12px; font-weight: 700; border-radius: 4px; box-shadow: none;

@@ -107,7 +107,7 @@ function renderGrid(keepAnchor) {
 
 // one coloured bar for an entry; the location icon sits at the front, so you can see where people sleep
 // repeat > 0: one bar across the whole day with the label repeated (centred) under each of `repeat` columns
-// wide: one full-width bar with the label once (a helper house-sitting: "✅ Emma house-sitting")
+// wide: a helper house-sitting ("✅ Mia house-sitting") - the label under every column like Family, only once on phones (style.css)
 function barHTML(it, key, n, person, label, repeat = 0, wide = false) {
   if (it.kind === "birthday") return `<div class="gi bday ${it.rec.type === "Memorial" ? "memorial" : ""}" data-rec="${it.rec.id}">${esc(it.text)}</div>`;
   const e = it.ev, multi = e.end !== e.start;
@@ -153,7 +153,7 @@ function gridMonth(m, days, where, cols, showClashes) {
           Array(cols.length).fill(`<span>${info.phFlag} ${esc(info.ph)}</span>`).join("")}</div>` : ""}${phx}${strip.map((it) => {
         const p = it.who.filter((x) => x !== "Family");
         if (it.kind === "event" && it.who.includes("Family")) return barHTML(it, key, n, null, "", cols.length);   // Family: label in every column
-        if (it.kind === "event" && CalendarRules.stayOf(state.data, it.ev) && whoList(it.ev.who).length === 1) return barHTML(it, key, n, null, "", 0, true);   // house-sitting: one bar, the name once
+        if (it.kind === "event" && CalendarRules.stayOf(state.data, it.ev) && whoList(it.ev.who).length === 1) return barHTML(it, key, n, null, "", cols.length, true);   // house-sitting: one bar
         return barHTML(it, key, n, null, p.length && !it.who.includes("Family") ? p.join(" & ") : "");
       }).join("")}</div>`;
     }
