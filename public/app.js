@@ -572,32 +572,155 @@ function renderBirthdays() {
   $("#add-rec")?.addEventListener("click", () => recurringForm());
 }
 
-// School tab: per child, holidays by start date - now / coming up first, past ones folded away at the bottom
+// School tab: a "next holiday" card per child, the year as a timeline (one strip per child + when they're all off), then the
+// holidays side by side - ones that overlap share a row. Past ones folded away at the bottom.
+const daysBetween = (a, b) => Math.round((parse(b) - parse(a)) / 864e5);
+// the first school day after a holiday (skips weekends and public holidays); the plain next day for a child without a school
+const backDay = (h) => {
+  let d = dayStep(h.end, 1);
+  for (let i = 0; i < 14 && !CalendarRules.isSchoolDay(state.data, h.child, d); i++) d = dayStep(d, 1);
+  return CalendarRules.isSchoolDay(state.data, h.child, d) ? d : dayStep(h.end, 1);
+};
 function renderSchool() {
-  const today = todayISO();
-  const row = (h, tag) => {
-    const days = Math.round((parse(h.end) - parse(h.start)) / 864e5) + 1;
-    const until = Math.round((parse(h.start) - parse(today)) / 864e5);
-    const badge = tag === "now" ? `<span class="sbadge now">on holiday now</span>`
-      : tag === "next" ? `<span class="sbadge next">next · ${until === 1 ? "tomorrow" : `in ${until} days`}</span>` : "";
-    return `<div class="row ${tag === "past" ? "past" : ""}" data-sh="${h.id}"><span><b>${esc(h.name)}</b> ${badge}
-            ${h.status === "Tentative" ? "<small>(tentative)</small>" : ""}<br><small>${fmtDay(h.start)}${CalendarRules.closesAt(h) ? ` (closes ${esc(CalendarRules.closesAt(h))})` : ""} – ${fmtDay(h.end)} · back ${fmtDay(iso(addDays(parse(h.end), 1)))}</small></span>
-            <small>${days} day${days > 1 ? "s" : ""}</small></div>`;
+  const today = todayISO(), kids = KIDS(), all = state.data.schoolHolidays.filter((h) => kids.includes(h.child));
+  const head = pageHead("🌿 School holidays", state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : "");
+  if (!kids.length) { $("#main").innerHTML = `${head}<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`; return; }
+  const listOf = (k) => all.filter((h) => h.child === k).sort((x, y) => x.start.localeCompare(y.start));
+  const schoolOf = (k) => state.data.people.find((p) => p.name === k)?.school || "";
+  const len = (h) => daysBetween(h.start, h.end) + 1;
+  const plural = (n, w) => `${n} ${w}${n === 1 ? "" : "s"}`;
+  const howLong = (n) => n >= 14 ? `${Math.round(n / 7)} weeks` : plural(n, "day");
+  const allOff = kids.length === 2 ? "Both off" : kids.length > 2 ? "All off" : "";
+  // the days every child is off at once, as runs [from, to]
+  const offRuns = (from, to) => {
+    const runs = [];
+    if (!allOff) return runs;
+    for (let d = from; d <= to; d = dayStep(d, 1)) {
+      if (!kids.every((k) => CalendarRules.holidayOf(state.data, k, d))) continue;
+      const last = runs.at(-1);
+      if (last && dayStep(last[1], 1) === d) last[1] = d; else runs.push([d, d]);
+    }
+    return runs;
   };
-  const card = (child) => {
-    const list = state.data.schoolHolidays.filter((h) => h.child === child).sort((x, y) => x.start.localeCompare(y.start));
-    const past = list.filter((h) => h.end < today), now = list.filter((h) => h.start <= today && h.end >= today);
-    const ahead = list.filter((h) => h.start > today);
-    let year = today.slice(0, 4);   // a heading whenever the list moves into the next year
-    const yearHead = (h) => h.start.slice(0, 4) !== year ? `<div class="syear">${year = h.start.slice(0, 4)}</div>` : "";
-    const rows = now.map((h) => row(h, "now")).join("") + ahead.map((h, i) => yearHead(h) + row(h, i === 0 && !now.length ? "next" : "")).join("")
-      + (past.length ? `<details class="spast"><summary>Earlier (${past.length})</summary>${past.reverse().map((h) => row(h, "past")).join("")}</details>` : "");
-    const school = state.data.people.find((p) => p.name === child)?.school || "";
-    return `<div class="card"><h3><span class="p" style="--c:${COLORS[child]}">${esc(child)}</span> ${esc(school)}</h3>${rows || `<p class="muted pad">None yet.</p>`}</div>`;
+  const runText = (runs) => runs.map(([a, b]) => a === b ? fmtShort(a) : `${fmtShort(a)} – ${fmtShort(b)}`).join(", ");
+
+  // 1. the next (or current) holiday per child
+  const nextCard = (k) => {
+    const list = listOf(k), now = list.find((h) => h.start <= today && h.end >= today), h = now || list.find((x) => x.start > today);
+    const top = `<div class="snk">${esc(k)}<small>${esc(schoolOf(k))}</small></div>`;
+    if (!h) return `<div class="snext" style="--c:${COLORS[k]}">${top}<div class="muted">No holidays coming up</div></div>`;
+    const until = daysBetween(today, h.start), left = daysBetween(today, h.end) + 1;
+    return `<div class="snext" data-sh="${h.id}" style="--c:${COLORS[k]}">${top}
+      <div class="snbig">${now ? `On holiday · ${plural(left, "day")} left` : until === 1 ? "Tomorrow" : `In ${plural(until, "day")}`}</div>
+      <div class="snname">${esc(h.name)}${h.status === "Tentative" ? " <small>(tentative)</small>" : ""}</div>
+      <div class="sndates">${fmtShort(h.start)} – ${fmtShort(h.end)} · ${howLong(len(h))}</div>
+      <div class="muted">back ${fmtDay(backDay(h))}</div></div>`;
   };
-  $("#main").innerHTML = `${pageHead("🌿 School holidays", state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : "")}${KIDS().map(card).join("") || `<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`}
+  const both = offRuns(today, dayStep(today, 400)).filter(([a, b]) => b >= today)[0];
+  const bothNote = both ? `<div class="sbothnext">👨‍👩‍👧‍👦 ${allOff} next: <b>${runText([both])}</b> · ${plural(daysBetween(both[0], both[1]) + 1, "day")}</div>` : "";
+
+  // 2. the timeline: a year (12 months from this month, or a calendar year), 3 months or one month (state.schoolZoom);
+  // tap a month to zoom into it. Zoomed in, the bars carry the holiday's name and the strips show exams 📝, school dates 🏫
+  // and the day back 🎒; Month shows every day (weekends shaded, public holidays 🇿🇦)
+  const zoom = state.schoolZoom || "year";
+  const years = [...new Set(all.map((h) => h.start.slice(0, 4)))].sort();
+  const pick = years.includes(String(state.schoolYear)) ? String(state.schoolYear) : "next";
+  const monthAdd = (m, n) => iso(new Date(Date.UTC(+m.slice(0, 4), +m.slice(5, 7) - 1 + n, 1)));
+  const at = state.schoolFrom || today.slice(0, 8) + "01";
+  const from = zoom !== "year" ? at : pick === "next" ? today.slice(0, 8) + "01" : `${pick}-01-01`;
+  const to = dayStep(monthAdd(from, zoom === "month" ? 1 : zoom === "q" ? 3 : 12), -1);
+  const span = daysBetween(from, to) + 1, pct = (d) => (daysBetween(from, d) / span * 100).toFixed(3);
+  const width = (a, b) => ((daysBetween(a, b) + 1) / span * 100).toFixed(3);
+  const block = (a, b, cls, title, id, label = "") => {
+    a = a < from ? from : a; b = b > to ? to : b;
+    return a > b ? "" : `<i class="${cls}" ${id ? `data-sh="${id}"` : ""} title="${esc(title)}" style="left:${pct(a)}%;width:${width(a, b)}%">${zoom !== "year" && label ? `<span>${esc(label)}</span>` : ""}</i>`;
+  };
+  const days = []; for (let d = from; d <= to; d = dayStep(d, 1)) days.push(d);
+  const months = days.filter((d) => d.endsWith("-01"));
+  const weekday = (d) => parse(d).getUTCDay();
+  const ph = (d) => state.data.publicHolidays.find((h) => h.date === d && h.main !== false);
+  const shade = zoom === "month" ? days.filter((d) => weekday(d) === 0 || weekday(d) === 6 || ph(d)).map((d) => `<em class="tl-we" style="left:${pct(d)}%;width:${width(d, d)}%"></em>`).join("") : "";
+  const nowLine = today >= from && today <= to ? `<b class="tl-today" style="left:${zoom === "month" ? (+pct(today) + +width(today, today) / 2).toFixed(3) : pct(today)}%"></b>` : "";
+  // markers zoomed in: a child's exams / School entries (one per day) and the first day back after each holiday
+  const markers = (k) => {
+    if (zoom === "year") return "";
+    const byDay = {};
+    for (const e of state.data.events) {
+      if (!["Exam", "School"].includes(e.category) || e.status === "Cancelled" || e.end < from || e.start > to) continue;
+      if (!CalendarRules.expandWho(state.data, e.who).includes(k)) continue;
+      const d = e.start < from ? from : e.start;
+      (byDay[d] ||= []).push(e);
+    }
+    const out = Object.entries(byDay).map(([d, es]) => {
+      const icon = es.some((e) => e.category === "Exam") ? "📝" : "🏫";
+      return `<s class="tl-mk" data-ev="${es[0].id}" title="${esc(`${fmtDay(d)}: ${es.map((e) => CalendarRules.plainTitle(e.title)).join(" · ")}`)}" style="left:${(+pct(d) + +width(d, d) / 2).toFixed(3)}%">${icon}</s>`;
+    });
+    for (const h of listOf(k)) { const b = backDay(h);
+      if (b >= from && b <= to && !byDay[b]) out.push(`<s class="tl-mk" data-sh="${h.id}" title="${esc(`${fmtDay(b)}: back at school after ${h.name}`)}" style="left:${(+pct(b) + +width(b, b) / 2).toFixed(3)}%">🎒</s>`); }
+    return out.join("");
+  };
+  const lane = (name, color, inner, cls = "") => `<div class="tl-row ${cls}" style="--c:${color}"><div class="tl-name">${name}</div><div class="tl-track">${inner}</div></div>`;
+  const monthName = (m, long) => parse(m).toLocaleDateString("en-GB", { month: long ? "long" : "short" });
+  const scale = zoom === "month"
+    ? lane("", "transparent", days.map((d) => `<span class="tl-d ${+d.slice(8) === 1 || +d.slice(8) % 5 === 0 ? "" : "minor"} ${weekday(d) === 0 || weekday(d) === 6 ? "we" : ""}" style="left:${pct(d)}%;width:${width(d, d)}%" title="${esc(fmtDay(d) + (ph(d) ? ` · ${ph(d).name}` : ""))}">${ph(d) ? "🇿🇦" : +d.slice(8)}</span>`).join(""), "tl-months tl-days")
+    : lane("", "transparent", months.map((m) => `<span class="tl-m" data-zm="${m}" style="left:${pct(m)}%">${monthName(m, zoom === "q")}${m.slice(5, 7) === "01" && (zoom !== "year" || pick === "next") ? ` ${m.slice(2, 4)}` : ""}</span>`).join("")
+      + (zoom === "q" ? days.filter((d) => weekday(d) === 1 && +d.slice(8) > 6).map((d) => `<span class="tl-w" style="left:${pct(d)}%">${+d.slice(8)}</span>`).join("") : ""), "tl-months");
+  const title = zoom === "month" ? `${monthName(from, true)} ${from.slice(0, 4)}` : zoom === "q" ? `${monthName(from)} – ${monthName(to)} ${to.slice(0, 4)}` : "The year at a glance";
+  const timeline = `<div class="card tl-card"><div class="tl-head"><h3>📅 ${title}</h3>
+      <div class="tl-years">${[["year", "Year"], ["q", "3 months"], ["month", "Month"]].map(([z, l]) => `<button class="chip ${zoom === z ? "on" : ""}" data-zoom="${z}">${l}</button>`).join("")}</div></div>
+    <div class="tl-nav">${zoom === "year"
+      ? `<button class="chip ${pick === "next" ? "on" : ""}" data-sy="next">Next 12 months</button>${years.map((y) => `<button class="chip ${pick === y ? "on" : ""}" data-sy="${y}">${y}</button>`).join("")}<span class="muted">Tap a month to zoom in</span>`
+      : `<button class="chip" data-step="-1" aria-label="Earlier">‹</button><button class="chip" data-step="0">This month</button><button class="chip" data-step="1" aria-label="Later">›</button>`}</div>
+    <div class="tl-scroll"><div class="tl z-${zoom}">
+      ${scale}
+      ${kids.map((k) => lane(esc(k), COLORS[k], shade + listOf(k).map((h) => block(h.start, h.end, h.status === "Tentative" ? "tent" : "",
+        `${k}: ${h.name} · ${fmtShort(h.start)} – ${fmtShort(h.end)} · back ${fmtDay(backDay(h))}`, h.id, h.name)).join("") + markers(k) + nowLine)).join("")}
+      ${allOff ? lane(allOff, "#2f9e44", shade + offRuns(from, to).map(([a, b]) => block(a, b, "", `${allOff}: ${runText([[a, b]])}`, null, `${allOff} ${runText([[a, b]])}`)).join("") + nowLine, "tl-both") : ""}
+    </div></div>
+    <div class="tl-key"><span><i class="k-term"></i>School</span><span><i class="k-hol"></i>Holiday – tap for details</span>${all.some((h) => h.status === "Tentative") ? `<span><i class="k-hol tent"></i>Tentative</span>` : ""}${allOff ? `<span><i class="k-both"></i>${allOff}</span>` : ""}<span><i class="k-today"></i>Today</span>${zoom !== "year" ? `<span>📝 Exam</span><span>🏫 School date</span><span>🎒 Back at school</span>` : ""}${zoom === "month" ? `<span>🇿🇦 Public holiday</span>` : ""}</div></div>`;
+
+  // 3. the list, a compact table: month on the left, one column per child, a holiday = name + dates, then length + back day;
+  // a child at school shows "at school"; overlapping holidays share a row, with a green "Both off" band across it
+  const cell = (h) => {
+    const tent = h.status === "Tentative" ? ` <span class="sltent">tentative</span>` : "";
+    if (len(h) === 1) return `<div class="sl one" data-sh="${h.id}" style="--c:${COLORS[h.child]}"><span class="sck">${esc(h.child)}</span>${ph(h.start) ? "🇿🇦 " : ""}${esc(h.name)} · ${fmtDay(h.start)}${tent}</div>`;
+    return `<div class="sl ${len(h) >= 14 ? "long" : ""}" data-sh="${h.id}" style="--c:${COLORS[h.child]}"><span class="sck">${esc(h.child)}</span>
+      <div><b>${esc(h.name)}</b> <span class="sld">${fmtShort(h.start)} – ${fmtShort(h.end)}</span>${tent}</div>
+      <small>${howLong(len(h))}${CalendarRules.closesAt(h) ? ` · closes ${esc(CalendarRules.closesAt(h))}` : ""} · back ${fmtDay(backDay(h))}</small></div>`;
+  };
+  const groups = [];
+  for (const h of [...all].sort((x, y) => x.start.localeCompare(y.start) || y.end.localeCompare(x.end))) {
+    const g = groups.at(-1);
+    if (g && h.start <= g.end) { g.items.push(h); if (h.end > g.end) g.end = h.end; }
+    else groups.push({ start: h.start, end: h.end, items: [h] });
+  }
+  const mon = (d) => parse(d).toLocaleDateString("en-GB", { month: "short" });
+  const groupRow = (g) => {
+    const runs = kids.every((k) => g.items.some((h) => h.child === k)) ? offRuns(g.start, g.end) : [];
+    const months = mon(g.start) === mon(g.end) ? mon(g.start) : `${mon(g.start)}<small>– ${mon(g.end)}</small>`;
+    return `<div class="stab-row ${g.end < today ? "past" : ""}"><div class="stab-m">${months}</div>${kids.map((k) => { const mine = g.items.filter((h) => h.child === k);
+      return `<div class="stab-c">${mine.length ? mine.map(cell).join("") : `<div class="sl none">at school</div>`}</div>`; }).join("")}
+      ${runs.length ? `<div class="stab-both">👨‍👩‍👧‍👦 ${allOff} ${runText(runs)} · ${plural(runs.reduce((n, [a, b]) => n + daysBetween(a, b) + 1, 0), "day")}</div>` : ""}</div>`;
+  };
+  const past = groups.filter((g) => g.end < today), ahead = groups.filter((g) => g.end >= today);
+  let year = today.slice(0, 4);
+  const yearHead = (g) => g.start.slice(0, 4) !== year ? `<div class="stab-year">${year = g.start.slice(0, 4)}</div>` : "";
+  const list = `<div class="card stab" style="--n:${kids.length}"><div class="stab-row stab-head"><div></div>${kids.map((k) => `<div><span class="p" style="--c:${COLORS[k]}">${esc(k)}</span> <small class="muted">${esc(schoolOf(k))}</small></div>`).join("")}</div>
+    ${ahead.map((g) => yearHead(g) + groupRow(g)).join("") || `<p class="muted pad">No holidays coming up.</p>`}
+    ${past.length ? `<details class="spast"><summary>Earlier (${past.length})</summary>${past.reverse().map(groupRow).join("")}</details>` : ""}</div>`;
+
+  $("#main").innerHTML = `${head}<div class="snexts">${kids.map(nextCard).join("")}</div>${bothNote}${timeline}${list}
     <p class="muted" style="font-size:12px">The dates are the days at home: from the day school closes to the last day before going back.</p>`;
   $("#add-sh")?.addEventListener("click", () => holidayForm());
+  const again = () => { state.stay = true; renderSchool(); };
+  $("#main").querySelectorAll("[data-sy]").forEach((b) => b.onclick = () => { state.schoolYear = b.dataset.sy; again(); });
+  // zoom: Year / 3 months / Month (3 months and Month start on the month in view); a month's name zooms into that month
+  $("#main").querySelectorAll("[data-zoom]").forEach((b) => b.onclick = () => {
+    if (b.dataset.zoom !== "year" && zoom === "year") state.schoolFrom = from <= today && today <= to ? today.slice(0, 8) + "01" : from;
+    state.schoolZoom = b.dataset.zoom; again(); });
+  $("#main").querySelectorAll("[data-zm]").forEach((b) => b.onclick = (e) => { e.stopPropagation(); state.schoolZoom = "month"; state.schoolFrom = b.dataset.zm; again(); });
+  $("#main").querySelectorAll("[data-step]").forEach((b) => b.onclick = () => {
+    state.schoolFrom = +b.dataset.step ? monthAdd(from, +b.dataset.step * (zoom === "q" ? 3 : 1)) : today.slice(0, 8) + "01"; again(); });
 }
 
 async function renderLog() {

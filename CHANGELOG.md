@@ -2,6 +2,10 @@
 
 ## Next version (not released yet)
 
+## 1.0.38
+- 🌿 School tab redone: a "next holiday" card per child (countdown, dates, back day), "The year at a glance" timeline (a strip per child + when they're all off, today marked), and the holidays as a compact table – the month on the left, a column per child (name + dates, then length + back day; "at school" when they're not off), overlapping holidays share a row with a green "Both off" band, public holidays a slim 🇿🇦 line. The "back" date now skips weekends and public holidays.
+- 🔍 Zoom on the School timeline: Year · 3 months · Month (or tap a month), ‹ › to move. Zoomed in, the bars show the holiday names and each child's strip marks exams 📝, school dates 🏫 and the day back 🎒; Month shows every day with weekends shaded and public holidays 🇿🇦.
+
 ## 1.0.37
 - 📱 Phones: opening an entry (or any form) no longer pops the keyboard up over half the screen – it only comes up when you tap a box.
 
