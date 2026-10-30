@@ -16,6 +16,7 @@ import { syncEmailAddresses } from "../../lib/email-sync.js";
 import { welcomeWaiting } from "../../lib/welcome.js";
 import { processInbox } from "../../lib/inbox.js";
 import { sendUsage } from "../../lib/usage.js";
+import { selfUpdate } from "../../lib/self-update.js";
 import { extraEmail } from "../../src/extras.js";
 import { syncRequests, makerNews } from "../../lib/requests.js";   // optional extra addresses (none in the public release)
 
@@ -48,6 +49,8 @@ export default {
       await step("outbox", sendOutbox(env));
       // once a day: "this calendar is in use" to the Family Calendar maker (Settings > This calendar; lib/usage.js)
       await step("usage check-in", sendUsage(env, t));
+      // at night, once a day: a calendar put in by the install page updates itself to the newest release (lib/self-update.js)
+      await step("self-update", selfUpdate(env, t));
       if (t.getUTCMinutes() < 10) await step("hourly", hourly(env, t));
       // smart inbox last (the slowest step; only when switched on in Settings): one new email -> proposals + approval email in the outbox
       await processInbox(env).then((r) => r && console.log("inbox:", r))

@@ -82,6 +82,12 @@ async function apiCall(method, path, body) {
   return data;
 }
 
+// a calendar put in by the install page opens as .../#setup=<code>: keep the code for this visit and tidy the address
+if (location.hash.startsWith("#setup=")) {
+  try { sessionStorage.setItem("setupCode", decodeURIComponent(location.hash.slice(7))); } catch { /* private mode */ }
+  history.replaceState(null, "", location.pathname);
+}
+
 // ---------- a brand-new install: the setup password (chosen on Cloudflare's deploy page) until sign-in is switched on
 function setupLogin(wrong) {
   try { sessionStorage.removeItem("setupCode"); } catch { /* */ }
@@ -102,14 +108,15 @@ function connectForm() {
     <p class="muted" style="margin-top:0">Until now only the setup password protects the calendar. This step makes Cloudflare ask for an
       <b>email code</b> instead, and only the people you add can sign in.</p>
     <div class="two"><label>Your name<input name="name" required></label><label>Your email (you'll sign in with it)<input name="email" type="email" required></label></div>
-    <details open><summary>Get the Cloudflare key (about 2 minutes)</summary><ol class="meta" style="margin:6px 0 0 18px;padding:0">
+    ${state.data.hasCfKey ? `<p class="meta">Once, before this: in the Cloudflare dashboard click <b>Zero Trust</b> in the menu, type any team name and choose the
+      <b>Free</b> plan (Cloudflare asks for card details – the Free plan isn't charged).</p>` : `<details open><summary>Get the Cloudflare key (about 2 minutes)</summary><ol class="meta" style="margin:6px 0 0 18px;padding:0">
       <li>Once: Cloudflare dashboard → <b>Zero Trust</b> in the menu → any team name → <b>Free</b> plan (it asks for a card; Free isn't charged).</li>
       <li>Cloudflare dashboard → <b>person icon</b> (top right) → <b>Profile</b> → <b>API Tokens</b> → <b>Create Token</b> → <b>Create Custom Token</b> → <b>Get started</b>.</li>
       <li>Name: <i>Family calendar</i>. Permissions – add these rows (all <b>Account</b>, all <b>Edit</b>):<br>
         <b>Access: Apps and Policies</b> · <b>Access: Organizations, Identity Providers, and Groups</b> · <b>Workers Scripts</b> ·
         <b>Email Routing Addresses</b>, and one more: <b>Account Settings</b> – <b>Read</b>.</li>
       <li><b>Continue to summary</b> → <b>Create Token</b> → <b>Copy</b>, and paste it here.</li></ol></details>
-    <label>Cloudflare key<input name="token" type="password" required autocomplete="new-password"></label>
+    <label>Cloudflare key<input name="token" type="password" required autocomplete="new-password"></label>`}
     <div class="err"></div>
     <div class="actions"><button type="button" id="cancel">Not now</button><button class="primary" id="go">Switch on sign-in</button></div></form>`, () => {
     $("#cancel").onclick = closeDialog;

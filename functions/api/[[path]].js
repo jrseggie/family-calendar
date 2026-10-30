@@ -272,7 +272,7 @@ async function getAll(env, u) {
   let people = allPeople.filter((p) => p.active);
   if (!seesAll(u)) people = people.filter((p) => u.seeList.includes(p.name));
   return json({
-    setupMode: !!u.setup, signInOn: !!env.ACCESS_AUD || demo(env),
+    setupMode: !!u.setup, signInOn: !!env.ACCESS_AUD || demo(env), hasCfKey: !!u.setup && !!env.CF_API_TOKEN,   // put in by the install page: no key to paste
     me: { id: u.id, name: u.name, email: u.email, role: u.role, person: u.person || null, isAdmin: isAdmin(u), canEditAll: canEditAll(u),
           canAddEvents: canEditAll(u) || u.role === "child" || (u.role === "limited" && !!u.can_edit),
           editablePeople: canEditAll(u) || u.role === "child" ? null : u.editList,
@@ -1143,7 +1143,7 @@ export async function onRequest({ request, env, params }) {
       if (parts[1] === "wizard") return await setupWizard(request, env, u);
       if (parts[1] === "cloudflare" && request.method === "POST") {   // wizard: "Switch on sign-in" (lib/cloudflare-setup.js)
         if (env.ACCESS_AUD) invalid("Sign-in is already switched on");
-        const b = await request.json(), email = String(b.email || "").trim().toLowerCase(), token = String(b.token || "").trim();
+        const b = await request.json(), email = String(b.email || "").trim().toLowerCase(), token = String(b.token || "").trim() || env.CF_API_TOKEN || "";
         if (!EMAIL.test(email)) invalid("Enter the email address you'll sign in with");
         if (token.length < 30) invalid("Paste the Cloudflare key (it's about 40 characters long)");
         const url = new URL(request.url), worker = url.hostname.endsWith(".workers.dev") ? url.hostname.split(".")[0] : String(b.worker || "");

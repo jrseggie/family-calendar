@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.40
+- 🚀 Easier install for new families: an install page puts the calendar into their Cloudflare account with one key (no GitHub), and calendars installed that way update themselves every night. The set-up skips pasting a key when the install page already gave one.
+
 ## 1.0.39
 - 📱 Phone / computer calendar link: entries with a time now show as "free" too (like all-day ones), so family entries never block your own diary.
 
