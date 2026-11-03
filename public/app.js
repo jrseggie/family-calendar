@@ -67,8 +67,10 @@ async function api(method, path, body) {
   const done = method === "GET" ? null : busyOn();
   try { return await apiCall(method, path, body); } finally { done?.(); }
 }
+const myBuild = (document.querySelector('script[src*="app.js"]')?.src.match(/\?v=(\d+)/) || [])[1] || "";
+const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
 async function apiCall(method, path, body) {
-  const headers = { "content-type": "application/json" };
+  const headers = { "content-type": "application/json", "X-Build": `${myBuild}${installed ? " app" : " browser"}` };   // which version each device runs (table health)
   const as = load("viewAs");                       // demo only: "View as" another login
   if (as) headers["X-Demo-User"] = as;
   let code = null; try { code = sessionStorage.getItem("setupCode"); } catch { /* private mode */ }
@@ -308,7 +310,7 @@ function welcomeCard() {
 
 // ---------- set-up wizard: family name, people + roles, houses (POST setup/wizard; only adds, never removes)
 // house / place icons to pick from (a select, so nobody has to type an emoji)
-const PLACE_ICONS = ["🏠", "🏡", "🏘️", "🏢", "🏖️", "🌊", "🏔️", "🏕️", "🌳", "🌾", "🏝️", "⛵", "🏫", "🛏️", "✈️", "🚗", "👵", "❤️"];
+const PLACE_ICONS = ["🏠", "🏡", "🏘️", "🏢", "🏖️", "🌊", "🏔️", "🏕️", "🌳", "🌾", "🐄", "🏝️", "⛵", "🏫", "🛏️", "✈️", "🚗", "👵", "❤️"];
 const iconSelect = (attr, cur) => `<select ${attr} title="Icon" style="font-size:18px">${[...new Set([cur, ...PLACE_ICONS].filter(Boolean))]
   .map((i) => `<option ${i === cur ? "selected" : ""}>${i}</option>`).join("")}</select>`;
 const WIZARD_ROLE_LABELS = { adult: "Parent / adult", child: "Child", boarder: "Child (boards)", helper: "Helper", visitor: "Visits the children" };
@@ -552,7 +554,7 @@ const MONTH_HUE = ["#4dabf7", "#f783ac", "#69db7c", "#ffd43b", "#b197fc", "#ffa9
 function renderBirthdays() {
   const list = [...state.data.recurring].sort((a, b) => nextOccurrence(a) - nextOccurrence(b));
   const today = new Date().setHours(0, 0, 0, 0);
-  let html = pageHead("🎂 Birthdays & anniversaries", state.data.me.canEditAll ? `<button class="btn-add" id="add-rec">+ Add birthday / anniversary</button>` : "");
+  let html = pageHead("🎂 Birthdays & anniversaries");
   let month = null;
   for (const r of list) {
     const n = nextOccurrence(r), age = r.born ? n.getFullYear() - r.born : null;
@@ -576,7 +578,6 @@ function renderBirthdays() {
   }
   if (month) html += `</div>`;
   $("#main").innerHTML = html || `<p class="muted pad">No birthdays yet.</p>`;
-  $("#add-rec")?.addEventListener("click", () => recurringForm());
 }
 
 // School tab: a "next holiday" card per child, the year as a timeline (one strip per child + when they're all off), then the
@@ -590,7 +591,7 @@ const backDay = (h) => {
 };
 function renderSchool() {
   const today = todayISO(), kids = KIDS(), all = state.data.schoolHolidays.filter((h) => kids.includes(h.child));
-  const head = pageHead("🌿 School holidays", state.data.me.canEditAll ? `<button class="btn-add" id="add-sh">+ Add school holiday</button>` : "");
+  const head = pageHead("🌿 School holidays");
   if (!kids.length) { $("#main").innerHTML = `${head}<div class="card pad"><p class="muted">No children set up yet – tick "Child" for them on the ⚙ Settings tab.</p></div>`; return; }
   const listOf = (k) => all.filter((h) => h.child === k).sort((x, y) => x.start.localeCompare(y.start));
   const schoolOf = (k) => state.data.people.find((p) => p.name === k)?.school || "";
@@ -718,7 +719,6 @@ function renderSchool() {
 
   $("#main").innerHTML = `${head}<div class="snexts">${kids.map(nextCard).join("")}</div>${bothNote}${timeline}${list}
     <p class="muted" style="font-size:12px">The dates are the days at home: from the day school closes to the last day before going back.</p>`;
-  $("#add-sh")?.addEventListener("click", () => holidayForm());
   const again = () => { state.stay = true; renderSchool(); };
   $("#main").querySelectorAll("[data-sy]").forEach((b) => b.onclick = () => { state.schoolYear = b.dataset.sy; again(); });
   // zoom: Year / 3 months / Month (3 months and Month start on the month in view); a month's name zooms into that month
@@ -1290,7 +1290,7 @@ const ROLE_INFO = {
 // ⚙ Settings, in four tabs (state.setupTab, remembered): 👪 Family (people, places) · 🔑 Logins · 📧 Emails (Sunday email, email addresses)
 // · ⚙ Calendar (name and address, version, backups, set-up wizard, usage check-in). Every block works the same way: tap a row
 // (›) to open it, "+ Add" in the block's heading. The phone-calendar link is in each person's own menu (👤 in the header, meSheet).
-const SETUP_TABS = [["family", "👪 Family"], ["logins", "🔑 Logins"], ["emails", "📧 Emails"], ["calendar", "⚙ Calendar"]];
+const SETUP_TABS = [["family", "Family"], ["logins", "Logins"], ["emails", "Emails"], ["calendar", "Calendar"]];
 const card = (title, body, { sub = "", add = "" } = {}) => `<div class="card"><h3 class="chead"><span>${title}${sub ? ` <small class="muted">${sub}</small>` : ""}</span>${add}</h3>${body}</div>`;
 const addBtn = (id, label) => `<button type="button" class="ackbtn cadd" id="${id}">+ ${label}</button>`;
 
@@ -1402,7 +1402,7 @@ function setupCalendar() {
           ? ` + ${settings.countries.extras.map(flagOf).join(" ")} for information` : ""} · times in ${esc(tzName(sb.tz))}</small></span></div>
       <div class="row tap" id="wizard-row"><span>👋 Set-up wizard<br><small class="muted">Change the family name, people or houses step by step</small></span></div>`)
     + card("Version", `<div class="row"><span>Family Calendar <b>${esc(state.data.version || "")}</b>${state.data.unreleased ? ` <span class="muted">+ changes not released yet</span>` : ""}
-        <br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>`)
+        ${myBuild ? `<br><small class="muted">Build ${esc(myBuild)}</small>` : ""}<br><small id="update-note" class="muted"></small></span><span class="vacts" id="version-actions"></span></div>`)
     + card("🗄️ Backups", `<div class="row"><span><small class="muted">Cloudflare keeps 30 days of restore points automatically, and on the 1st of each month a full backup
         is emailed to the admins. 🔒 Info items stay scrambled in it.</small></span><span><a class="ackbtn" href="/api/setup/backup" download>⬇️ Download now</a></span></div>`)
     + card("📡 Usage check-in", `<div class="row tap" id="usage-row"><span>Let the Family Calendar maker know you use it: <b>${esc(settings.usage.choices[settings.usage.mode])}</b>
@@ -1925,19 +1925,38 @@ document.addEventListener("click", (e) => {
 });
 // the round + adds what fits the tab: an entry, a birthday / anniversary, or a school holiday (hidden on Changes / Setup)
 const FAB = {
-  upcoming: ["Add event", () => canAdd(), () => eventForm(null)],
-  month: ["Add event", () => canAdd(), () => eventForm(null)],
+  upcoming: ["Add event", () => canAdd(), () => addFromCalendar()],
+  month: ["Add event", () => canAdd(), () => addFromCalendar()],
   birthdays: ["Add birthday or anniversary", () => state.data.me.canEditAll, () => recurringForm()],
   school: ["Add school holiday", () => state.data.me.canEditAll, () => holidayForm()],
   info: ["Add to Info", () => state.data.me.isAdmin, () => vaultForm()],
-  requests: ["Suggest an idea or report a bug", () => true, () => requestForm("idea")],
+  requests: ["Suggest an idea or report a bug", () => true, () => fabMenu([["💡 Suggest an idea", () => requestForm("idea")], ["🐞 Report a bug", () => requestForm("bug")]])],
 };
+// the calendar's +: an entry; a private module this login can use may offer something more (EXTRA_VIEWS.x.calendarAdd() -> [label, action]) - then it asks which
+function addFromCalendar() {
+  const more = Object.values(globalThis.EXTRA_VIEWS || {}).filter((v) => v.calendarAdd && v.ok?.(state.data)).map((v) => v.calendarAdd());
+  if (more.length) fabMenu([["📅 Calendar event", () => eventForm(null)], ...more]); else eventForm(null);
+}
+// several things to add on one page: the + opens a short list just above itself; another tap on it, a tap elsewhere or Esc closes it
+const closeFabMenu = () => { const m = $("#fabpop"); if (!m) return false; m.remove(); document.removeEventListener("pointerdown", closeFabMenu.away, true); document.removeEventListener("keydown", closeFabMenu.esc, true); return true; };
+closeFabMenu.away = (e) => { if (!e.target.closest("#fabpop, #fab")) closeFabMenu(); };
+closeFabMenu.esc = (e) => { if (e.key === "Escape") closeFabMenu(); };
+function fabMenu(items) {
+  closeFabMenu();
+  const r = $("#fab").getBoundingClientRect();
+  document.body.insertAdjacentHTML("beforeend", `<div id="fabpop" role="menu" style="right:${Math.round(innerWidth - r.right)}px;bottom:${Math.round(innerHeight - r.top + 10)}px">
+    ${items.map(([t], i) => `<button type="button" role="menuitem" data-i="${i}">${esc(t)}</button>`).join("")}</div>`);
+  $("#fabpop").querySelectorAll("[data-i]").forEach((b) => b.onclick = () => { closeFabMenu(); items[+b.dataset.i][1](); });
+  document.addEventListener("pointerdown", closeFabMenu.away, true); document.addEventListener("keydown", closeFabMenu.esc, true);
+}
+// (a private module's section can say what it adds on its current tab: EXTRA_VIEWS.x.fab() -> [label, action] or nothing)
+const fabOf = (view) => { const x = globalThis.EXTRA_VIEWS?.[view]?.fab; if (!x) return FAB[view]; const a = x(); return a ? [a[0], () => true, a[1]] : null; };
 function fabFor(view) {
-  const f = FAB[view];
+  const f = fabOf(view);
   $("#fab").hidden = !f || !f[1]();
   if (f) $("#fab").setAttribute("aria-label", f[0]), $("#fab").title = f[0];
 }
-$("#fab").onclick = () => state.data && FAB[state.view]?.[2]();
+$("#fab").onclick = () => { if (!closeFabMenu() && state.data) fabOf(state.view)?.[2](); };
 // "Today" in the top bar: back to today's row on Month / Upcoming (other tabs open Upcoming)
 $("#today").onclick = () => {
   if (!state.data) return;
@@ -2023,7 +2042,7 @@ function renderInfoView() {
       chip("person", p, p === "–" ? "General" : esc(p), COLORS[p])).join("")}</div>
     <div class="vfilters"><span class="lbl">Type</span>${chip("section", "", "All types")}${sections.filter((s) => items.some((it) => it.section === s)).map((s) =>
       chip("section", s, `${VAULT_ICON[s]} ${s}`)).join("")}</div>` : "";
-  $("#main").innerHTML = `${pageHead("🔒 Info", `<button class="btn-add" id="add-vault">+ Add</button>`)}<div class="vintro">🔒 Only ${esc(adminNames())} can open this page. It's stored scrambled (encrypted) – the backups and
+  $("#main").innerHTML = `${pageHead("🔒 Info")}<div class="vintro">🔒 Only ${esc(adminNames())} can open this page. It's stored scrambled (encrypted) – the backups and
       the inbox check can't read it. Hidden numbers show for 30 seconds when you tap <b>Show</b>. Don't keep passwords, PINs or card numbers here.</div>
     ${filters}
     ${groups.length ? groups.map((s) => { const list = shown.filter((it) => it.section === s);
@@ -2032,7 +2051,6 @@ function renderInfoView() {
       : items.length ? `<div class="card pad"><p class="muted">Nothing matches – tap <b>Everyone</b> and <b>All types</b>.</p></div>`
       : `<div class="card pad"><p>Nothing here yet. Tap <b>+ Add</b> for e.g. the medical aid (member number, plan, emergency line), doctors, allergies,
          school contacts, insurance policies or car registrations.</p></div>`}`;
-  $("#add-vault").onclick = () => vaultForm();
 }
 const vaultItem = (id) => state.vault?.items.find((x) => x.id === +id);
 document.addEventListener("click", async (e) => {
@@ -2204,6 +2222,21 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 let lastLoad = Date.now();
 const _refresh = refresh;
 refresh = async (...a) => { const r = await _refresh(...a); lastLoad = Date.now(); return r; };
+// a window left open (or a phone app woken up) keeps running the code it opened with: when a newer version is live, reload it, once
+async function checkBuild() {
+  if (!myBuild || !navigator.onLine || $("#dlg").open) return;
+  try {
+    const live = (await (await fetch("/", { cache: "no-store" })).text()).match(/app\.js\?v=(\d+)/)?.[1];
+    if (live && live !== myBuild && sessionStorage.getItem("cal.reloadedFor") !== live) { sessionStorage.setItem("cal.reloadedFor", live); location.reload(); }
+  } catch { /* offline, or the sign-in has run out: next time */ }
+}
+// never while in use: only straight after opening, or on coming back after 5+ minutes away
+let hiddenAt = 0;
+setTimeout(checkBuild, 300);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "hidden") hiddenAt = Date.now();
+  else if (hiddenAt && Date.now() - hiddenAt >= 5 * 60e3) checkBuild();
+});
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && Date.now() - lastLoad > 60e3 && !$("#dlg").open && state.data) refresh().then(sendQueued).catch(() => {});
 });
@@ -2276,7 +2309,7 @@ async function renderRequests() {
   const row = (r) => `<div class="rqrow" data-rq="${r.id}"><span class="rqk">${r.kind === "bug" ? "🐞" : "💡"}</span>
       <div class="rqt"><b>${esc(r.title)}</b><small class="muted">${esc(r.created_by || "")} · ${esc(localDay(r.created_at))}${nC(r.id) ? ` · 💬 ${nC(r.id)}` : ""}${r.maker_note ? ` · the maker replied` : ""}</small></div>${badge(stat(r))}</div>`;
   const open = R.list.filter((r) => !["done", "wontdo"].includes(stat(r))), closed = R.list.filter((r) => ["done", "wontdo"].includes(stat(r)));
-  $("#main").innerHTML = `${pageHead("💡 Requests", `<button class="btn-add" data-rqnew="idea">💡 Suggest an idea</button><button class="btn-add" data-rqnew="bug">🐞 Report a bug</button>`)}<div class="pad rq">
+  $("#main").innerHTML = `${pageHead("💡 Requests")}<div class="pad rq">
     <p class="meta">Anyone using the calendar can suggest an idea or report a bug. Each one is also sent to the Family Calendar maker, who decides what's built –
       for every family using it – and the answer shows here. (Your name and any screenshot stay on this calendar.)</p>
     <h3>Open (${open.length})</h3>${open.map(row).join("") || `<p class="muted">Nothing open.</p>`}
@@ -2289,7 +2322,6 @@ async function renderRequests() {
           <div class="rqmk"><select data-mks="${m.id}">${Object.entries(R.statuses).map(([k, t]) => `<option value="${k}" ${m.status === k ? "selected" : ""}>${esc(t)}</option>`).join("")}</select>
             <input data-mkn="${m.id}" value="${esc(m.note || "")}" placeholder="Reply to the family (optional)"><button data-mkb="${m.id}">Save</button></div></div></div>`).join("") || `<p class="muted">None yet.</p>`}` : ""}
   </div>`;
-  $("#main").querySelectorAll("[data-rqnew]").forEach((b) => b.onclick = () => requestForm(b.dataset.rqnew));
   $("#main").querySelectorAll("[data-rq]").forEach((d) => d.onclick = () => requestView(R.list.find((r) => r.id == d.dataset.rq)));
   $("#main").querySelectorAll("[data-mkb]").forEach((b) => b.onclick = async () => {
     const id = b.dataset.mkb;

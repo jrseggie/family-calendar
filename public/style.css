@@ -44,6 +44,7 @@ button.busy { cursor: progress; opacity: .85; } .spin { display: inline-block; w
    (only the flag characters use it - unicode-range; without the network the letters show, as before) */
 @font-face { font-family: "Flags"; src: url("https://cdn.jsdelivr.net/npm/country-flag-emoji-polyfill@0.1.8/dist/TwemojiCountryFlags.woff2") format("woff2");
   unicode-range: U+1F1E6-1F1FF, U+1F3F4, U+E0062-E007F; font-display: swap; }
+html { -webkit-text-size-adjust: 100%; text-size-adjust: 100%; }   /* iPhone: no automatic enlarging of long text in wide tables */
 html, body { margin: 0; background: var(--bg); color: var(--text);
   font: 15px/1.4 "Flags", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; }
 button, input, select, textarea { font: inherit; color: inherit; }
@@ -235,10 +236,13 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .role.admin { background: var(--brand); color: #fff; }
 .role.limited { background: var(--important); }
 /* ⚙ Settings: tabs, block headings with their own "+ Add", rows you can tap (›) */
-.stabs { display: flex; gap: 6px; overflow-x: auto; padding: 10px 0 2px; margin-bottom: 4px; }
-.stabs button { border: 1px solid var(--line); background: var(--card); color: var(--muted); padding: 8px 14px; border-radius: 999px; white-space: nowrap; cursor: pointer; font-weight: 600; }
-.stabs button.active { background: var(--brand); border-color: var(--brand); color: var(--brand-text); }
-@media (max-width: 480px) { .stabs { gap: 4px; } .stabs button { padding: 7px 8px; font-size: 13px; } }
+/* tabs inside a page: plain dark text, the current one underlined; they wrap, so every tab stays in view */
+.stabs { display: flex; flex-wrap: wrap; gap: 0 2px; padding: 6px 0 0; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.stabs button { border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; background: none; color: var(--text); padding: 9px 12px; border-radius: 0; white-space: nowrap; cursor: pointer; font: inherit; font-size: 15px; font-weight: 500; }
+.stabs button:hover { border-bottom-color: var(--line); }
+.stabs button.active { border-bottom-color: #2f6fd6; font-weight: 700; }
+.stabs .tabn { display: inline-block; min-width: 18px; padding: 0 5px; border-radius: 999px; background: #f08c00; color: #fff; font-size: 12px; font-weight: 700; text-align: center; line-height: 18px; }
+@media (max-width: 480px) { .stabs button { padding: 8px 9px; font-size: 14px; } }
 .chead { display: flex; justify-content: space-between; align-items: center; gap: 8px; flex-wrap: wrap; }
 .chead small { font-weight: 400; } .cbtns { display: flex; gap: 6px; } .chead .ackbtn { font-size: 13px; font-weight: 600; }
 .chead .ackbtn, .uacts .ackbtn { padding: 6px 12px; }
@@ -613,20 +617,19 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .sections i { font-style: normal; } .sections em { display: none; }
 body.nosections .sections { display: none; }
 @media (max-width: 699px) {
-  .sections { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0; gap: 0; background: var(--card); border-top: 1px solid var(--line);
-    padding-bottom: env(safe-area-inset-bottom); overflow: visible; box-shadow: 0 -2px 10px rgba(0,0,0,.06); }
+  .sections { position: fixed; left: 0; right: 0; bottom: 0; z-index: 6; margin: 0; gap: 0; background: var(--brand); border-top: 0;   /* dark like the header, so it reads as the app's menu */
+    padding-bottom: env(safe-area-inset-bottom); overflow: visible; box-shadow: 0 -2px 10px rgba(0,0,0,.18); }
   .sections .sp { display: none; }
-  .sections button { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 1px; padding: 7px 2px 6px; border-radius: 0; color: var(--muted); font-size: 11px; }
-  .sections button:hover { background: transparent; color: var(--muted); }
-  .sections button.active { background: transparent; color: var(--brand); }
-  [data-theme=dark] .sections button.active { color: #8fb3ff; }
+  .sections button { flex: 1 1 0; min-width: 0; flex-direction: column; gap: 1px; padding: 8px 2px 7px; border-radius: 0; color: rgba(255,255,255,.82); font-size: 11.5px; }
+  .sections button:hover { background: transparent; color: rgba(255,255,255,.82); }
+  .sections button.active { background: rgba(255,255,255,.1); color: #fff; font-weight: 700; box-shadow: inset 0 3px 0 #6ea8fe; }
   .sections i { font-size: 20px; line-height: 1.1; } .sections span { display: none; }
   .sections em { display: block; font-style: normal; max-width: 100%; overflow: hidden; text-overflow: ellipsis; }
   body:not(.nosections) main { padding-bottom: calc(150px + env(safe-area-inset-bottom)); }
   body:not(.nosections) .fab { bottom: calc(76px + env(safe-area-inset-bottom)); }
   body:not(.nosections) .toast { bottom: calc(140px + env(safe-area-inset-bottom)); }
 }
-@media (max-width: 699px) and (prefers-color-scheme: dark) { :root:not([data-theme=light]) .sections button.active { color: #8fb3ff; } }
+@media (max-width: 360px) { .sections button { font-size: 10.5px; } }   /* "Maintenance" fits whole on the smallest phones */
 @media print { .sections { display: none !important; } }
 
 /* an entry's time in front of its title (Month, Upcoming, day sheets) */
@@ -740,3 +743,8 @@ body.nosections .sections { display: none; }
   .stab .sck { display: block; font-size: 11px; font-weight: 800; color: var(--c); text-transform: uppercase; letter-spacing: .4px; }
   .sl.one .sck { display: inline; margin-right: 6px; }
 }
+
+/* the round +: which thing to add (app.js fabMenu) */
+#fabpop { position: fixed; z-index: 60; display: grid; gap: 6px; width: max-content; min-width: 210px; max-width: calc(100vw - 32px); padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.25); }
+#fabpop button { width: 100%; margin: 0; padding: 11px 16px; border: 0; border-radius: 10px; background: var(--brand); color: var(--brand-text); font: inherit; font-size: 15px; font-weight: 600; text-align: left; white-space: normal; cursor: pointer; }
+#fabpop button:hover { filter: brightness(1.2); }

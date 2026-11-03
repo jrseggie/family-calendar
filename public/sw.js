@@ -2,10 +2,15 @@
 // ONLY when the network can't be reached - online, everything always comes fresh. Nothing else is kept: not the 🔒 Info
 // page, not private extras (e.g. expenses), not Setup. Changes (POST/PUT/DELETE) always go to the network; new entries made
 // offline wait in the page (app.js offline queue) and are sent when it's next open with a connection.
-const SHELL = "cal-shell-v1", DATA = "cal-data-v1";
+const SHELL = "cal-shell-v2", DATA = "cal-data-v1";
 
 self.addEventListener("install", () => self.skipWaiting());
-self.addEventListener("activate", (e) => e.waitUntil(self.clients.claim()));
+// a new copy of this file: old kept copies go, and any open window reloads onto the current version
+self.addEventListener("activate", (e) => e.waitUntil((async () => {
+  for (const k of await caches.keys()) if (k !== SHELL && k !== DATA) await caches.delete(k);
+  await self.clients.claim();
+  for (const c of await self.clients.matchAll({ type: "window" })) c.navigate(c.url).catch(() => {});
+})()));
 
 const keep = (res) => res && res.ok && res.type === "basic" && !res.redirected;   // never a sign-in redirect or an error page
 

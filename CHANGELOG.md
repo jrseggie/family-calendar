@@ -2,6 +2,15 @@
 
 ## Next version (not released yet)
 
+## 1.0.41
+- 📱 Phones: the menu at the bottom is now dark blue like the header, with clearer labels and a stronger mark on the current page.
+- 🐄 A cow in the icon list for places.
+- ➕ One way to add everywhere: the round + at the bottom right. If a page can add more than one thing (e.g. Requests: an idea or a bug), it asks which. The green add buttons are gone.
+- 🗂️ Tabs inside a page (Settings) are now plain, darker text with an underline on the current one.
+- 🔄 The app replaces its saved offline copy when a new version comes out.
+- 🔄 A window left open or a phone app woken up now picks up a new version by itself. Settings › Calendar › Version shows the build it is running.
+- 📱 iPhone: text in wide tables no longer shows bigger than the text around it.
+
 ## 1.0.40
 - 🚀 Easier install for new families: an install page puts the calendar into their Cloudflare account with one key (no GitHub), and calendars installed that way update themselves every night. The set-up skips pasting a key when the install page already gave one.
 

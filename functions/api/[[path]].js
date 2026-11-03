@@ -1091,7 +1091,14 @@ export async function onRequest({ request, env, params }) {
     const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time", "people-order", "icon"].includes(parts[1]);   // addressed by key / no id
     if (["PUT", "DELETE"].includes(request.method) && !id && !byKey) return fail(400, "Missing id");
 
-    if (parts[0] === "all" && request.method === "GET") return await getAll(env, u);
+    if (parts[0] === "all" && request.method === "GET") {
+      // which version each login's devices are really running (table health, key device:<name>:<device>): a device on old code is visible
+      const build = String(request.headers.get("x-build") || "").slice(0, 40), ua = request.headers.get("user-agent") || "";
+      if (u.name) await env.DB.prepare("INSERT INTO health (key, at, detail) VALUES (?, ?, ?) ON CONFLICT(key) DO UPDATE SET at = excluded.at, detail = excluded.detail")
+        .bind(`device:${u.name}:${/iPhone/.test(ua) ? "iPhone" : /iPad/.test(ua) ? "iPad" : /Android/.test(ua) ? "Android" : /Windows/.test(ua) ? "Windows" : /Mac/.test(ua) ? "Mac" : "other"}`, new Date().toISOString(), build || "old code (no build sent)").run()
+        .catch((e) => env.DB.prepare("INSERT INTO health (key, at, detail) VALUES ('device_error', ?, ?) ON CONFLICT(key) DO UPDATE SET at = excluded.at, detail = excluded.detail").bind(new Date().toISOString(), String(e).slice(0, 300)).run().catch(() => {}));
+      return await getAll(env, u);
+    }
     if (parts[0] === "log" && request.method === "GET") {
       if (!canEditAll(u)) deny();
       return json((await env.DB.prepare("SELECT * FROM change_log ORDER BY id DESC LIMIT 200").all()).results);
