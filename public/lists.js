@@ -71,7 +71,15 @@
     const line = (l, other) => `<button type="button" class="lrow" data-lo="${l.id}"><span><b>${esc(l.name)}</b><small>${[other ? esc(where(l) || "Anywhere") : "", !l.members?.length && l.owner_id === L.me ? "🔒 Just you" : shared(l)].filter(Boolean).join(" · ")}</small></span><em class="${l.open ? "" : "lzero"}" title="${l.open} to get">${l.open}</em><i aria-hidden="true">›</i></button>`;
     // 📌 For me: everything still to do that's for you, from every list (only when there's something)
     const mine = L.mine || [];
-    const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? "" : mine.map((m) => `<div class="lrow lminerow"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><b>${esc(m.text)}</b><small class="${m.due && m.due < todayISO() ? "late" : ""}">${esc([m.list, dueText(m.due)].filter(Boolean).join(" · "))}</small></button></div>`).join("")}</section>` : "";
+    // PC: a table - Item | List | Due | Days left; phone: list and date under the name
+    // the same lights as the ammo stock: 🔴 late, 🟠 today to 2 days, 🟢 3 days or more
+    const daysLeft = (d) => { if (!d) return ["", ""]; const n = Math.round((Date.parse(`${d}T00:00`) - Date.parse(`${todayISO()}T00:00`)) / 864e5);
+      const words = n < 0 ? `${-n} day${n === -1 ? "" : "s"} late` : n === 0 ? "Today" : n === 1 ? "Tomorrow" : `${n} days`;
+      return [`${n < 0 ? "🔴" : n <= 2 ? "🟠" : "🟢"} ${words}`, n < 0 ? "late" : n <= 2 ? "soon" : ""]; };
+    const mineRow = (m) => { const late = m.due && m.due < todayISO() ? "late" : "", [dl, dc] = daysLeft(m.due);
+      return `<div class="lrow lminerow"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${esc(m.text)}</b><small class="lmsub ${late}">${esc([m.list, m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(m.list)}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
+    const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? ""
+      : `<div class="lmhead"><span>Item</span><span class="lmlist">List</span><span class="lmdue">Due</span><span class="lmdays">Days left</span></div>${mine.map(mineRow).join("")}`}</section>` : "";
     const cols = [...places().map((p) => [p.key, `${p.icon || ""} ${p.label}`.trim(), L.lists.filter((l) => l.place === p.key), false]), ["_other", `${OTHER} Other places`, L.lists.filter((l) => !l.place || l.place === "other" || !places().some((p) => p.key === l.place)), true]].filter(([, , ls]) => ls.length);
     $("#main").innerHTML = `<div class="ls lswide">${pageHead("🛒 Lists")}
       ${forMe}${cols.length ? `<div class="lcols">${cols.map(([k, t, ls, other]) => `<section class="lcol"><button type="button" class="lcolh" data-fp="${esc(k)}" aria-expanded="${!shut.has(k)}">${shut.has(k) ? "▸" : "▾"} ${esc(t)} (${ls.length})</button>${shut.has(k) ? "" : ls.map((l) => line(l, other)).join("")}</section>`).join("")}</div>`
@@ -354,12 +362,15 @@
       ${others.length ? `<label>List<select name="move"><option value="">${esc(L.list.name)} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(x.name)}${placeName(x) ? ` – ${esc(placeName(x))}` : ""}</option>`).join("")}</select></label>` : ""}
       <div class="actions"><button type="button" class="danger" id="del">Remove</button><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
       const f = $("#f"); $("#cancel").onclick = closeDialog;
+      const forBoxes = [...f.querySelectorAll("[name=for]")];
+      forBoxes.forEach((x) => x.onchange = () => { if (forNow.length && !forBoxes.some((y) => y.checked)) f.elements.due.value = ""; });
       const mark = () => f.querySelectorAll("[data-dep]").forEach((b) => b.classList.toggle("on", b.dataset.dep === f.elements.category.value.trim()));
       f.querySelectorAll("[data-dep]").forEach((b) => b.onclick = () => { f.elements.category.value = b.dataset.dep; mark(); });
       f.elements.category.oninput = mark;
       f.onsubmit = (e) => { e.preventDefault();
         const text = f.elements.text.value.trim() || it.text, note = f.elements.note.value.trim() || null, category = f.elements.category.value.trim() || null, to = +f.elements.move?.value || 0;
-        const fr = [...f.querySelectorAll("[name=for]:checked")].map((x) => +x.value), due = f.elements.due.value || null;
+        const fr = [...f.querySelectorAll("[name=for]:checked")].map((x) => +x.value);
+        const due = onIt.length > 1 && it.for_ids && !fr.length ? null : f.elements.due.value || null;   // nobody on it any more: no date either
         const forStr = fr.length ? `,${fr.join(",")},` : null, jobChanged = (onIt.length > 1 && forStr !== (it.for_ids || null)) || due !== (it.due || null);
         if (jobChanged) { it.for_ids = onIt.length > 1 ? forStr : it.for_ids; it.due = due; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { ...(onIt.length > 1 ? { for: fr } : {}), due } }); }
         const changed = text !== it.text || note !== (it.note || null) || category !== (it.category || null);
@@ -418,7 +429,13 @@
     .lshare { display: grid; gap: 4px; }
     .litems small.ljob, .lminerow small { color: var(--muted); font-size: 11.5px; } .litems small.ljob.late, .lminerow small.late { color: var(--del-text, #c92a2a); }
     .lmine { margin-bottom: 14px; } .lminerow { display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; } .lminerow input { width: 22px; height: 22px; flex: none; }
-    .lminerow button { flex: 1; min-width: 0; display: grid; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 10px 12px 10px 0; cursor: pointer; } .lminerow b { font-weight: 600; font-size: 15px; }
+    .lminerow button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 10px 12px 10px 0; cursor: pointer; } .lminerow b { font-weight: 600; font-size: 15px; }
+    .lmitem { flex: 1; min-width: 0; display: grid; } .lmlist, .lmdue, .lmdays { flex: none; font-size: 13px; } .lmlist { width: 190px; } .lmdue { width: 130px; } .lmdays { width: 118px; text-align: left; white-space: nowrap; }   /* left-aligned: the lights sit in one line */
+    .lmdue.late, .lmdays.late { color: var(--del-text, #c92a2a); font-weight: 600; } .lmdays.soon { font-weight: 600; }
+    /* the For me headings: blue and white like every table heading; lined up with the columns (51px = the row's left edge, tick box and gap) */
+    .lmhead { display: flex; gap: 12px; background: var(--brand); color: #fff; font-weight: 600; font-size: 13px; padding: 6px 12px 6px 51px; border-top: 1px solid rgba(255,255,255,.25); } .lmhead > span:first-child { flex: 1; }
+    .lmsub { display: none; }
+    @media (max-width: 699px) { .lmhead, .lmlist, .lmdue { display: none; } .lmsub { display: block; } .lmdays { width: 104px; font-size: 12.5px; } }   /* phone: days left stays as its own column, so the lights line up */
     .ldeps { display: grid; gap: 6px; } .ldeps > div { display: flex; flex-wrap: wrap; gap: 6px; }
     .ldepb { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
     .ldepb.on { background: var(--brand); border-color: var(--brand); color: #fff; }

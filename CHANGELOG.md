@@ -2,6 +2,10 @@
 
 ## Next version (not released yet)
 
+## 1.0.45
+- 📌 Lists: taking everyone off a job clears its date too, and the calendar entry goes.
+- 📌 Lists: the For me box shows days left with a light (🔴 late, 🟠 within 2 days, 🟢 later); on a PC it is a table - item, list, due date, days left.
+
 ## 1.0.44
 - 📌 Lists: a line can be FOR someone on the list (✎ › For), with an optional due date. They get a notification, it shows on their
   "📌 For me" box at the top of Lists (from every list, tick it off right there), and a due date puts it on the calendar (so the

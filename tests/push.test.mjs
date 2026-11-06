@@ -170,6 +170,12 @@ test("📌 jobs: whoever it's for hears about it, whoever gave it hears when it'
   await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: true });
   it = (await call(1, "POST", `lists/${id}/items`, { text: "fix the door locks", client_id: "j9aaaaaa" })).items.find((i) => /door/i.test(i.text));
   assert.deepEqual([it.done, it.for_ids, it.due], [0, null, null]);
+  // nobody on it any more: the date and the calendar entry go too
+  await call(1, "PUT", `lists/${id}/items/c:j9aaaaaa`, { for: [2], due: "2026-11-27" });   // (typed again: it goes by its new phone id)
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 1);
+  it = (await call(1, "PUT", `lists/${id}/items/c:j9aaaaaa`, { for: [], due: "2026-11-27" })).items.find((i) => /door/i.test(i.text));
+  assert.deepEqual([it.for_ids, it.due], [null, null]);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 0);
   await settle();
   sent.length = 0;
   await call(1, "POST", `lists/${id}/items`, { text: "Paint", client_id: "j2aaaaaa" });
