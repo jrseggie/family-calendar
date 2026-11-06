@@ -21,6 +21,13 @@
   const sharedAll = (l) => L.people.length > 1 && L.people.every((p) => p.id === l.owner_id || l.members.some((m) => m.id === p.id));
   const shared = (l) => l.members?.length ? (sharedAll(l) ? "Shared with all" : `Shared with ${l.members.map((m) => esc(m.name)).join(", ")}`) : l.owner_id === L.me ? "Just you" : `From ${esc(l.owner || "")}`;
 
+  // 📌 jobs: who a line is for (",3,7," = logins) and when it's due
+  const forIds = (v) => String(v || "").split(",").map(Number).filter((n) => n > 0);
+  const nameOf = (id) => id === L.me ? "you" : L.people.find((p) => p.id === id)?.name || "";
+  const dueText = (d) => d ? `by ${fmtDay(d)}` : "";
+  const jobLine = (i) => { const f = forIds(i.for_ids).map(nameOf).filter(Boolean), bits = [f.length ? `📌 For ${f.join(", ")}` : "", i.done ? "" : dueText(i.due)].filter(Boolean);
+    return bits.length ? `<small class="ljob${!i.done && i.due && i.due < todayISO() ? " late" : ""}">${esc(bits.join(" · "))}</small>` : ""; };
+
   // ---------- sending: straight away when there's a connection, otherwise kept and sent later in the same order
   async function send(op) {
     setQueue([...queue(), op]);
@@ -50,8 +57,8 @@
   // ---------- the lists
   async function render() {
     if (L.open) return openList(L.open);
-    try { const r = await api("GET", "lists"); L.lists = r.lists; L.people = r.people; L.me = r.me; store.set("lists.all", r); }
-    catch (e) { const c = store.get("lists.all", null); if (!c) { $("#main").innerHTML = `<p class="pad err">${esc(e.message)}</p>`; return; } L.lists = c.lists; L.people = c.people; L.me = c.me; }
+    try { const r = await api("GET", "lists"); L.lists = r.lists; L.people = r.people; L.mine = r.mine; L.me = r.me; store.set("lists.all", r); }
+    catch (e) { const c = store.get("lists.all", null); if (!c) { $("#main").innerHTML = `<p class="pad err">${esc(e.message)}</p>`; return; } L.lists = c.lists; L.people = c.people; L.mine = c.mine; L.me = c.me; }
     drawAll();
     flush();
   }
@@ -62,12 +69,19 @@
     // its place too: nobody else sees it anyway. Side by side on a PC, one under another on a phone. Empty boxes aren't shown.
     const shut = new Set(store.get("lists.foldPlaces", []));
     const line = (l, other) => `<button type="button" class="lrow" data-lo="${l.id}"><span><b>${esc(l.name)}</b><small>${[other ? esc(where(l) || "Anywhere") : "", !l.members?.length && l.owner_id === L.me ? "🔒 Just you" : shared(l)].filter(Boolean).join(" · ")}</small></span><em class="${l.open ? "" : "lzero"}" title="${l.open} to get">${l.open}</em><i aria-hidden="true">›</i></button>`;
+    // 📌 For me: everything still to do that's for you, from every list (only when there's something)
+    const mine = L.mine || [];
+    const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? "" : mine.map((m) => `<div class="lrow lminerow"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><b>${esc(m.text)}</b><small class="${m.due && m.due < todayISO() ? "late" : ""}">${esc([m.list, dueText(m.due)].filter(Boolean).join(" · "))}</small></button></div>`).join("")}</section>` : "";
     const cols = [...places().map((p) => [p.key, `${p.icon || ""} ${p.label}`.trim(), L.lists.filter((l) => l.place === p.key), false]), ["_other", `${OTHER} Other places`, L.lists.filter((l) => !l.place || l.place === "other" || !places().some((p) => p.key === l.place)), true]].filter(([, , ls]) => ls.length);
     $("#main").innerHTML = `<div class="ls lswide">${pageHead("🛒 Lists")}
-      ${cols.length ? `<div class="lcols">${cols.map(([k, t, ls, other]) => `<section class="lcol"><button type="button" class="lcolh" data-fp="${esc(k)}" aria-expanded="${!shut.has(k)}">${shut.has(k) ? "▸" : "▾"} ${esc(t)} (${ls.length})</button>${shut.has(k) ? "" : ls.map((l) => line(l, other)).join("")}</section>`).join("")}</div>`
+      ${forMe}${cols.length ? `<div class="lcols">${cols.map(([k, t, ls, other]) => `<section class="lcol"><button type="button" class="lcolh" data-fp="${esc(k)}" aria-expanded="${!shut.has(k)}">${shut.has(k) ? "▸" : "▾"} ${esc(t)} (${ls.length})</button>${shut.has(k) ? "" : ls.map((l) => line(l, other)).join("")}</section>`).join("")}</div>`
         : `<p class="muted pad">No lists yet: tap the round + to make one.</p>`}<p class="meta" id="lsync"></p></div>`;
     $("#main").querySelectorAll("[data-fp]").forEach((b) => b.onclick = () => { const f = new Set(store.get("lists.foldPlaces", [])); f.has(b.dataset.fp) ? f.delete(b.dataset.fp) : f.add(b.dataset.fp); store.set("lists.foldPlaces", [...f]); drawAll(); });
     $("#main").querySelectorAll("[data-lo]").forEach((b) => b.onclick = () => openList(+b.dataset.lo));
+    $("#main").querySelectorAll("[data-mt]").forEach((c) => c.onchange = () => {   // done, straight from For me
+      const [lid, k] = c.dataset.mt.split("|"); L.mine = (L.mine || []).filter((m) => `${m.list_id}|${m.client_id ? `c:${m.client_id}` : m.id}` !== c.dataset.mt);
+      drawAll(); toast("Done"); send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { done: true } });
+    });
     offlineNote();
     setTimeout(() => globalThis.fabFor?.("lists"), 0);
   }
@@ -215,7 +229,7 @@
     // a list nobody else is on: no "Added by" column - it would say the same name on every line
     const priv = !l.members?.length;
     const gs = groups(open), dragItems = () => open.length > 1, shut = folded();   // any line can move, into another department too
-    const text = (i) => `<b>${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ""}`;
+    const text = (i) => `<b>${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ""}${jobLine(i)}`;
     // ≡ = hold and drag up or down (like most list apps); a department's ≡ moves the whole department
     const BIN = `<svg width="16" height="17" viewBox="0 0 16 17" aria-hidden="true"><path d="M2 4h12M6 4V2.5h4V4M3.5 4l.8 10.5h7.4L12.5 4M6.5 7v5M9.5 7v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const GRAB = `<svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><path d="M2 2h14M2 7h14M2 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
@@ -273,7 +287,7 @@
         if (open.some((i) => i.text.trim().toLowerCase().replace(/\s+/g, " ") === t.toLowerCase().replace(/\s+/g, " "))) { toast(`"${t}" is already on the list`); return; }
         const c = cid(), same = (i) => i.text.trim().toLowerCase().replace(/\s+/g, " ") === t.toLowerCase().replace(/\s+/g, " ");
         const back = done.find(same);   // already completed: that one comes back (the server does the same), with the new note / department if given
-        if (back) Object.assign(back, { done: 0, done_by: null, done_at: null, client_id: c, note: note || back.note, category: category || back.category, added_by: state.data.me.name });
+        if (back) Object.assign(back, { done: 0, done_by: null, done_at: null, for_ids: null, assigned_by: null, due: null, client_id: c, note: note || back.note, category: category || back.category, added_by: state.data.me.name });
         L.items = back ? [...open, back, ...done.filter((i) => i !== back)] : [...open, { id: -Date.now(), client_id: c, text: t, note: note || null, category: category || null, done: 0, added_by: state.data.me.name }, ...done];
         if (category) { L.dept[t.toLowerCase()] = category; if (!L.departments.includes(category)) L.departments = [...L.departments, category].sort(); }
         f.elements.text.value = ""; f.elements.note.value = ""; f.elements.category.value = ""; drawList(); $("#ladd").elements.text.focus();
@@ -281,13 +295,29 @@
       };
     }
     const key = (k) => /^\d+$/.test(k) ? k : `c:${k}`;
-    $("#main").querySelectorAll("[data-lt]").forEach((b) => b.onchange = () => {
-      const it = L.items.find((i) => String(i.client_id || i.id) === b.dataset.lt); if (!it) return;
-      it.done = b.checked ? 1 : 0; it.done_by = state.data.me.name; it.done_at = it.done ? new Date().toISOString() : null;
+    const tick = (it, k, done, fresh) => {
+      it.done = done ? 1 : 0; it.done_by = state.data.me.name; it.done_at = it.done ? new Date().toISOString() : null;
+      if (fresh) Object.assign(it, { for_ids: null, assigned_by: null, due: null });
       const twin = (x) => x !== it && x.done === it.done && x.text.trim().toLowerCase() === it.text.trim().toLowerCase();
       L.items = it.done ? L.items.filter((x) => !twin(x)) : L.items.some(twin) ? L.items.filter((x) => x !== it) : L.items;   // never the same thing twice
       L.items.sort((a, c) => a.done - c.done); drawList();
-      send({ method: "PUT", path: `lists/${l.id}/items/${key(b.dataset.lt)}`, body: { done: it.done } });
+      send({ method: "PUT", path: `lists/${l.id}/items/${k}`, body: { done: it.done, ...(fresh ? { fresh: true } : {}) } });
+    };
+    $("#main").querySelectorAll("[data-lt]").forEach((b) => b.onchange = () => {
+      const it = L.items.find((i) => String(i.client_id || i.id) === b.dataset.lt); if (!it) return;
+      // 📌 a completed job taken off Completed: back as it was (a mistaken tick), or as a new line (doing it again: who and date cleared)
+      if (!b.checked && it.done && (it.for_ids || it.due)) {
+        b.checked = true;
+        const was = [jobLine({ ...it, done: 0 }).replace(/<[^>]+>/g, "")].filter(Boolean).join("");
+        openDialog(`<div class="form"><h2>Put it back</h2><p><b>${esc(it.text)}</b>${was ? `<br><small class="meta">${was}</small>` : ""}</p>
+          <div class="actions"><button type="button" id="cancel">Cancel</button><button type="button" class="ackbtn" id="lasnew">Back as a new line</button><button type="button" class="primary" id="laswas">Back as it was</button></div></div>`, () => {
+          $("#cancel").onclick = closeDialog;
+          $("#laswas").onclick = () => { closeDialog(); tick(it, key(b.dataset.lt), false, false); };
+          $("#lasnew").onclick = () => { closeDialog(); tick(it, key(b.dataset.lt), false, true); };
+        });
+        return;
+      }
+      tick(it, key(b.dataset.lt), b.checked, false);
     });
     $("#main").querySelectorAll("[data-le]").forEach((b) => b.onclick = () => itemForm(L.items.find((i) => String(i.client_id || i.id) === b.dataset.le), key(b.dataset.le)));
     // 🗑 on a completed line (↩ Undo for a few seconds)
@@ -311,9 +341,14 @@
     const lid = L.list.id, others = (L.lists || store.get("lists.all", {}).lists || []).filter((x) => x.id !== lid);
     // departments as buttons (the browser's suggestion list is clumsy on phones); a new one can still be typed
     const deps = [...new Set([...L.departments, it.category].filter(Boolean))].sort((a, b) => a.localeCompare(b));
+    // the people on this list (owner + shared with), for "For"
+    const onIt = [L.list.owner_id, ...(L.list.members || []).map((m) => m.id)].map((id) => ({ id, name: id === L.list.owner_id ? L.list.owner || nameOf(id) : (L.list.members.find((m) => m.id === id)?.name || nameOf(id)) }));
+    const forNow = forIds(it.for_ids);
     openDialog(`<form class="form" id="f" autocomplete="off"><h2>Change it</h2>
       <label>What<input name="text" maxlength="120" value="${esc(it.text)}" required></label>
       <label>Note<input name="note" maxlength="200" value="${esc(it.note || "")}"></label>
+      ${onIt.length > 1 ? `<div class="lshare"><span class="meta">For (optional – they get a notification)</span>${onIt.map((p) => `<label class="fatick"><input type="checkbox" name="for" value="${p.id}" ${forNow.includes(p.id) ? "checked" : ""}> ${esc(p.id === L.me ? `${p.name} (you)` : p.name)}</label>`).join("")}</div>` : ""}
+      <label>Due (optional – it goes on the calendar)<input type="date" name="due" value="${esc(it.due || "")}"></label>
       <div class="ldeps"><span class="meta">Category</span><div>${["", ...deps].map((d) => `<button type="button" class="ldepb ${(it.category || "") === d ? "on" : ""}" data-dep="${esc(d)}">${d ? esc(d) : "None"}</button>`).join("")}</div>
         <input name="category" maxlength="40" value="${esc(it.category || "")}" placeholder="or type a new one" aria-label="Category"></div>
       ${others.length ? `<label>List<select name="move"><option value="">${esc(L.list.name)} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(x.name)}${placeName(x) ? ` – ${esc(placeName(x))}` : ""}</option>`).join("")}</select></label>` : ""}
@@ -324,6 +359,9 @@
       f.elements.category.oninput = mark;
       f.onsubmit = (e) => { e.preventDefault();
         const text = f.elements.text.value.trim() || it.text, note = f.elements.note.value.trim() || null, category = f.elements.category.value.trim() || null, to = +f.elements.move?.value || 0;
+        const fr = [...f.querySelectorAll("[name=for]:checked")].map((x) => +x.value), due = f.elements.due.value || null;
+        const forStr = fr.length ? `,${fr.join(",")},` : null, jobChanged = (onIt.length > 1 && forStr !== (it.for_ids || null)) || due !== (it.due || null);
+        if (jobChanged) { it.for_ids = onIt.length > 1 ? forStr : it.for_ids; it.due = due; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { ...(onIt.length > 1 ? { for: fr } : {}), due } }); }
         const changed = text !== it.text || note !== (it.note || null) || category !== (it.category || null);
         Object.assign(it, { text, note, category });
         if (category) { L.dept[text.trim().toLowerCase()] = category; if (!L.departments.includes(category)) L.departments = [...L.departments, category].sort(); }
@@ -378,6 +416,9 @@
     .ldonehead { display: block; width: 100%; padding: 6px 10px; background: var(--brand); color: #fff; border: 0; border-top: 1px solid rgba(255,255,255,.25); font: inherit; font-weight: 700; font-size: 14px; text-align: center; cursor: pointer; }
     .lbin { flex: none; width: 40px; align-self: stretch; border: 0; background: transparent; color: var(--del-text, #c92a2a); cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .lshare { display: grid; gap: 4px; }
+    .litems small.ljob, .lminerow small { color: var(--muted); font-size: 11.5px; } .litems small.ljob.late, .lminerow small.late { color: var(--del-text, #c92a2a); }
+    .lmine { margin-bottom: 14px; } .lminerow { display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; } .lminerow input { width: 22px; height: 22px; flex: none; }
+    .lminerow button { flex: 1; min-width: 0; display: grid; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 10px 12px 10px 0; cursor: pointer; } .lminerow b { font-weight: 600; font-size: 15px; }
     .ldeps { display: grid; gap: 6px; } .ldeps > div { display: flex; flex-wrap: wrap; gap: 6px; }
     .ldepb { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
     .ldepb.on { background: var(--brand); border-color: var(--brand); color: #fff; }

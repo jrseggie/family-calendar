@@ -2,6 +2,12 @@
 
 ## Next version (not released yet)
 
+## 1.0.44
+- 📌 Lists: a line can be FOR someone on the list (✎ › For), with an optional due date. They get a notification, it shows on their
+  "📌 For me" box at the top of Lists (from every list, tick it off right there), and a due date puts it on the calendar (so the
+  Sunday email too). When it's done, whoever gave it is told. Most lines never use it - nothing changes for them.
+  Taking a done job off Completed asks: back as it was, or back as a new line (who and date cleared); typed again = a new line.
+
 ## 1.0.43
 - 🛒 Lists: changing a list straight after a refresh inside it now shows the family's names to share with (it showed none, and saving would have unshared the list).
 

@@ -45,12 +45,13 @@ function setup() {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, role TEXT, person TEXT, active INTEGER DEFAULT 1);
            CREATE TABLE places (key TEXT, active INTEGER DEFAULT 1); CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
+           CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
            INSERT INTO users VALUES (1, 'Emma', 'admin', NULL, 1), (2, 'Max', 'admin', NULL, 1), (3, 'Leo', 'child', 'Leo', 1);`);
-  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
   for (const id of [1, 2, 3]) db.prepare("INSERT INTO push_subs (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, 'x')").run(id, `https://push.example/${id}`, phoneKeys.p256dh, phoneKeys.authB64);
   const sent = [], waits = [];
   const env = { DB: d1(db), PUSH_GROUP_MS: 30, PUSH_FETCH: async (url, init) => { sent.push({ to: url, init }); return new Response(null, { status: 201 }); } };
-  const people = [{ name: "Leo", family: 1 }];
+  const people = [{ name: "Emma", family: 1 }, { name: "Max", family: 1 }, { name: "Leo", family: 1 }, { name: "Family", type: "group" }];
   const users = { 1: { id: 1, name: "Emma", role: "admin" }, 2: { id: 2, name: "Max", role: "admin" }, 3: { id: 3, name: "Leo", role: "child", person: "Leo" } };
   const call = async (who, method, path, body) => (await listsApi({ request: { method, json: async () => body }, env, u: users[who], parts: path.split("/"), people, waitUntil: (p) => waits.push(p),
     json: (o) => ({ data: o, json: async () => o }), deny: (m) => { throw new Error(m); }, invalid: (m) => { throw new Error(m); } })).data;
@@ -133,4 +134,49 @@ test("the 10-minute job sends anything a cut-off request left behind, and never 
   assert.equal(sent.length, 1);
   assert.equal(await listAdded(env, null, { id: 9, owner_id: 1 }, { id: 1, role: "admin", name: "Emma" }, "Tape"), undefined);   // the owner adding: nothing waiting
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM push_pending WHERE sent = 0").get().n, 0);
+});
+
+test("📌 jobs: whoever it's for hears about it, whoever gave it hears when it's done; it's on their For me list and on the calendar", async () => {
+  const { db, call, sent, settle, to } = setup();
+  const { id } = await call(1, "POST", "lists", { name: "DIY", members: [2] });   // Emma's DIY list, shared with Max
+  await call(1, "POST", `lists/${id}/items`, { text: "Fix the door locks", client_id: "j1aaaaaa" });
+  let r = await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { for: [2, 3], due: "2026-11-13" });   // Leo isn't on the list: dropped
+  await settle();
+  assert.deepEqual(to(), ["2"]);
+  assert.equal(r.items[0].for_ids, ",2,");
+  let ev = db.prepare("SELECT start, who, title FROM events WHERE source LIKE '🛒 List item #%'").all();
+  assert.deepEqual(ev.map((e) => [e.start, e.who, e.title]), [["2026-11-13", "Max", "📌 Fix the door locks (DIY)"]]);
+  assert.deepEqual((await call(2, "GET", "lists")).mine.map((m) => [m.text, m.list, m.due]), [["Fix the door locks", "DIY", "2026-11-13"]]);
+  assert.equal((await call(1, "GET", "lists")).mine.length, 0);
+  sent.length = 0;
+  await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { for: [2], due: "2026-11-20" });   // a new date: the entry moves, nobody new is told
+  await settle();
+  assert.equal(sent.length, 0);
+  assert.equal(db.prepare("SELECT start FROM events WHERE source LIKE '🛒 List item #%'").get().start, "2026-11-20");
+  await call(2, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: true });   // Max does it: Emma hears, the entry goes, it leaves his For me
+  await settle();
+  assert.deepEqual(to(), ["1"]);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 0);
+  assert.equal((await call(2, "GET", "lists")).mine.length, 0);
+  // taken off Completed "as it was": still for Max, the entry is back; "as a new line" / typed again: who and date go
+  let it = (await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: false })).items.find((i) => i.text === "Fix the door locks");
+  assert.deepEqual([it.done, it.for_ids, it.due], [0, ",2,", "2026-11-20"]);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 1);
+  await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: true });
+  it = (await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: false, fresh: true })).items.find((i) => i.text === "Fix the door locks");
+  assert.deepEqual([it.done, it.for_ids, it.due], [0, null, null]);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 0);
+  await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { for: [2], due: "2026-11-27" });
+  await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { done: true });
+  it = (await call(1, "POST", `lists/${id}/items`, { text: "fix the door locks", client_id: "j9aaaaaa" })).items.find((i) => /door/i.test(i.text));
+  assert.deepEqual([it.done, it.for_ids, it.due], [0, null, null]);
+  await settle();
+  sent.length = 0;
+  await call(1, "POST", `lists/${id}/items`, { text: "Paint", client_id: "j2aaaaaa" });
+  await call(1, "PUT", `lists/${id}/items/c:j2aaaaaa`, { for: [1], due: "2026-12-01" });   // for yourself: no notification; on the calendar under your own name
+  await settle();
+  assert.equal(sent.length, 0);
+  assert.equal(db.prepare("SELECT who FROM events").get().who, "Emma");
+  await call(1, "DELETE", `lists/${id}/items/c:j2aaaaaa`);
+  assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 0);
 });
