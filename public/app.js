@@ -2396,3 +2396,27 @@ function requestView(r) {
     f.onsubmit = (e) => { e.preventDefault(); submit(() => api("POST", `requests/${r.id}/comments`, { text: f.elements.text.value }), "Comment added"); };
   });
 }
+
+// 📅 date boxes in DD/MM/YYYY on phones too. A phone draws its own date box (an iPhone writes "10 Nov 2026") and the site can't
+// change that, so on touch screens the box's own text is hidden and the date is written over it in the site's format. Tapping
+// still opens the phone's date wheel. Every <input type="date"> on every page, forms included (a watcher catches new ones).
+(function () {
+  if (!matchMedia("(pointer: coarse)").matches) return;   // a PC's date box types DD/MM/YYYY already (browser in English (UK) / SA)
+  const show = (inp) => { const v = inp.parentElement.querySelector(":scope > .dmyv"); if (v) { v.textContent = inp.value ? fmtLong(inp.value) : "DD/MM/YYYY"; v.classList.toggle("empty", !inp.value); } };
+  const fix = (inp) => {
+    if (inp.dataset.dmy) return;
+    inp.dataset.dmy = "1";
+    const wrap = document.createElement("span"); wrap.className = "dmy";
+    inp.parentNode.insertBefore(wrap, inp); wrap.append(inp);
+    const v = document.createElement("span"); v.className = "dmyv"; v.setAttribute("aria-hidden", "true"); wrap.append(v);
+    for (const ev of ["input", "change", "blur"]) inp.addEventListener(ev, () => show(inp));
+    show(inp);
+    // a value set by the code later (e.g. a cleared due date) shows too
+    const d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value");
+    Object.defineProperty(inp, "value", { get() { return d.get.call(this); }, set(x) { d.set.call(this, x); show(this); }, configurable: true });
+  };
+  const scan = (root) => root.querySelectorAll?.('input[type="date"]:not([data-dmy])').forEach(fix);
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches?.('input[type="date"]')) fix(n); else scan(n); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  scan(document);
+})();

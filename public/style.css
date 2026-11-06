@@ -767,3 +767,9 @@ body.nosections .sections { display: none; }
 .wk-h > :first-child { grid-column: 2; } .wk-h .wk-badges { grid-column: 3; justify-content: flex-end; } .wk-h .wk-label { color: #fff; } .wk-h .wk-range { color: rgba(255,255,255,.85); }
 @media (max-width: 699px) { .wk-h { grid-template-columns: 1fr; } .wk-h > :first-child, .wk-h .wk-badges { grid-column: 1; justify-content: center; } }
 @media (max-width: 420px) { .sections:has(> button:nth-of-type(8)) button { font-size: 9.5px; letter-spacing: -.25px; padding-left: 0; padding-right: 0; } }   /* 8 sections on a small phone: every label still fits whole */
+
+/* 📅 phones: the date box's own text is hidden and the date shows as DD/MM/YYYY over it (app.js, end) */
+.dmy { position: relative; display: inline-block; } .form .dmy, label .dmy { display: block; }
+.dmy > input[type="date"] { width: 100%; color: transparent; -webkit-text-fill-color: transparent; }
+.dmy > .dmyv { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text); font: inherit; }
+.dmy > .dmyv.empty { color: var(--muted); }

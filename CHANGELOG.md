@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.46
+- 📅 Phones: date boxes show DD/MM/YYYY too (an iPhone wrote e.g. "10 Nov 2026"); tapping still opens the phone's date wheel.
+
 ## 1.0.45
 - 📌 Lists: taking everyone off a job clears its date too, and the calendar entry goes.
 - 📌 Lists: the For me box shows days left with a light (🔴 late, 🟠 within 2 days, 🟢 later); on a PC it is a table - item, list, due date, days left.
