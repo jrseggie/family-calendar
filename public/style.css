@@ -138,6 +138,8 @@ main:has(.fgrid) { max-width: 1500px; }   /* the Family grid uses the width of a
 /* the top of every list page: name left, add buttons top right (app.js pageHead) */
 .pagehead { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 12px 0 10px; }
 .pagehead h2 { margin: 0; font-size: 19px; } .pacts { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; } .pacts .btn-add { margin: 0; }
+/* phones: no page name - the bottom bar (and the tabs) already show where you are, and the room goes to the page. PC keeps it. */
+@media (max-width: 699px) { .pagehead h2 { display: none; } .pagehead:not(:has(.pacts)) { display: none; } }
 
 /* add button + dialog */
 .fab { position: fixed; right: 18px; bottom: max(18px, env(safe-area-inset-bottom)); width: 58px; height: 58px; border-radius: 50%;
@@ -210,7 +212,8 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .sheet-list .item { border-radius: 8px; border: 1px solid var(--line); margin-top: 6px; }
 
 .toast { position: fixed; left: 50%; bottom: 90px; transform: translateX(-50%) translateY(20px); opacity: 0; pointer-events: none;
-  background: #1d2330; color: #fff; padding: 9px 16px; border-radius: 999px; transition: .2s; z-index: 20; font-size: 14px; }
+  background: #1d2330; color: #fff; padding: 9px 16px; border-radius: 14px; transition: .2s; z-index: 20; font-size: 14px;
+  width: max-content; max-width: min(460px, calc(100vw - 32px)); text-align: center; line-height: 1.35; }   /* a longer message wraps as a neat box, not a blob */
 .toast.show { opacity: 1; transform: translateX(-50%); }
 .toast.act { pointer-events: auto; }
 .toast button { margin-left: 10px; font: inherit; font-weight: 700; color: inherit; background: rgba(255,255,255,.18); border: 0; border-radius: 999px; padding: 3px 10px; cursor: pointer; }
@@ -418,9 +421,9 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .sorting { background: var(--card); border: 1px solid color-mix(in srgb, #e03131 45%, var(--line)); border-radius: var(--radius); margin: 14px 0 6px; padding: 0 12px; }
 .sorting summary { cursor: pointer; font-weight: 800; padding: 10px 0; }
 .sorting.ok { padding: 10px 12px; border-color: var(--line); color: var(--muted); }
-.srow { display: grid; grid-template-columns: 112px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px; }
+.srow { display: grid; grid-template-columns: 190px 1fr; gap: 8px; padding: 7px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: 14px; }
 .srow b { white-space: nowrap; }
-.sorting .srow { grid-template-columns: 112px 1fr auto; align-items: center; }
+.sorting .srow { grid-template-columns: 190px 1fr auto; align-items: center; }
 /* the one look for every small action button (+ Add, Reorder, Send welcome, It's on, OK noted, Copy, Restore …): light green with dark
    green text. "Do it" buttons (Save, Add ticked …) stay dark blue; anything that removes something is red (.ackbtn.danger, .danger) */
 :root { --act-bg: #e6f6ea; --act-bg2: #d3efdb; --act-line: #8fd19e; --act-text: #1e6b33; --del-bg: #fff0f0; --del-line: #f5b5b5; --del-text: #b42318; }
@@ -488,7 +491,7 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .ap-h { padding: 10px 12px; font-weight: 800; background: color-mix(in srgb, #1f6feb 10%, var(--card)); }
 .ap-batch { border-top: 1px solid var(--line); }
 .ap-src { padding: 8px 12px; }
-.ap-row { display: grid; grid-template-columns: 112px 1fr auto; gap: 8px; align-items: start; padding: 7px 12px; border-top: 1px dashed var(--line); font-size: 14px; }
+.ap-row { display: grid; grid-template-columns: 190px 1fr auto; gap: 8px; align-items: start; padding: 7px 12px; border-top: 1px dashed var(--line); font-size: 14px; }
 .ap-row.important { background: var(--important); }
 .ap-when { font-weight: 700; white-space: nowrap; }
 .ap-what .p { margin-right: 2px; }
@@ -629,7 +632,7 @@ body.nosections .sections { display: none; }
   body:not(.nosections) .fab { bottom: calc(76px + env(safe-area-inset-bottom)); }
   body:not(.nosections) .toast { bottom: calc(140px + env(safe-area-inset-bottom)); }
 }
-@media (max-width: 360px) { .sections button { font-size: 10.5px; } }   /* "Maintenance" fits whole on the smallest phones */
+@media (max-width: 360px) { .sections button { font-size: 10.5px; } }   /* every label fits whole on the smallest phones */
 @media print { .sections { display: none !important; } }
 
 /* an entry's time in front of its title (Month, Upcoming, day sheets) */
@@ -748,3 +751,19 @@ body.nosections .sections { display: none; }
 #fabpop { position: fixed; z-index: 60; display: grid; gap: 6px; width: max-content; min-width: 210px; max-width: calc(100vw - 32px); padding: 8px; background: var(--card); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 8px 28px rgba(0,0,0,.25); }
 #fabpop button { width: 100%; margin: 0; padding: 11px 16px; border: 0; border-radius: 10px; background: var(--brand); color: var(--brand-text); font: inherit; font-size: 15px; font-weight: 600; text-align: left; white-space: normal; cursor: pointer; }
 #fabpop button:hover { filter: brightness(1.2); }
+/* Every box title is centred. Something on the right of a title (+ Add, a fold arrow) stays on the right. */
+.card h3, .tl-head h3, .rq h3, .sortbox h3, .form h2 { text-align: center; }
+.card h3.chead, .vsec h3 { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.card h3.chead > :first-child, .vsec h3 > :first-child { grid-column: 2; }
+.card h3.chead > :nth-child(2), .vsec h3 > :nth-child(2) { grid-column: 3; justify-self: end; }
+.tl-head { justify-content: center; } .tl-head h3 { flex: 1 0 100%; }
+/* Box titles white on blue: Settings, Info, Changes. Month colours on Birthdays stay. */
+.card:not(.bmonth):not(.pad) > h3 { background: var(--brand); color: #fff; border-bottom: 1px solid rgba(255,255,255,.35); }
+.card:not(.bmonth):not(.pad) > h3 small, .card:not(.bmonth):not(.pad) > h3 .muted { color: rgba(255,255,255,.85); }
+.vsec h3 .vfold { background: transparent; color: #fff; border-color: rgba(255,255,255,.7); }   /* ▸ Show / ▾ Hide on the blue bar */
+.gtitle { background: var(--brand); color: #fff; text-align: center; padding: 8px 12px; border-radius: 10px 10px 0 0; }   /* month bar on the calendar: same look as every box title; the names under it keep their colours */
+/* Upcoming: week bars, same look; badges stay on the right, under the title on a phone */
+.wk-h { display: grid; grid-template-columns: 1fr auto 1fr; gap: 8px; background: var(--brand); color: #fff; padding: 8px 12px; margin: 0 -10px 6px; border-radius: 16px 16px 0 0; text-align: center; }
+.wk-h > :first-child { grid-column: 2; } .wk-h .wk-badges { grid-column: 3; justify-content: flex-end; } .wk-h .wk-label { color: #fff; } .wk-h .wk-range { color: rgba(255,255,255,.85); }
+@media (max-width: 699px) { .wk-h { grid-template-columns: 1fr; } .wk-h > :first-child, .wk-h .wk-badges { grid-column: 1; justify-content: center; } }
+@media (max-width: 420px) { .sections:has(> button:nth-of-type(8)) button { font-size: 9.5px; letter-spacing: -.25px; padding-left: 0; padding-right: 0; } }   /* 8 sections on a small phone: every label still fits whole */

@@ -2,6 +2,28 @@
 
 ## Next version (not released yet)
 
+## 1.0.42
+- 🛒 Lists: shopping lists (or any list) for the family's own logins. Name a list, say which house it's for, keep it to yourself or share it
+  with family members. Tick things off in the shop, even with no signal (it catches up when you're back online), and see what others
+  add within seconds. "Send by WhatsApp" sends what's still to get.
+  - The main page has a box per house (tap its bar to fold it away), one line per list with how much is still to get.
+  - Categories (e.g. Pantry, Fruit & veg - or Range Bag on a shooting list) group a list into sections that fold away. Each list has its own
+    (lists with the same name share them); a thing goes back into the category it was in last time.
+  - Hold the ≡ and drag a line up or down, or into another category; drag a category's ≡ to move the whole category.
+    Tap a heading (Item, Added by) to sort.
+  - Never the same thing twice: adding something that's completed brings it back (capitals don't matter).
+  - Completed shows who ticked it and when, and folds away; the 🗑 removes a line, with ↩ Undo.
+  - ✎ on a line: change it, pick its category, or move it to another list.
+  - Tap the list's name to fold away the add boxes in the shop; a refresh comes back to the list you were in.
+- 🔔 Phone notifications (turn them on in the 👤 menu, on each phone; iPhones from the home-screen app):
+  - When a child adds to a list a parent is on, the parents on it get one notification for the lot ("Leo added 3 things: …").
+  - The 🛒 next to WhatsApp on a shared list ("Going shopping") tells everyone else on it; its light turns 🟢 while someone is shopping; for 2 hours the shopper hears about anything added.
+- 👤 Logins have a first name and a surname on Settings; the site shows first names everywhere.
+- 📱 Phones: no page name at the top of a page (the menu at the bottom shows where you are).
+- 📅 Every date now reads the same way: DD/MM/YYYY, on screen and in emails.
+- 🎯 Titles on boxes and forms are now centred everywhere.
+- 🎨 Box titles on Settings, Info and Changes, and the month and week bars on the calendar, are white on the dark blue.
+
 ## 1.0.41
 - 📱 Phones: the menu at the bottom is now dark blue like the header, with clearer labels and a stronger mark on the current page.
 - 🐄 A cow in the icon list for places.

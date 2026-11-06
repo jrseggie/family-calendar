@@ -31,7 +31,7 @@ export async function problems(env, now = new Date()) {
   const h = Object.fromEntries((await env.DB.prepare("SELECT key, at FROM health").all()).results.map((r) => [r.key, r.at]));
   const older = (key, ms) => !h[key] || new Date(h[key]).getTime() < now.getTime() - ms;
   const tz = brand(await loadSettings(env.DB)).tz;   // the calendar's time zone (Settings > This calendar)
-  const when = (s) => s ? new Date(s).toLocaleString("en-GB", { timeZone: tz, dateStyle: "medium", timeStyle: "short" }) : "never";
+  const when = (s) => s ? new Date(s).toLocaleString("en-GB", { timeZone: tz, day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "never";
   const sastHour = localParts(now, tz).hour;   // the hour where the family is
   const out = [];
   // the routine runs 07:00-23:00 every 2 hours; only judge it in the daytime so the overnight gap doesn't count

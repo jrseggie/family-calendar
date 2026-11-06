@@ -8,14 +8,13 @@ import "../../public/rules.js";
 const clashRules = globalThis.CalendarRules;
 
 const DAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const MON = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const pad = (n) => String(n).padStart(2, "0");
 const iso = (d) => `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 const parse = (s) => new Date(s + "T00:00:00Z");
 const addDays = (d, n) => new Date(d.getTime() + n * 864e5);
-const nice = (s) => { const d = parse(s); return `${DAY[d.getUTCDay()]} ${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
-const short = (s) => { const d = parse(s); return `${d.getUTCDate()} ${MON[d.getUTCMonth()]}`; };
+const short = (s) => `${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`;   // every date reads DD/MM/YYYY
+const nice = (s) => `${DAY[parse(s).getUTCDay()]} ${short(s)}`;
 const whoList = (w) => String(w || "").split(",").map((x) => x.trim()).filter(Boolean);
 
 // Monday..Sunday of the week after `now` (sent on Sunday evening, so this is "next week")
@@ -99,6 +98,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
   if (ifs.length) text += "❔ IF PENCILLED-IN PLANS GO AHEAD\n" + ifs.map((r) => `- ${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}: ${r.msg}`).join("\n") + "\n\n";
   if (expiring.length) text += "⏳ RENEW SOON\n" + expiring.map((x) => `- ${x}`).join("\n") + "\n\n";
   if (leave.length) text += "🌴 ON LEAVE\n" + leave.map((l) => `- ${l.who}: ${l.when}`).join("\n") + "\n\n";
+  for (const x of opts.extra || []) text += `${x.title.toUpperCase()}\n` + x.lines.map((l) => `- ${l}`).join("\n") + "\n\n";
   for (const d of days) {
     const rows = [
       ...(d.ph ? [d.ph] : []), ...d.phx,
@@ -119,6 +119,7 @@ export function buildDigest(data, from, to, site, opts = {}) {
     `<b>${r.start === r.end ? nice(r.start) : short(r.start) + " – " + short(r.end)}</b> · ${esc(r.msg)}`));
   if (expiring.length) body += warnBox("Renew soon", expiring.map(esc));
   if (leave.length) body += noteBox("🌴 On leave", leave.map((l) => `<b>${esc(l.who)}</b> · ${esc(l.when)}`));
+  for (const x of opts.extra || []) body += noteBox(x.title, x.lines.map(esc));
   for (const d of days) {
     const wd = parse(d.key).getUTCDay();
     const rows = [

@@ -2,3 +2,5 @@
 export const extraApi = {};
 export const extraEmail = {};
 export const extraInboxes = [];
+export const extraJobs = [];
+export const extraDigest = [];

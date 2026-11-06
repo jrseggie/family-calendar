@@ -304,7 +304,7 @@ function cellSheet(key, person) {
   state.filter = saved;
   const wh = whereIndex(key, key)[key][person];
   const items = info.items.filter((it) => it.who.includes(person));
-  const title = `${person} · ${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}`;
+  const title = `${person} · ${parse(key).toLocaleDateString("en-GB", { weekday: "long" })} ${fmtLong(key)}`;
   const pl = wh && LOC()[wh.loc];
   const whereTxt = !wh || !wh.loc ? "" : wh.loc === "unknown" ? "❓ Holiday – not planned yet" : wh.loc === "conflict" ? "⚠ Down for two places"
     : !pl ? wh.loc : pl.kind === "school" ? `${pl.icon} At school (boarding)` : `${pl.icon} ${esc(pl.label)}${wh.explicit ? "" : " (usual)"}`;
@@ -600,7 +600,7 @@ function clashSheet(key) {
   const placesTxt = activePlaces().filter((p) => p.kind === "home" || p.kind === "away" || list(p.key) !== "nobody")
     .map((p) => `${p.icon} ${p.kind === "school" ? "At school" : p.kind === "friend" ? "At a friend's" : p.kind === "away" ? "Away" : esc(p.label)}: <b>${esc(list(p.key))}</b>`).join("<br>");
   const sort = canAdd() && alone.length;
-  openDialog(`<form class="form" id="f"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long" })}</h2>
+  openDialog(`<form class="form" id="f"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long" })} ${fmtLong(key)}</h2>
     ${clashes.length ? `<div class="clashes">${clashes.map((c) => `<div>⚠ ${esc(c)}${ackBy(key, c) ? ` <small class="muted">· 👍 noted by ${esc(ackBy(key, c))}</small>` : ""}</div>`).join("")}</div>` : `<p class="muted">No clashes 👍</p>`}
     ${CalendarRules.maybesFor(state.data, key).map((c) => `<div class="dmaybe">❔ ${esc(c)}</div>`).join("")}
     <div class="meta">${placesTxt}</div>

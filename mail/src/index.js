@@ -17,8 +17,9 @@ import { welcomeWaiting } from "../../lib/welcome.js";
 import { processInbox } from "../../lib/inbox.js";
 import { sendUsage } from "../../lib/usage.js";
 import { selfUpdate } from "../../lib/self-update.js";
-import { extraEmail } from "../../src/extras.js";
+import { extraEmail, extraJobs, extraDigest } from "../../src/extras.js";
 import { syncRequests, makerNews } from "../../lib/requests.js";   // optional extra addresses (none in the public release)
+import { pushCatchUp } from "../../lib/push.js";   // 🔔 list notifications
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
@@ -47,6 +48,7 @@ export default {
       await step("weekly email", maybeDigest(env, t));
       await step("welcome emails", welcomeWaiting(env));   // ✉️ a new login's welcome, once they've confirmed Cloudflare's email
       await step("outbox", sendOutbox(env));
+      await step("notifications", pushCatchUp(env, t));   // 🔔 list notifications a cut-off request left behind (lib/push.js)
       // once a day: "this calendar is in use" to the Family Calendar maker (Settings > This calendar; lib/usage.js)
       await step("usage check-in", sendUsage(env, t));
       // at night, once a day: a calendar put in by the install page updates itself to the newest release (lib/self-update.js)
@@ -106,6 +108,11 @@ async function hourly(env, now = new Date()) {
   await makerMail(env).catch((e) => console.log("maker mail:", String(e)));
   await syncEmailAddresses(env).catch((e) => markHealthy(env, "email_sync_error", String(e.message || e).slice(0, 500)));   // only if the Cloudflare key is set
   await monthlyBackup(env, now).catch((e) => console.log("backup email:", String(e)));
+  if (extraJobs.length) {   // private modules' own hourly jobs (none in the public release)
+    const b = brand(await loadSettings(env.DB), env.SITE), admins = async () => (await env.DB.prepare(`SELECT DISTINCT u.email FROM users u JOIN digest_recipients d ON lower(d.email) = lower(u.email)
+      WHERE u.role = 'admin' AND u.active = 1 AND d.verified = 1`).all()).results.map((r) => r.email);
+    for (const job of extraJobs) await job(env, now, { sendOnce, page, here: localParts(now, b.tz), admins, url: b.url, full: b.full }).catch((e) => console.log("extra job:", String(e)));
+  }
   const alert = await healthCheck(env);
   if (alert) {   // ALERT_TO if set (e.g. one person's address), else every admin whose address is confirmed for email
     const to = env.ALERT_TO ? [env.ALERT_TO] : (await env.DB.prepare(`SELECT DISTINCT u.email FROM users u JOIN digest_recipients d ON lower(d.email) = lower(u.email)
@@ -205,7 +212,7 @@ export async function sendDigest(env, now) {
   const data = await loadData(env);
   const sched = digestSchedule(await loadSettings(env.DB)), { from, to, sentOn } = digestRange(now, sched);
   const { subject, text, html } = buildDigest(data, from, to, data.brand.url || env.SITE,
-    { sentOn, when: `every ${DAYS[sched.day]} at ${String(sched.hour).padStart(2, "0")}:00` });
+    { sentOn, when: `every ${DAYS[sched.day]} at ${String(sched.hour).padStart(2, "0")}:00`, extra: (await Promise.all(extraDigest.map((f) => f(env, sentOn).catch(() => null)))).filter(Boolean) });
   if (env.ONLY_TO) return void await sendTo(env, await recipients(env), subject, text, html);   // ONLY_TO (--var when testing) = just that address
   const r = await sendOnce(env, "digest", sentOn, await recipients(env), subject, text, html);
   if (r.all) await markHealthy(env, "digest", r.result);

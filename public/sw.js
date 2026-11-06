@@ -55,3 +55,21 @@ async function data(req) {
     return new Response(JSON.stringify(d), { headers: { "content-type": "application/json" } });
   }
 }
+
+// 🔔 a notification from the calendar (lib/push.js): show it; several from the same person about the same list replace each
+// other (same tag), so a run of additions is one notification. Tapping it opens the calendar on that list.
+self.addEventListener("push", (e) => {
+  let m = {}; try { m = e.data ? e.data.json() : {}; } catch { m = { body: e.data?.text() }; }
+  e.waitUntil(self.registration.showNotification(m.title || "Family Calendar", {
+    body: m.body || "", tag: m.tag || undefined, renotify: !!m.tag, data: { url: m.url || "/" }, icon: "/icon-192.png", badge: "/icon-192.png" }));
+});
+self.addEventListener("notificationclick", (e) => {
+  e.notification.close();
+  const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
+  e.waitUntil((async () => {
+    const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });
+    const w = wins.find((c) => new URL(c.url).origin === self.location.origin);
+    if (w) { await w.focus(); return w.navigate(url).catch(() => self.clients.openWindow(url)); }
+    return self.clients.openWindow(url);
+  })());
+});

@@ -22,6 +22,8 @@ import { connectCloudflare, syncAccessPolicy, addAccessDomain } from "../../lib/
 import { sendWelcome, welcomeMail, welcomeWhatsApp, canSendDirect, markWelcome } from "../../lib/welcome.js";
 import { involvesOthers, ownEntry, tellParents } from "../../lib/child.js";
 import { extraApi, extraInboxes } from "../../src/extras.js";
+import { listsApi, isFamilyLogin } from "../../lib/lists.js";
+import { pushApi } from "../../lib/push.js";   // 🔔 phone notifications   // 🛒 Lists (shopping lists for the family's own logins)
 import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
@@ -229,9 +231,9 @@ function cleanPerson(b) {
 
 function cleanUser(b, people) {
   const email = String(b.email || "").trim().toLowerCase();
-  const name = String(b.name || "").trim();
+  const name = String(b.name || "").trim().slice(0, 40), surname = String(b.surname || "").trim().slice(0, 60);   // first name = what the site shows
   if (!EMAIL.test(email)) invalid("Enter a valid email address");
-  if (!name) invalid("Name is required");
+  if (!name) invalid("First name is required");
   const role = ROLES.includes(b.role) ? b.role : "viewer";
   const limited = role === "limited";
   const see = limited ? cleanWho(b.see || [], people) : null;
@@ -239,7 +241,7 @@ function cleanUser(b, people) {
   const person = role === "child" && people.some((p) => p.name === b.person) ? b.person : null;
   const invite = String(b.invite_email || "").trim().toLowerCase();
   if (invite && !EMAIL.test(invite)) invalid("Pick a valid address for calendar invites");
-  return { email, name, role, see, see_school: limited && b.see_school ? 1 : 0, see_birthdays: limited && b.see_birthdays ? 1 : 0,
+  return { email, name, surname: surname || null, role, see, see_school: limited && b.see_school ? 1 : 0, see_birthdays: limited && b.see_birthdays ? 1 : 0,
            can_edit: limited && b.can_edit ? 1 : 0, edit_who: editWho || null, person, active: b.active === false || b.active === 0 ? 0 : 1, invite_email: invite || null };
 }
 
@@ -276,7 +278,7 @@ async function getAll(env, u) {
     me: { id: u.id, name: u.name, email: u.email, role: u.role, person: u.person || null, isAdmin: isAdmin(u), canEditAll: canEditAll(u),
           canAddEvents: canEditAll(u) || u.role === "child" || (u.role === "limited" && !!u.can_edit),
           editablePeople: canEditAll(u) || u.role === "child" ? null : u.editList,
-          seeSchool: seesSchool(u), seeBirthdays: seesBirthdays(u), seeLog: canEditAll(u), demo: demo(env) },
+          seeSchool: seesSchool(u), seeBirthdays: seesBirthdays(u), seeLog: canEditAll(u), family: isFamilyLogin(u, allPeople), demo: demo(env) },
     people, categories: CATEGORIES, places: await loadPlaces(env), brand: brand(await loadSettings(env.DB), env.ORIGIN || ""),
     country: (await loadSettings(env.DB)).country || null,
     version: VERSION, unreleased: UNRELEASED, upstream: UPSTREAM_REPO, needsWizard: isAdmin(u) && !(await loadSettings(env.DB)).family_name,
@@ -658,7 +660,7 @@ async function setupUsers(request, env, u, id) {
     const b = await request.json(), rec = cleanUser(b, people);
     if (all.some((x) => x.email === rec.email)) invalid("That email already has a login");
     const newId = await insert(env, "users", rec);
-    await log(env, u, "Added login", `${rec.name} <${rec.email}> as ${rec.role}`);
+    await log(env, u, "Added login", `${[rec.name, rec.surname].filter(Boolean).join(" ")} <${rec.email}> as ${rec.role}`);
     await syncAccessPolicy(env).catch((e) => log(env, u, "Sign-in list not updated", String(e.message || e)));
     return json({ ok: true, id: newId }, 201);   // the screen then offers the welcome (from your email / WhatsApp)
   }
@@ -669,7 +671,7 @@ async function setupUsers(request, env, u, id) {
     if (all.some((x) => x.id !== id && x.email === rec.email)) invalid("That email already has a login");
     if (before.role === "admin" && (rec.role !== "admin" || !rec.active) && !activeAdmins(id)) invalid("There must always be at least one admin");
     await update(env, "users", id, rec);
-    await log(env, u, "Edited login", `${rec.name} <${rec.email}> as ${rec.role}${rec.active ? "" : " (disabled)"}`);
+    await log(env, u, "Edited login", `${[rec.name, rec.surname].filter(Boolean).join(" ")} <${rec.email}> as ${rec.role}${rec.active ? "" : " (disabled)"}`);
     await syncAccessPolicy(env).catch((e) => log(env, u, "Sign-in list not updated", String(e.message || e)));
     return json({ ok: true });
   }
@@ -904,7 +906,7 @@ async function decideProposals(request, env, u) {
 
 // the "Calendar updated" email for a finished batch (same look as tools/email_layout.py, via mail/src/layout.js)
 function batchEmail(batch, items, u, colors = {}, br = brand({})) {
-  const nice = (s) => { const d = new Date(s + "T00:00:00Z"); return d.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short", timeZone: "UTC" }); };
+  const nice = (s) => { const d = new Date(s + "T00:00:00Z"); return `${d.toLocaleDateString("en-GB", { weekday: "short", timeZone: "UTC" })} ${s.slice(8, 10)}/${s.slice(5, 7)}/${s.slice(0, 4)}`; };
   const entry = (x) => { const d = JSON.parse(x.data); return x.kind === "update" ? { ...d.before, ...d.changes, title: (d.changes.title || d.before?.title || "") + " (updated)" }
     : x.kind === "school_holiday" ? { start: d.start, end: d.end, who: d.child, title: "🌿 " + d.name }
     : x.kind === "public_holiday" ? { start: d.date, end: d.date, who: "Family", title: "Public holiday: " + d.name }
@@ -1069,7 +1071,7 @@ function crossSite(request) {
   return !!site && !["same-origin", "none"].includes(site);
 }
 
-export async function onRequest({ request, env, params }) {
+export async function onRequest({ request, env, params, waitUntil }) {
   const parts = params.path || [];
   if (crossSite(request)) return fail(403, "Changes can only be made from the calendar itself");
   try {
@@ -1089,7 +1091,7 @@ export async function onRequest({ request, env, params }) {
     const last = parts[parts.length - 1];
     const id = last && /^\d+$/.test(last) ? parseInt(last, 10) : null;
     const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time", "people-order", "icon"].includes(parts[1]);   // addressed by key / no id
-    if (["PUT", "DELETE"].includes(request.method) && !id && !byKey) return fail(400, "Missing id");
+    if (["PUT", "DELETE"].includes(request.method) && !id && !byKey && parts[0] !== "lists") return fail(400, "Missing id");   // Lists: items can be addressed by the phone's own id (c:...)
 
     if (parts[0] === "all" && request.method === "GET") {
       // which version each login's devices are really running (table health, key device:<name>:<device>): a device on old code is visible
@@ -1108,6 +1110,8 @@ export async function onRequest({ request, env, params }) {
     if (parts[0] === "deleted" && request.method === "GET") return await recentlyDeleted(env, u);
     if (parts[0] === "vault") return await vault(request, env, u, id);
     if (parts[0] === "requests") return await requestsApi(request, env, u, parts);
+    if (parts[0] === "lists") return await listsApi({ request, env, u, parts, json, deny, invalid, people: await loadPeople(env), waitUntil });
+    if (parts[0] === "push") return await pushApi({ request, env, u, parts, json, invalid });   // 🔔 this phone's notifications (👤 menu)
     if (parts[0] === "me" && parts[1] === "feed") return await myFeed(request, env, u, request.method === "POST" && parts[2] === "reset");
     if (parts[0] === "invite" && request.method === "POST" && id) return await invite(request, env, u, id);
     if (parts[0] === "proposals" && parts[1] === "decide" && request.method === "POST") return await decideProposals(request, env, u);

@@ -79,8 +79,10 @@ test("pencilled in: no ⚠ but an 'If … goes ahead' note; nudged 2 weeks befor
   assert.match(mail.text, /beach\? ✏️ \(maybe\)/);
   assert.match(mail.text, /❔ IF PENCILLED-IN PLANS GO AHEAD/);
   assert.match(mail.text, /still pencilled in – on or not\?/);
+  const extra = buildDigest({ ...data([trip]), recurring: [] }, "2026-10-12", "2026-10-18", "https://example.com", { sentOn: "2026-10-11", extra: [{ title: "⚡ Extra block", lines: ["A line from a private module"] }] });
+  assert.match(extra.text, /⚡ EXTRA BLOCK\s+- A line from a private module/); assert.match(extra.html, /A line from a private module/);
   const mail2 = buildDigest({ ...data([done]), recurring: [] }, "2026-10-12", "2026-10-18", "https://example.com", { sentOn: "2026-10-11" });
-  assert.match(mail2.text, /✅ CONFIRMED SINCE LAST WEEK\s+- Anna & Tom: beach \(Wed 14 Oct\) – confirmed by Anna/);
+  assert.match(mail2.text, /✅ CONFIRMED SINCE LAST WEEK\s+- Anna & Tom: beach \(Wed 14\/10\/2026\) – confirmed by Anna/);
 });
 test("rules: an Uber (Transport) entry replaces '(lifts!)'", () => {
   const d = data([ev("2026-10-14", "2026-10-14", "Anna, Tom", "beach", { location: "beach" }),
@@ -243,8 +245,8 @@ test("Sunday email: Renew soon lists Info expiries within 30 days of the Sunday 
   ];
   const mail = buildDigest({ ...data([]), recurring: [], expiring }, "2026-10-12", "2026-10-18", "https://example.com");
   assert.match(mail.html, /Renew soon/);
-  assert.match(mail.text, /🚗 Polo – Licence disc expires: Fri 23 Oct \(12 days\)/);
-  assert.match(mail.text, /🎯 Shotgun – Licence expires: expired 1 Oct/);
+  assert.match(mail.text, /🚗 Polo – Licence disc expires: Fri 23\/10\/2026 \(12 days\)/);
+  assert.match(mail.text, /🎯 Shotgun – Licence expires: expired 01\/10\/2026/);
   assert.doesNotMatch(mail.text, /Passport/);
   assert.match(mail.subject, /⏳ 2 to renew/);
   assert.doesNotMatch(buildDigest({ ...data([]), recurring: [] }, "2026-10-12", "2026-10-18", "").html, /Renew soon/);
@@ -257,8 +259,8 @@ test("Info reminders: a month before each expiry, today if that's passed, none o
     { k: "Passport expires", v: "2026-01-01" }, { k: "Licence number", v: "2027-01-01", hide: true }] };
   const r = vaultReminders(7, item, "2026-10-09", ["Anna", "Tom"]);
   assert.deepEqual(r.map((x) => [x.start, x.who, x.title]), [
-    ["2026-10-09", "Anna", "⏳ Renew: Polo – Competency (expires 20 Oct 2026)"],
-    ["2027-02-28", "Anna", "⏳ Renew: Polo – Licence disc (expires 31 Mar 2027)"]]);
+    ["2026-10-09", "Anna", "⏳ Renew: Polo – Competency (expires 20/10/2026)"],
+    ["2027-02-28", "Anna", "⏳ Renew: Polo – Licence disc (expires 31/03/2027)"]]);
   assert.match(r[0].source, /^🔒 Info #7 2026-10-20 /);
   assert.equal(vaultReminders(7, { ...item, person: null }, "2026-10-09", [], "Anna, Tom")[0].who, "Anna, Tom");   // the admins
   assert.equal(vaultReminders(7, { ...item, person: null }, "2026-10-09", [])[0].who, "Family");   // no admin in the calendar
@@ -317,7 +319,7 @@ test("leave: a helper on 🌴 leave isn't free, doesn't count at a house, and a 
   assert.ok(c.includes("Kid is at the House with no adult there"));   // she doesn't count while on leave
   assert.deepEqual(R.clashesFor(d([trip, stay]), "2026-10-17"), []);   // without the leave she does
   const mail = buildDigest(d([leave]), "2026-10-12", "2026-10-18", "https://example.com");
-  assert.match(mail.text, /🌴 ON LEAVE\s+- Nanny: Wed 14 Oct – Tue 20 Oct/);
+  assert.match(mail.text, /🌴 ON LEAVE\s+- Nanny: Wed 14\/10\/2026 – Tue 20\/10\/2026/);
   assert.match(mail.html, /On leave/);
 });
 

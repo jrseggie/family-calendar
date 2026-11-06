@@ -27,9 +27,10 @@ const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0
 const parse = (s) => { const [y, m, d] = s.split("-").map(Number); return new Date(y, m - 1, d); };
 const addDays = (d, n) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
 const todayISO = () => iso(new Date());
-const fmtDay = (s) => parse(s).toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" });
-const fmtShort = (s) => parse(s).toLocaleDateString("en-GB", { day: "numeric", month: "short" });
-const fmtLong = (s) => parse(s).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
+// every date on the site reads DD/MM/YYYY; calendar lists keep the weekday in front of it
+const fmtLong = (s) => parse(s).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" });
+const fmtShort = fmtLong;
+const fmtDay = (s) => `${parse(s).toLocaleDateString("en-GB", { weekday: "short" })} ${fmtLong(s)}`;
 const mondayOf = (d) => addDays(d, -((d.getDay() + 6) % 7));
 const whoList = (w) => String(w || "").split(",").map((x) => x.trim()).filter(Boolean);
 const pchips = (people) => people.map((p) => `<span class="p" style="--c:${COLORS[p]}">${esc(p)}</span>`).join("");
@@ -380,7 +381,7 @@ async function wizardForm() {
 function jobsCard() {
   const at = state.data.jobsRanAt;
   if (!state.data.me.isAdmin || state.data.me.demo || (at && Date.now() - new Date(at).getTime() < 30 * 60000)) return "";
-  return `<div class="sorting"><b>⚠ The calendar's background jobs haven't run ${at ? `since ${esc(new Date(at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))}` : "yet"}</b>
+  return `<div class="sorting"><b>⚠ The calendar's background jobs haven't run ${at ? `since ${esc(new Date(at).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }))}` : "yet"}</b>
     <div class="muted" style="font-size:13px">These send the Sunday email and queued emails. Ask Claude to look at the Worker's cron triggers.</div></div>`;
 }
 
@@ -506,10 +507,8 @@ function renderUpcoming() {
       }
       body += `<div class="${cls}" id="d-${key}">${dayHeader(key, info)}${warn}${breakItems.join("")}${items.map((it) => itemHTML(it, { day: key })).join("")}${stillOn}</div>`;
     }
-    const label = w === 0 ? "This week" : w === 1 ? "Next week" : `Week of ${fmtShort(iso(mon))}`;
-    const range = mon.getMonth() === sun.getMonth()
-      ? `${mon.getDate()} – ${sun.getDate()} ${MONTHS[sun.getMonth()].slice(0, 3)}`
-      : `${fmtShort(iso(mon))} – ${fmtShort(iso(sun))}`;
+    const label = w === 0 ? "This week" : w === 1 ? "Next week" : "Week";
+    const range = `${fmtShort(iso(mon))} – ${fmtShort(iso(sun))}`;
     const offBadges = Object.keys(off).filter((c) => off[c].length).map((c) => {
       const d = off[c], all = d.length === 7;
       const span = all ? "all week" : d.length === 1 ? fmtDay(d[0]).split(" ")[0] : `${fmtDay(d[0]).split(" ")[0]}–${fmtDay(d[d.length - 1]).split(" ")[0]}`;
@@ -733,13 +732,13 @@ function renderSchool() {
 async function renderLog() {
   if (!state.stay) $("#main").innerHTML = `<p class="muted pad">Loading…</p>`;   // a refresh of the same page updates it in place
   const [rows, gone] = await Promise.all([api("GET", "log"), api("GET", "deleted")]);
-  const when = (s) => new Date(s).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" });
+  const when = (s) => new Date(s).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
   const deleted = gone.length ? `<div class="card log"><h3>🗑 Recently deleted <small class="muted">(can be restored for 30 days)</small></h3>${gone.map((g) =>
     `<div class="row del-row"><span><small>${esc(when(g.at))} · ${byName(g.by)}</small><br><b>${esc(g.title)}</b> ${whoList(g.who).map((p) => `<span class="pill" style="--c:${COLORS[p] || "var(--muted)"}">${esc(p)}</span>`).join(" ")}
       <small class="muted">${fmtShort(g.start)}${g.end !== g.start ? " – " + fmtShort(g.end) : ""}${g.n > 1 ? ` + ${g.n - 1} more repeat${g.n > 2 ? "s" : ""}` : ""}</small></span>
       <button type="button" class="ackbtn" data-restore="${esc(g.batch)}">↩ Restore</button></div>`).join("")}</div>` : "";
   $("#main").innerHTML = pageHead("🕘 Changes") + deleted + `<div class="card log"><h3>Recent changes</h3>${rows.map((r) =>
-    `<div class="row"><small>${esc(new Date(r.at.endsWith("Z") ? r.at : r.at + "Z").toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "short" }))} · ${byName(r.user)}</small><br>
+    `<div class="row"><small>${esc(new Date(r.at.endsWith("Z") ? r.at : r.at + "Z").toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }))} · ${byName(r.user)}</small><br>
      <b>${esc(r.action)}</b> ${esc(r.details || "")}</div>`).join("")}</div>`;
 }
 // who made a change, in their own colour (a login whose name is a person in the calendar); others (e.g. Claude) grey
@@ -1263,7 +1262,7 @@ function holidayForm(h, preset = {}) {
 
 function daySheet(key) {
   const info = buildDays(key, key)[key];
-  openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}</h2>
+  openDialog(`<div class="form"><h2>${parse(key).toLocaleDateString("en-GB", { weekday: "long" })} ${fmtLong(key)}</h2>
     <div>${info.ph ? `<span class="badge ph">${info.phFlag} ${esc(info.ph)}</span> ` : ""}${info.phx.map((x) => `<span class="badge phx">${x.flag} ${esc(x.name)}</span> `).join("")}${info.off.map((c) => `<span class="badge off">${c} off school</span>`).join(" ")}</div>
     <div class="sheet-list">${info.items.map((it) => itemHTML(it, { day: key })).join("") || `<p class="muted">Nothing planned.</p>`}</div>
     <div class="actions"><button type="button" id="cancel">Close</button><button class="primary" id="addday">+ Add on this day</button></div></div>`, () => {
@@ -1345,7 +1344,7 @@ function setupLogins() {
       : seen ? `<span class="dbadge ok">✅ Signed in · last used ${seen}</span>`
       : u.welcome_at ? `<span class="dbadge wait">👋 Welcome sent ${fmtShort(u.welcome_at.slice(0, 10))}${VIA[u.welcome_via] ? ` ${VIA[u.welcome_via]}` : ""} · not signed in yet</span>`
       : `<span class="dbadge off">Not signed in yet</span>`;
-    return `<div class="row tap" data-user="${u.id}"><span><b>${esc(u.name)}</b> <small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small><br>
+    return `<div class="row tap" data-user="${u.id}"><span><b>${esc([u.name, u.surname].filter(Boolean).join(" "))}</b> <small class="role ${u.role}">${ROLE_INFO[u.role][0]}</small><br>
       <small class="muted">${esc(u.email)}${u.invite_email ? ` · 📅 invites → ${esc(u.invite_email)}` : ""}${extra ? `<br>${extra}` : ""}</small>
       <div class="rbadges">${status}${sunday ? `<span class="dbadge ok">📧 Sunday email</span>` : ""}</div></span>
       ${u.active && !seen ? `<span class="uacts"><button type="button" class="ackbtn" data-welcome="${u.id}">👋 Send welcome</button></span>` : ""}</div>`;
@@ -1374,7 +1373,7 @@ function setupEmails() {
 // 📥 every address the calendar receives email on: inbox@ (dates -> Waiting for approval) plus any extra ones (e.g. a private
 // expenses@) - what it's for, its address, where things go and who reads them, last email / problem - and the one Claude key they share
 function mailboxesCard(inbox) {
-  const day = (t) => esc(new Date(t).toLocaleDateString("en-GB", { day: "numeric", month: "short" }));
+  const day = (t) => esc(new Date(t).toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }));
   const status = (last, problem) => problem ? mstat("wait", "⚠ Problem", problem) : last ? mstat("ok", `Last email ${day(last)}`) : mstat("off", "No email yet");
   const row = (attr, icon, color, title, address, to, reader, last, problem) => `<div class="row tap mrow" ${attr}>
       <span class="mico" style="--c:${color}">${icon}</span>
@@ -1652,7 +1651,7 @@ function digestTimeForm() {
 }
 
 // a stored time (UTC, e.g. updated_at) as a date in this phone's / PC's own time zone
-const localDay = (t) => t ? new Date(t.endsWith("Z") || t.includes("+") ? t : t + "Z").toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" }) : "";
+const localDay = (t) => t ? new Date(t.endsWith("Z") || t.includes("+") ? t : t + "Z").toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 
 // what the daily usage check-in sends, in words
 const usageText = (p) => [p.name ? `the name "${p.name}"` : "a random number", `version ${p.version}`,
@@ -1807,7 +1806,8 @@ function userForm(u) {
   const x = u || { email: "", name: "", role: "viewer", see: "", see_school: 1, see_birthdays: 0, can_edit: 0, active: 1 };
   const see = new Set(whoList(x.see));
   openDialog(`<form class="form" id="f"><h2>${u ? "Edit" : "Add"} login</h2>
-    <label>Name<input name="name" value="${esc(x.name)}" required></label>
+    <div class="two"><label>First name<input name="name" value="${esc(x.name)}" required></label><label>Surname<input name="surname" value="${esc(x.surname || "")}"></label></div>
+    <div class="meta" style="margin-top:-6px">The site shows the first name everywhere; the surname only tells logins apart here.</div>
     <label>Email they sign in with<input type="email" name="email" value="${esc(x.email)}" required></label>
     <label>Access<select name="role">${Object.entries(ROLE_INFO).map(([k, [lbl, help]]) =>
       `<option value="${k}" ${x.role === k ? "selected" : ""}>${lbl} – ${help}</option>`).join("")}</select></label>
@@ -1872,7 +1872,7 @@ function userForm(u) {
     f.onsubmit = (e) => {
       e.preventDefault();
       const fd = new FormData(f);
-      const body = { name: fd.get("name"), email: fd.get("email"), role: fd.get("role"), see: [...see],
+      const body = { name: fd.get("name"), surname: fd.get("surname"), email: fd.get("email"), role: fd.get("role"), see: [...see],
                      see_school: fd.get("see_school") === "on", see_birthdays: fd.get("see_birthdays") === "on",
                      can_edit: edit.size > 0, active: fd.get("active") === "on", invite_email: fd.get("invite_email") || null,
                      edit_who: [...edit], person: fd.get("person") || null, welcome: fd.get("welcome") === "on" };
@@ -2005,7 +2005,7 @@ function expiryBadge(f) {
   const [cls, icon] = n < 0 ? ["exp-over", "⛔"] : n <= 30 ? ["exp-soon", "🔴"] : n <= 60 ? ["exp-near", "🟠"] : ["exp-ok", "🟢"];
   const text = n < 0 ? `Expired ${plural(-n, "day")} ago` : n === 0 ? "Expires today"
     : yrs ? `${plural(yrs, "year")}${rest ? " " + plural(rest, "day") : ""} left (${n.toLocaleString("en-ZA")} days)` : `${plural(n, "day")} left`;
-  return { n, icon, text, date: x.date, html: `<span class="expiry ${cls}" title="${esc(dt.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" }))}">${icon} ${text}</span>` };
+  return { n, icon, text, date: x.date, html: `<span class="expiry ${cls}" title="${esc(dt.toLocaleDateString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric" }))}">${icon} ${text}</span>` };
 }
 async function renderInfo() {
   $("#main").innerHTML = `<p class="muted pad">Unlocking…</p>`;
@@ -2137,11 +2137,42 @@ function meSheet() {
       <p class="meta" style="margin:0 0 8px">Subscribe once and the family calendar shows in your phone's calendar or Outlook next to your own
         (read-only; it updates itself about every hour). The link is private to you – don't share it.</p>
       <button type="button" class="ackbtn" id="feed-show">Show my link</button><div id="feed-box"></div></div></div>
+    ${me.family ? `<div class="card" style="margin:10px 0 0"><h3>🔔 Notifications on this phone</h3><div class="pad" style="padding-top:0">
+      <p class="meta" style="margin:0 0 8px">${me.role === "admin" ? "When a child adds to a list you're on, " : ""}when someone on a list is going to the shop, and while you're shopping
+        (anything added to that list). Each phone or computer is turned on by itself.</p><div id="push-box"><span class="meta">Checking…</span></div></div></div>` : ""}
     ${me.demo ? `<div class="actions" style="justify-content:flex-start"><button type="button" id="viewas">👁 View as someone else (demo)</button></div>` : ""}
     <div class="actions"><button type="button" id="cancel">Close</button></div></div>`, () => {
     $("#cancel").onclick = closeDialog;
     $("#viewas")?.addEventListener("click", viewAsPicker);
+    if (me.family) pushBox().catch((e) => { const b = $("#push-box"); if (b) b.innerHTML = `<span class="meta">${esc(e.message)}</span>`; });
   });
+}
+
+// 🔔 this phone's notifications (lib/push.js): on, off, a test. iPhones only from the home-screen app (Safari itself can't).
+async function pushBox() {
+  const box = $("#push-box"); if (!box) return;
+  const can = "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+  if (!can) { box.innerHTML = `<span class="meta">This browser can't show notifications.${/iPhone|iPad/.test(navigator.userAgent) ? " On an iPhone: open the calendar from its icon on the home screen, then come back here." : ""}</span>`; return; }
+  const reg = await navigator.serviceWorker.ready, sub = await reg.pushManager.getSubscription();
+  if (sub) {
+    box.innerHTML = `<p style="margin:0 0 8px">✅ On for this phone</p><div class="feed-btns"><button type="button" class="ackbtn" id="push-test">Send a test</button><button type="button" class="ackbtn danger" id="push-off">Turn off</button></div>`;
+    $("#push-test").onclick = async () => { const r = await api("POST", "push/test"); toast(r.sent ? "Sent – it should pop up in a moment" : "Not sent – try turning it off and on again"); };
+    $("#push-off").onclick = async () => { await api("POST", "push/unsubscribe", { subscription: sub.toJSON() }).catch(() => {}); await sub.unsubscribe().catch(() => {}); toast("Turned off for this phone"); pushBox(); };
+    return;
+  }
+  if (Notification.permission === "denied") { box.innerHTML = `<span class="meta">Notifications are blocked for this site in the phone's (or browser's) settings – allow them there first.</span>`; return; }
+  box.innerHTML = `<button type="button" class="ackbtn" id="push-on">🔔 Turn on for this phone</button>`;
+  $("#push-on").onclick = async () => {
+    if (await Notification.requestPermission() !== "granted") return pushBox();
+    const { publicKey } = await api("GET", "push/key");
+    const raw = Uint8Array.from(atob(publicKey.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - publicKey.length % 4) % 4)), (c) => c.charCodeAt(0));
+    const s = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: raw });
+    const device = (navigator.userAgentData?.platform || navigator.platform || "") + (/Mobi|iPhone|Android/.test(navigator.userAgent) ? " phone" : "");
+    await api("POST", "push/subscribe", { subscription: s.toJSON(), device });
+    await api("POST", "push/test").catch(() => {});
+    toast("Notifications on – a test is on its way");
+    pushBox();
+  };
 }
 
 // phone-calendar link (👤 menu)
@@ -2178,7 +2209,7 @@ function offlineBar() {
   const off = state.data?._offline, n = queue().length;
   bar.hidden = !off && !n;
   if (bar.hidden) return;
-  const when = typeof off === "string" ? new Date(off).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : "";
+  const when = typeof off === "string" ? new Date(off).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "";
   bar.innerHTML = off ? `📴 Offline – showing your copy${when ? ` from ${esc(when)}` : ""}. New entries are kept on this phone and sent when you're back online${n ? ` · ⏳ ${n} waiting to send` : ""}.`
     : `⏳ ${n} new entr${n === 1 ? "y" : "ies"} waiting to send… <button type="button" id="offsend">Send now</button>`;
   $("#offsend")?.addEventListener("click", sendQueued);
@@ -2195,7 +2226,7 @@ function queueAdd(body, fromSubmit = false) {
 }
 function queuedOpen(id) {
   const q = queue()[-id - 1]; if (!q) return;
-  if (confirm(`"${q.body.title}" is waiting to be sent to the calendar (made offline ${new Date(q.at).toLocaleString("en-GB", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" })}).\n\nRemove it from this phone instead?`)) {
+  if (confirm(`"${q.body.title}" is waiting to be sent to the calendar (made offline ${new Date(q.at).toLocaleString("en-GB", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" })}).\n\nRemove it from this phone instead?`)) {
     save("queue", queue().filter((_, i) => i !== -id - 1)); showQueued(); offlineBar(); render();
   }
 }
