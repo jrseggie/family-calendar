@@ -1093,6 +1093,13 @@ export async function onRequest({ request, env, params, waitUntil }) {
     const byKey = parts[0] === "setup" && ["places", "settings", "backup", "email-sync", "inbox", "wizard", "cloudflare", "digest-time", "people-order", "icon"].includes(parts[1]);   // addressed by key / no id
     if (["PUT", "DELETE"].includes(request.method) && !id && !byKey && parts[0] !== "lists") return fail(400, "Missing id");   // Lists: items can be addressed by the phone's own id (c:...)
 
+    // "anything new?" - a few bytes the calendar asks for once a minute while it's on screen; only when this changes does it load
+    // everything again (/api/all). Counts catch deletes, the latest change times catch edits.
+    if (parts[0] === "changed" && request.method === "GET") {
+      const r = await env.DB.prepare(`SELECT (SELECT COUNT(*) || '.' || IFNULL(MAX(updated_at), '') FROM events) AS e, (SELECT IFNULL(MAX(id), 0) FROM change_log) AS c,
+        (SELECT COUNT(*) FROM school_holidays) AS s, (SELECT COUNT(*) FROM acknowledged) AS a, (SELECT COUNT(*) FROM proposals WHERE status = 'pending') AS p`).first().catch(() => null);
+      return json({ stamp: r ? [r.e, r.c, r.s, r.a, r.p].join("|") : String(Date.now()) });
+    }
     if (parts[0] === "all" && request.method === "GET") {
       // which version each login's devices are really running (table health, key device:<name>:<device>): a device on old code is visible
       const build = String(request.headers.get("x-build") || "").slice(0, 40), ua = request.headers.get("user-agent") || "";

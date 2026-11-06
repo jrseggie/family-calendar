@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.47
+- 🔄 The calendar picks up new and changed entries by itself while it's open (it asks "anything new?" once a minute, and as soon as you come back to the app) - no refresh needed. It never checks in the background or while a form is open.
+
 ## 1.0.46
 - 📅 Phones: date boxes show DD/MM/YYYY too (an iPhone wrote e.g. "10 Nov 2026"); tapping still opens the phone's date wheel.
 

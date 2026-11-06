@@ -2252,7 +2252,22 @@ if ("serviceWorker" in navigator) navigator.serviceWorker.register("/sw.js").cat
 // back in the app after more than a minute away: the latest calendar (not while a form is open)
 let lastLoad = Date.now();
 const _refresh = refresh;
-refresh = async (...a) => { const r = await _refresh(...a); lastLoad = Date.now(); return r; };
+// 🔄 new entries show up by themselves: while a calendar page is on screen it asks "anything new?" once a minute (/api/changed, a
+// few bytes) and only loads everything again when the answer changed - never while the app is in the background or a form is open
+// (it catches up when the form closes). Coming back to the app asks straight away. The page stays where you were.
+let lastStamp = null;
+const stampNow = () => apiCall("GET", "changed").then((r) => r.stamp).catch(() => null);
+refresh = async (...a) => { const sp = stampNow(); const r = await _refresh(...a); lastLoad = Date.now(); lastStamp = await sp; return r; };
+async function anythingNew() {
+  if (document.visibilityState !== "visible" || !navigator.onLine || $("#dlg").open || !state.data || !CAL_VIEWS.includes(state.view) || state.view === "print") return;
+  const s = await stampNow();
+  if (!s) return;
+  if (!lastStamp) { lastStamp = s; return; }   // (the first load came before this was set up)
+  if (s !== lastStamp && !$("#dlg").open) refresh().then(sendQueued).catch(() => {});
+}
+stampNow().then((s) => { lastStamp ??= s; });
+setInterval(anythingNew, 60e3);
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && Date.now() - lastLoad <= 60e3) anythingNew(); });
 // a window left open (or a phone app woken up) keeps running the code it opened with: when a newer version is live, reload it, once
 async function checkBuild() {
   if (!myBuild || !navigator.onLine || $("#dlg").open) return;
