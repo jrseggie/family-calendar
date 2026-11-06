@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.50
+- 🔔 Calendar: the bell sits between the time and the title, with ✅ next to it once done, e.g. "10:00 🔔✅ Clean the bird cage".
+
 ## 1.0.49
 - ✅ Calendar: "Must confirm it's done" on an entry with a reminder (e.g. a child's chore) - the reminder comes again every 30 minutes (not 21:00-07:00) until it's marked done (✅ Mark as done at the top of the entry; a tapped reminder opens it). The parents hear when it's done, and once if it's 2 hours late.
 - 🔔 A tapped reminder opens a card: what it is, ✅ Done, 😴 Snooze 15 min / 1 hour, or open the entry. Android phones show ✅ Done and 😴 15 min as buttons on the notification itself. Done is for that day only - a weekly chore is one entry per week.

@@ -274,7 +274,7 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(CalendarRules.stayText(state.data, e))}${e.done_at ? ` <span title="Done">✅</span>` : e.remind ? ` <span title="Sends a phone reminder">🔔</span>` : ""}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
+          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${e.remind ? `<span title="Sends a phone reminder">🔔</span>` : ""}${e.done_at ? `<span title="Done">✅</span>` : ""}${e.remind || e.done_at ? " " : ""}${esc(CalendarRules.stayText(state.data, e))}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
             CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
