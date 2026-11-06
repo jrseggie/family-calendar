@@ -61,10 +61,19 @@ async function data(req) {
 self.addEventListener("push", (e) => {
   let m = {}; try { m = e.data ? e.data.json() : {}; } catch { m = { body: e.data?.text() }; }
   e.waitUntil(self.registration.showNotification(m.title || "Family Calendar", {
-    body: m.body || "", tag: m.tag || undefined, renotify: !!m.tag, data: { url: m.url || "/" }, icon: "/icon-192.png", badge: "/icon-192.png" }));
+    body: m.body || "", tag: m.tag || undefined, renotify: !!m.tag, data: { url: m.url || "/", event: m.event || null }, icon: "/icon-192.png", badge: "/icon-192.png",
+    actions: Array.isArray(m.actions) ? m.actions.slice(0, 2) : [] }));   // ✅ Done / 😴 15 min on a reminder (Android shows them; iPhones don't)
 });
 self.addEventListener("notificationclick", (e) => {
   e.notification.close();
+  // a button on a reminder: done / snoozed straight away, without opening the app
+  const ev = e.notification.data?.event;
+  if (ev && (e.action === "done" || e.action === "snooze")) {
+    const body = e.action === "done" ? { done: true } : { minutes: 15 };
+    return e.waitUntil(fetch(`/api/events/${ev}/${e.action}`, { method: "POST", credentials: "include", headers: { "content-type": "application/json" }, body: JSON.stringify(body) })
+      .then((r) => r.ok ? self.registration.showNotification(e.action === "done" ? "✅ Marked as done" : "😴 Snoozed for 15 minutes", { tag: `ack-${ev}`, icon: "/icon-192.png" }) : self.clients.openWindow(`/?event=${ev}`))
+      .catch(() => self.clients.openWindow(`/?event=${ev}`)));
+  }
   const url = new URL(e.notification.data?.url || "/", self.location.origin).href;
   e.waitUntil((async () => {
     const wins = await self.clients.matchAll({ type: "window", includeUncontrolled: true });

@@ -23,7 +23,8 @@ import { sendWelcome, welcomeMail, welcomeWhatsApp, canSendDirect, markWelcome }
 import { involvesOthers, ownEntry, tellParents } from "../../lib/child.js";
 import { extraApi, extraInboxes } from "../../src/extras.js";
 import { listsApi, isFamilyLogin } from "../../lib/lists.js";
-import { pushApi } from "../../lib/push.js";   // 🔔 phone notifications   // 🛒 Lists (shopping lists for the family's own logins)
+import { pushApi } from "../../lib/push.js";   // 🔔 phone notifications
+import { doneNotice } from "../../lib/reminders.js";   // ✅ the parents hear when a must-be-done entry is done   // 🛒 Lists (shopping lists for the family's own logins)
 import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
 const CATEGORIES = ["School", "Exam", "Study", "Activity", "Travel", "Transport", "Medical", "Work", "Social", "Household", "Leave", "General"];
@@ -185,6 +186,9 @@ function cleanEvent(b, people) {
     notes: String(b.notes || "").trim() || null,
     source: String(b.source || "").trim() || null,
     share: ["show", "busy", "hide"].includes(b.share) ? b.share : null,
+    // 🔔 a phone reminder (lib/reminders.js); ✅ "must confirm it's done" needs one - none chosen = at the time (or the evening before, all day)
+    remind: ["at", "15", "60", "eve"].includes(String(b.remind)) ? String(b.remind) : b.must_done ? (b.start_time ? "at" : "eve") : null,
+    must_done: b.must_done ? 1 : 0,
     school_open: b.school_open && b.category === "School" ? 1 : null,   // 🏫 a normal school day even on a public holiday   // 🖨️ the printout for a tracked person (null = automatic)
   };
 }
@@ -1113,6 +1117,25 @@ export async function onRequest({ request, env, params, waitUntil }) {
       return json((await env.DB.prepare("SELECT * FROM change_log ORDER BY id DESC LIMIT 200").all()).results);
     }
     if (parts[0] === "events" && parts[1] === "restore" && request.method === "POST") return await restoreDeleted(request, env, u);
+    // ✅ marked done / not done (a "must confirm it's done" entry), 😴 snooze: someone in its Who, or an admin
+    if (parts[0] === "events" && ["done", "snooze"].includes(parts[2]) && request.method === "POST" && /^\d+$/.test(parts[1] || "")) {
+      const id = +parts[1], ev = await env.DB.prepare("SELECT * FROM events WHERE id = ?").bind(id).first();
+      if (!ev) return fail(404, "That entry has gone");
+      const people = await loadPeople(env), fam = people.filter((p) => p.family && p.active !== 0).map((p) => p.name);
+      const inWho = String(ev.who || "").split(",").map((x) => x.trim()).flatMap((p) => p === "Family" ? fam : [p]).includes(u.person || u.name);
+      if (!inWho && !isAdmin(u)) deny("Only the people it's for (or a parent) can mark it done");
+      const body = await request.json().catch(() => ({})), at = new Date().toISOString();
+      if (parts[2] === "snooze") {
+        const mins = [15, 60].includes(+body.minutes) ? +body.minutes : 15, until = new Date(Date.now() + mins * 60000).toISOString();
+        await env.DB.prepare("UPDATE events SET snooze_until = ? WHERE id = ?").bind(until, id).run();
+        return json({ ok: true, snooze_until: until });
+      }
+      const on = !!body.done;
+      await env.DB.prepare("UPDATE events SET done_at = ?, done_by = ?, updated_by = ?, updated_at = ? WHERE id = ?").bind(on ? at : null, on ? u.name : null, u.name, at, id).run();
+      await log(env, u, on ? "Marked done" : "Marked not done", `${ev.start} ${ev.title}`);
+      if (on && !ev.done_at && ev.must_done) { const tell = doneNotice(env, ev, u).catch((e) => console.log("done notice:", String(e))); if (waitUntil) waitUntil(tell); else await tell; }
+      return json({ ok: true, done_at: on ? at : null, done_by: on ? u.name : null });
+    }
     if (parts[0] === "events" && request.method !== "GET") return await events(request, env, u, id);
     if (parts[0] === "deleted" && request.method === "GET") return await recentlyDeleted(env, u);
     if (parts[0] === "vault") return await vault(request, env, u, id);

@@ -773,3 +773,12 @@ body.nosections .sections { display: none; }
 .dmy > input[type="date"] { width: 100%; color: transparent; -webkit-text-fill-color: transparent; }
 .dmy > .dmyv { position: absolute; left: 11px; top: 50%; transform: translateY(-50%); pointer-events: none; color: var(--text); font: inherit; }
 .dmy > .dmyv.empty { color: var(--muted); }
+
+/* ✅ a must-be-done entry: the done line / Mark as done button at the top of its form */
+.donebox { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin: 0 0 6px; } .donebox .primary { width: 100%; padding: 12px; font-size: 16px; }
+.remcard h2 { margin-bottom: 4px; } .remwhen { margin: 0 0 8px; text-align: center; font-weight: 600; } .remcard .hc-notes { margin: 10px 0 0; }
+.remdone { text-align: center; margin: 12px 0 0; font-weight: 600; } .rembtns { display: grid; gap: 8px; margin-top: 14px; } .rembtns .primary { padding: 12px; font-size: 16px; }
+.rembtns .ackbtn { padding: 10px; font-size: 15px; justify-self: stretch; text-align: center; }
+/* tick boxes on forms: big enough to see and hit (the browser's own are 13px) */
+.form .checks input[type="checkbox"], .form .fatick input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
+.form .checks label { display: flex; align-items: center; gap: 10px; }

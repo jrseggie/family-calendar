@@ -274,7 +274,7 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(CalendarRules.stayText(state.data, e))}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
+          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${esc(CalendarRules.stayText(state.data, e))}${e.done_at ? ` <span title="Done">✅</span>` : e.remind ? ` <span title="Sends a phone reminder">🔔</span>` : ""}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
             CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
@@ -413,6 +413,39 @@ function approvalCard() {
 
 // Links in the "items to approve" email open the site with ?p=<id>&do=approve (or ?batch=<id>). They never act on
 // their own (mail scanners such as Outlook Safe Links open every link) - they show the item(s) and wait for Confirm.
+// 🔔 a tapped reminder opens /?event=<id>: the calendar, with that entry open
+function eventLink() {
+  const id = +new URLSearchParams(location.search).get("event");
+  if (!id) return;
+  history.replaceState(null, "", location.pathname);   // a refresh mustn't open it again
+  const ev = state.data.events.find((e) => e.id === id);
+  if (!ev) return toast("That entry has gone (or isn't on your calendar)");
+  if (sectionOf(state.view) !== "calendar" || state.view === "print") { state.view = "month"; render(); }
+  reminderSheet(ev);
+}
+
+// 🔔 the card a tapped reminder opens: what it is, then ✅ Done (a must-be-done entry), 😴 Snooze, or open the entry to change it
+function reminderSheet(ev) {
+  const when = `${fmtDay(ev.start)}${ev.start_time ? ` ${ev.start_time}` : ""}${ev.end !== ev.start ? ` – ${fmtDay(ev.end)}` : ""}${ev.end_time ? `${ev.end !== ev.start ? " " : "–"}${ev.end_time}` : ""}`;
+  const done = !!ev.done_at;   // any reminder can be marked done (it's for that day's entry only - a repeat is one entry per date)
+  openDialog(`<div class="form remcard"><h2>🔔 ${esc(ev.title)}</h2>
+    <p class="remwhen">${esc(when)}</p><div>${pchips(whoList(ev.who))}</div>
+    ${ev.notes ? `<p class="hc-notes">${esc(ev.notes)}</p>` : ""}
+    ${done ? `<p class="remdone">✅ Done by ${esc(ev.done_by || "")} · ${fmtDay(ev.done_at.slice(0, 10))} ${new Date(ev.done_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</p>` : ""}
+    <div class="rembtns">
+      ${done ? "" : `<button type="button" class="primary" id="rdone">✅ Done</button>`}
+      ${done ? "" : `<button type="button" class="ackbtn" data-snooze="15">😴 Snooze 15 min</button><button type="button" class="ackbtn" data-snooze="60">😴 Snooze 1 hour</button>`}
+    </div>
+    <div class="actions"><button type="button" id="ropen">Open the entry</button><button type="button" id="cancel">Close</button></div></div>`, () => {
+    $("#cancel").onclick = closeDialog;
+    $("#ropen").onclick = () => { closeDialog(); eventForm(ev); };
+    $("#rdone")?.addEventListener("click", async () => { try { await api("POST", `events/${ev.id}/done`, { done: true }); closeDialog(); toast("✅ Marked as done"); await refresh(); } catch (x) { toast(x.message); } });
+    document.querySelectorAll("[data-snooze]").forEach((b) => b.onclick = async () => {
+      try { await api("POST", `events/${ev.id}/snooze`, { minutes: +b.dataset.snooze }); closeDialog(); toast(`😴 It'll remind you again in ${b.dataset.snooze === "60" ? "an hour" : "15 minutes"}`); } catch (x) { toast(x.message); }
+    });
+  });
+}
+
 function approvalLink() {
   const q = new URLSearchParams(location.search);
   const act = q.get("do"), pid = +q.get("p"), bid = +q.get("batch");
@@ -977,6 +1010,8 @@ function eventForm(ev, preset = {}) {
     + (!ev && state.data.me.canEditAll ? `<option value="__holiday">🌿 School holiday (shades the column)</option>` : "");
   openDialog(`<form class="form" id="f" autocomplete="off">
     <h2>${preset.title || (ev ? "Edit event" : preset.copy ? "Add a copy" : "Add event")}</h2>
+    ${ev?.must_done ? `<div class="donebox" id="donebox">${ev.done_at ? `<span>✅ Done by ${esc(ev.done_by || "")} · ${fmtDay(ev.done_at.slice(0, 10))} ${new Date(ev.done_at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</span><button type="button" class="ackbtn" id="undone">Not done</button>`
+      : `<button type="button" class="primary" id="markdone">✅ Mark as done</button>`}</div>` : ""}
     <div class="emo-field"><label>What<input name="title" value="${esc(e.title)}" placeholder="e.g. Dentist" required></label>
       <button type="button" class="emo-btn" title="Add an emoji" aria-label="Add an emoji">😀</button>
       <div class="emo-hint" hidden></div><div class="emo-pick" hidden></div></div>
@@ -984,6 +1019,11 @@ function eventForm(ev, preset = {}) {
       <label>To (optional)<input type="date" name="end" value="${e.end !== e.start ? e.end || "" : ""}"></label></div>
     <div class="two"><label>Time (optional)<input type="time" name="start_time" value="${esc(e.start_time || "")}"></label>
       <label>Until (optional)<input type="time" name="end_time" value="${esc(e.end_time || "")}"></label></div>
+    <label>🔔 Remind (a notification on the phones of the people in Who)<select name="remind">${[["", "No reminder"], ["at", "At the time"], ["15", "15 minutes before"], ["60", "1 hour before"], ["eve", "The evening before (18:00)"]]
+      .map(([v, t]) => `<option value="${v}" ${(e.remind || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+    <div class="meta" id="remind-help" style="margin-top:-6px" hidden>Needs a time – or pick "The evening before".</div>
+    <div class="checks"><label><input type="checkbox" name="must_done" ${e.must_done ? "checked" : ""}> Must confirm it's done</label></div>
+    <div class="meta" style="margin-top:-6px">The reminder keeps coming every 30 minutes until it's marked done (not 21:00–07:00). Parents hear when it's done.</div>
     <label>Who<div class="whos">${(state.data.me.editablePeople || names()).map((p) =>
       `<button type="button" class="chip ${who.has(p) ? "on" : ""}" style="--c:${COLORS[p]}" data-who="${p}">${p}</button>`).join("")}</div></label>
     <label>Where are they sleeping?<select name="location">
@@ -1020,6 +1060,13 @@ function eventForm(ev, preset = {}) {
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
     emojiField(f.elements.title);
+    // ✅ done / not done straight from the entry (a tapped reminder opens it here)
+    const markDone = async (done) => { try { const r = await api("POST", `events/${ev.id}/done`, { done }); Object.assign(ev, r); closeDialog(); toast(done ? "✅ Marked as done" : "Marked as not done"); await refresh(); } catch (x) { toast(x.message); } };
+    $("#markdone")?.addEventListener("click", () => markDone(true));
+    $("#undone")?.addEventListener("click", () => markDone(false));
+    // 🔔 a reminder at / before the time needs a time
+    const rh = () => { $("#remind-help").hidden = !(f.elements.remind.value && f.elements.remind.value !== "eve" && !f.elements.start_time.value); };
+    f.elements.remind.onchange = rh; f.elements.start_time.addEventListener("input", rh); rh();
     // "To" can't be before "From", and an empty "To" opens its date picker on the From date (not today)
     const from = f.elements.start, to = f.elements.end;
     const keepTo = () => { to.min = from.value || ""; if (to.value && from.value && to.value < from.value) to.value = from.value; };
@@ -1066,7 +1113,7 @@ function eventForm(ev, preset = {}) {
       const body = { title: fd.get("title"), start: fd.get("start"), end: fd.get("end") || fd.get("start"),
                      who: [...who], category: fd.get("category"), notes: fd.get("notes"), location: fd.get("location") || null,
                      school_open: fd.get("school_open") === "on" && fd.get("category") === "School",
-                     start_time: fd.get("start_time") || null, end_time: fd.get("start_time") ? fd.get("end_time") || null : null,
+                     start_time: fd.get("start_time") || null, end_time: fd.get("start_time") ? fd.get("end_time") || null : null, remind: fd.get("remind") || null, must_done: fd.get("must_done") === "on",
                      important: fd.get("important") === "on", status: fd.get("stay") || (fd.get("tentative") === "on" ? "Tentative" : "Confirmed"),
                      source: ev?.source ?? e.source, house_off: ev?.house_off ?? e.house_off ?? null, guest: ev?.guest ?? e.guest ?? null, alone_ok: !!(ev?.alone_ok ?? e.alone_ok) };   // a typed-in stayer keeps their name; "OK alone" stays so
       if (f.elements.share) body.share = fd.get("share") || null;
@@ -2197,7 +2244,7 @@ document.addEventListener("click", (e) => {
 $("#search").onclick = () => state.data && searchSheet();
 
 // "setup" = a new install showing its setup-password box (api() drew it) - leave that on screen
-refresh().then(approvalLink).then(() => { if (!state.data._offline) sendQueued(); }).catch((e) => { if (e.message !== "setup") $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });
+refresh().then(approvalLink).then(eventLink).then(() => { if (!state.data._offline) sendQueued(); }).catch((e) => { if (e.message !== "setup") $("#main").innerHTML = `<p class="pad">Couldn't load the calendar: ${esc(e.message)}</p>`; });
 
 // ---------- offline (the phone / PC app): sw.js keeps the site and the last calendar data on the device. Offline, the
 // calendar shows that copy with a bar saying so; new entries are kept on the device (localStorage "cal.queue") with ⏳ and
@@ -2328,6 +2375,7 @@ document.addEventListener("visibilitychange", () => {
         <div class="hc-meta">${fmtDay(ev.start)}${ev.start_time ? ` ${esc(ev.start_time)}` : ""}${ev.end !== ev.start ? ` – ${fmtDay(ev.end)}` : ""}${ev.end_time ? `${ev.end !== ev.start ? " " : "–"}${esc(ev.end_time)}` : ""} · ${esc(ev.category || "")}${CalendarRules.pencilled(state.data, ev) ? " · ✏️ pencilled in" : ""}${ev.important ? " · ⭐" : ""}</div>
         <div>${pchips(whoList(ev.who))}</div>
         ${place ? `<div class="hc-meta">${place.icon} ${esc(place.label)}</div>` : ""}
+        ${ev.remind ? `<div class="hc-meta">🔔 Reminder: ${esc({ at: "at the time", 15: "15 minutes before", 60: "1 hour before", eve: "the evening before (18:00)" }[ev.remind] || "")}</div>` : ""}
         ${ev.notes ? `<div class="hc-notes">${esc(ev.notes)}</div>` : `<div class="hc-meta"><i>No notes</i></div>`}
         <div class="hc-meta">Click to open</div>`;
       card.hidden = false;

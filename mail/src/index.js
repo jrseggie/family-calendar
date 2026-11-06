@@ -19,7 +19,8 @@ import { sendUsage } from "../../lib/usage.js";
 import { selfUpdate } from "../../lib/self-update.js";
 import { extraEmail, extraJobs, extraDigest } from "../../src/extras.js";
 import { syncRequests, makerNews } from "../../lib/requests.js";   // optional extra addresses (none in the public release)
-import { pushCatchUp } from "../../lib/push.js";   // 🔔 list notifications
+import { pushCatchUp } from "../../lib/push.js";
+import { runReminders } from "../../lib/reminders.js";   // 🔔 calendar reminders on the phone   // 🔔 list notifications
 
 const MAX_SIZE = 20 * 1024 * 1024;
 const CHUNK = 512 * 1024;
@@ -40,6 +41,8 @@ export default {
 
   async scheduled(event, env, ctx) {
     // "last job run" stamp: the site warns admins (Upcoming) when the scheduled jobs haven't run for 30 minutes
+    // 🔔 once a minute: only calendar reminders that are due (lib/reminders.js) - a quick look, nothing else
+    if (event.cron === "* * * * *") { ctx.waitUntil(runReminders(env, new Date(event.scheduledTime)).catch((e) => console.log("reminders:", String(e)))); return; }
     ctx.waitUntil(markHealthy(env, "jobs", event.cron));
     if (event.cron !== "*/10 * * * *") return;   // only the 10-minute job does anything (an old Sunday-only trigger is ignored)
     ctx.waitUntil((async () => {

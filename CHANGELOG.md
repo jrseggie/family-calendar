@@ -2,6 +2,11 @@
 
 ## Next version (not released yet)
 
+## 1.0.49
+- ✅ Calendar: "Must confirm it's done" on an entry with a reminder (e.g. a child's chore) - the reminder comes again every 30 minutes (not 21:00-07:00) until it's marked done (✅ Mark as done at the top of the entry; a tapped reminder opens it). The parents hear when it's done, and once if it's 2 hours late.
+- 🔔 A tapped reminder opens a card: what it is, ✅ Done, 😴 Snooze 15 min / 1 hour, or open the entry. Android phones show ✅ Done and 😴 15 min as buttons on the notification itself. Done is for that day only - a weekly chore is one entry per week.
+- 🔔 Calendar reminders on the phone (🔔 shows on entries that have one): an entry can remind the people in Who - at the time, 15 minutes or an hour before, or the evening before (🔔 Remind on the entry). Repeating entries remind every time; tapping one opens that entry. Needs notifications turned on (👤 menu).
+
 ## 1.0.48
 - ⭐ Lists: mark a line Important (✎ box) - a star and the calendar's important yellow, also in For me and WhatsApp. A child marking one tells the parents on that list.
 

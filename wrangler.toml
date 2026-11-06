@@ -21,7 +21,7 @@ migrations_dir = "migrations"
 
 # every 10 minutes: the weekly email when it's time (Setup > Weekly email), queued emails, smart inbox, housekeeping
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["*/10 * * * *", "* * * * *"]   # 10-minute jobs; once a minute = 🔔 calendar reminders only
 
 # sending email (needs a domain with Cloudflare Email Routing - see docs/HELP.md; without one the calendar works, just no emails)
 [[send_email]]
