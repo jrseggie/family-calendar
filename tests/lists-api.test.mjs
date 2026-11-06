@@ -23,7 +23,7 @@ function setup() {
            CREATE TABLE places (key TEXT, active INTEGER DEFAULT 1); CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
            INSERT INTO users VALUES (1, 'Emma', 'admin', NULL, 1), (2, 'Leo', 'child', 'Leo', 1), (3, 'Nanny', 'limited', NULL, 1);
            INSERT INTO places VALUES ('town', 1), ('farm', 1);`);
-  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
   const env = { DB: d1(db) }, people = [{ name: "Leo", family: 1 }, { name: "Nanny", family: 0 }];
   const users = { 1: { id: 1, name: "Emma", role: "admin" }, 2: { id: 2, name: "Leo", role: "child", person: "Leo" }, 3: { id: 3, name: "Nanny", role: "limited" } };
   const call = async (who, method, path, body) => {

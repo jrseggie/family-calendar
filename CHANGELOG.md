@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.48
+- ⭐ Lists: mark a line Important (✎ box) - a star and the calendar's important yellow, also in For me and WhatsApp. A child marking one tells the parents on that list.
+
 ## 1.0.47
 - 🔄 The calendar picks up new and changed entries by itself while it's open (it asks "anything new?" once a minute, and as soon as you come back to the app) - no refresh needed. It never checks in the background or while a form is open.
 

@@ -47,7 +47,7 @@ function setup() {
            CREATE TABLE places (key TEXT, active INTEGER DEFAULT 1); CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
            CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
            INSERT INTO users VALUES (1, 'Emma', 'admin', NULL, 1), (2, 'Max', 'admin', NULL, 1), (3, 'Leo', 'child', 'Leo', 1);`);
-  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
   for (const id of [1, 2, 3]) db.prepare("INSERT INTO push_subs (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, 'x')").run(id, `https://push.example/${id}`, phoneKeys.p256dh, phoneKeys.authB64);
   const sent = [], waits = [];
   const env = { DB: d1(db), PUSH_GROUP_MS: 30, PUSH_FETCH: async (url, init) => { sent.push({ to: url, init }); return new Response(null, { status: 201 }); } };
@@ -185,4 +185,24 @@ test("📌 jobs: whoever it's for hears about it, whoever gave it hears when it'
   assert.equal(db.prepare("SELECT who FROM events").get().who, "Emma");
   await call(1, "DELETE", `lists/${id}/items/c:j2aaaaaa`);
   assert.equal(db.prepare("SELECT COUNT(*) AS n FROM events").get().n, 0);
+});
+
+test("⭐ important: a child marking a line important tells the parents on the list; a parent marking it tells nobody; typed again = no star", async () => {
+  const { call, sent, settle, to } = setup();
+  const { id } = await call(1, "POST", "lists", { name: "Groceries", members: [3] });
+  await call(1, "POST", `lists/${id}/items`, { text: "Milk", client_id: "k1aaaaaa" });
+  await settle(); sent.length = 0;
+  let r = await call(3, "PUT", `lists/${id}/items/c:k1aaaaaa`, { important: true });   // Leo (child)
+  await settle();
+  assert.deepEqual(to(), ["1"]);
+  assert.equal(r.items[0].important, 1);
+  sent.length = 0;
+  await call(1, "PUT", `lists/${id}/items/c:k1aaaaaa`, { important: false });
+  await call(1, "PUT", `lists/${id}/items/c:k1aaaaaa`, { important: true });   // Emma (parent): nobody told
+  await settle();
+  assert.equal(sent.length, 0);
+  await call(1, "PUT", `lists/${id}/items/c:k1aaaaaa`, { done: true });
+  r = await call(1, "POST", `lists/${id}/items`, { text: "milk", client_id: "k2aaaaaa" });   // typed again: a new line, no star
+  assert.equal(r.items.find((i) => /milk/i.test(i.text)).important, 0);
+  assert.match(groupMessage({ id, name: "Groceries" }, "Leo", ["Milk"], "starred").body, /Leo marked this important: Milk/);
 });

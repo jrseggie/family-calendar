@@ -77,7 +77,7 @@
       const words = n < 0 ? `${-n} day${n === -1 ? "" : "s"} late` : n === 0 ? "Today" : n === 1 ? "Tomorrow" : `${n} days`;
       return [`${n < 0 ? "🔴" : n <= 2 ? "🟠" : "🟢"} ${words}`, n < 0 ? "late" : n <= 2 ? "soon" : ""]; };
     const mineRow = (m) => { const late = m.due && m.due < todayISO() ? "late" : "", [dl, dc] = daysLeft(m.due);
-      return `<div class="lrow lminerow"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${esc(m.text)}</b><small class="lmsub ${late}">${esc([m.list, m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(m.list)}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
+      return `<div class="lrow lminerow${m.important ? " limp" : ""}"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${m.important ? "⭐ " : ""}${esc(m.text)}</b><small class="lmsub ${late}">${esc([m.list, m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(m.list)}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
     const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? ""
       : `<div class="lmhead"><span>Item</span><span class="lmlist">List</span><span class="lmdue">Due</span><span class="lmdays">Days left</span></div>${mine.map(mineRow).join("")}`}</section>` : "";
     const cols = [...places().map((p) => [p.key, `${p.icon || ""} ${p.label}`.trim(), L.lists.filter((l) => l.place === p.key), false]), ["_other", `${OTHER} Other places`, L.lists.filter((l) => !l.place || l.place === "other" || !places().some((p) => p.key === l.place)), true]].filter(([, , ls]) => ls.length);
@@ -237,12 +237,12 @@
     // a list nobody else is on: no "Added by" column - it would say the same name on every line
     const priv = !l.members?.length;
     const gs = groups(open), dragItems = () => open.length > 1, shut = folded();   // any line can move, into another department too
-    const text = (i) => `<b>${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ""}${jobLine(i)}`;
+    const text = (i) => `<b>${i.important ? "⭐ " : ""}${esc(i.text)}</b>${i.note ? `<small>${esc(i.note)}</small>` : ""}${jobLine(i)}`;
     // ≡ = hold and drag up or down (like most list apps); a department's ≡ moves the whole department
     const BIN = `<svg width="16" height="17" viewBox="0 0 16 17" aria-hidden="true"><path d="M2 4h12M6 4V2.5h4V4M3.5 4l.8 10.5h7.4L12.5 4M6.5 7v5M9.5 7v5" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
     const GRAB = `<svg width="18" height="14" viewBox="0 0 18 14" aria-hidden="true"><path d="M2 2h14M2 7h14M2 12h14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>`;
     const grab = (kind, label) => `<span class="lgrab" data-drag="${kind}" role="button" aria-label="Drag to move ${esc(label)}">${GRAB}</span>`;
-    const row = (i, canDrag) => `<li class="${i.done ? "ldone" : ""}" data-k="${esc(ikey(i))}"><label><input type="checkbox" data-lt="${esc(i.client_id || i.id)}" ${i.done ? "checked" : ""}><span>${text(i)}${priv && i.done ? `<small class="lby">Completed ${when(i.done_at).replace(" · ", "")}</small>` : ""}</span></label>${priv ? "" : `<span class="lwho">${i.done ? `${esc(i.done_by || "")}<small>${when(i.done_at).replace(" · ", "")}</small>` : esc(i.added_by || "")}</span>`}<button type="button" class="lmore" data-le="${esc(i.client_id || i.id)}" aria-label="Change ${esc(i.text)}">✎</button>${canDrag ? grab("item", i.text) : i.done ? `<button type="button" class="lbin" data-ldel="${esc(i.client_id || i.id)}" aria-label="Delete ${esc(i.text)}">${BIN}</button>` : `<span class="lgrab lnograb"></span>`}</li>`;
+    const row = (i, canDrag) => `<li class="${i.done ? "ldone" : ""}${i.important ? " limp" : ""}" data-k="${esc(ikey(i))}"><label><input type="checkbox" data-lt="${esc(i.client_id || i.id)}" ${i.done ? "checked" : ""}><span>${text(i)}${priv && i.done ? `<small class="lby">Completed ${when(i.done_at).replace(" · ", "")}</small>` : ""}</span></label>${priv ? "" : `<span class="lwho">${i.done ? `${esc(i.done_by || "")}<small>${when(i.done_at).replace(" · ", "")}</small>` : esc(i.added_by || "")}</span>`}<button type="button" class="lmore" data-le="${esc(i.client_id || i.id)}" aria-label="Change ${esc(i.text)}">✎</button>${canDrag ? grab("item", i.text) : i.done ? `<button type="button" class="lbin" data-ldel="${esc(i.client_id || i.id)}" aria-label="Delete ${esc(i.text)}">${BIN}</button>` : `<span class="lgrab lnograb"></span>`}</li>`;
     const openHTML = gs.map(([name, ls]) => `<ul class="litems lgroup" data-g="${esc(name)}">${name ? `<li class="lgrp"><i></i><button type="button" class="lfold" data-fold="${esc(name)}" aria-expanded="${!shut.has(name)}">${shut.has(name) ? "▸" : "▾"} ${esc(name)} (${ls.length})</button>${gs.length > 1 ? grab("group", name) : "<i></i>"}</li>` : ""}${shut.has(name) ? "" : ls.map((i) => row(i, dragItems(ls))).join("")}</ul>`).join("");
     // no place / shared-with line under the name: the main Lists page shows it already
     // the add box is drawn once per list and then left alone, so typing is never interrupted when changes come back from the
@@ -277,7 +277,7 @@
     $("#ltitle").onclick = () => { store.set("lists.addShut", !addShut()); $(".lbox").classList.toggle("lshut", addShut()); drawList(); };
     ["#ltog"].forEach((s) => $(s)?.addEventListener("click", () => { store.set("lists.hideDone", !hideDone()); drawList(); }));
     $("#lwa").onclick = () => {
-      const lines = [`🛒 ${l.name}${placeName(l) ? ` (${placeName(l)})` : ""}`, ...gs.flatMap(([name, ls]) => [...(name ? ["", `*${name}*`] : []), ...ls.map((i) => `• ${i.text}${i.note ? ` – ${i.note}` : ""}`)])];
+      const lines = [`🛒 ${l.name}${placeName(l) ? ` (${placeName(l)})` : ""}`, ...gs.flatMap(([name, ls]) => [...(name ? ["", `*${name}*`] : []), ...ls.map((i) => `• ${i.important ? "⭐ " : ""}${i.text}${i.note ? ` – ${i.note}` : ""}`)])];
       window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank", "noopener");
     };
     $("#lopen").querySelectorAll("[data-drag]").forEach(dragger);
@@ -355,6 +355,7 @@
     openDialog(`<form class="form" id="f" autocomplete="off"><h2>Change it</h2>
       <label>What<input name="text" maxlength="120" value="${esc(it.text)}" required></label>
       <label>Note<input name="note" maxlength="200" value="${esc(it.note || "")}"></label>
+      <label class="fatick limpbox"><input type="checkbox" name="important" ${it.important ? "checked" : ""}> ⭐ Important</label>
       ${onIt.length > 1 ? `<div class="lshare"><span class="meta">For (optional – they get a notification)</span>${onIt.map((p) => `<label class="fatick"><input type="checkbox" name="for" value="${p.id}" ${forNow.includes(p.id) ? "checked" : ""}> ${esc(p.id === L.me ? `${p.name} (you)` : p.name)}</label>`).join("")}</div>` : ""}
       <label>Due (optional – it goes on the calendar)<input type="date" name="due" value="${esc(it.due || "")}"></label>
       <div class="ldeps"><span class="meta">Category</span><div>${["", ...deps].map((d) => `<button type="button" class="ldepb ${(it.category || "") === d ? "on" : ""}" data-dep="${esc(d)}">${d ? esc(d) : "None"}</button>`).join("")}</div>
@@ -373,6 +374,8 @@
         const due = onIt.length > 1 && it.for_ids && !fr.length ? null : f.elements.due.value || null;   // nobody on it any more: no date either
         const forStr = fr.length ? `,${fr.join(",")},` : null, jobChanged = (onIt.length > 1 && forStr !== (it.for_ids || null)) || due !== (it.due || null);
         if (jobChanged) { it.for_ids = onIt.length > 1 ? forStr : it.for_ids; it.due = due; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { ...(onIt.length > 1 ? { for: fr } : {}), due } }); }
+        const imp = f.elements.important.checked ? 1 : 0;
+        if (imp !== (it.important ? 1 : 0)) { it.important = imp; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { important: !!imp } }); }
         const changed = text !== it.text || note !== (it.note || null) || category !== (it.category || null);
         Object.assign(it, { text, note, category });
         if (category) { L.dept[text.trim().toLowerCase()] = category; if (!L.departments.includes(category)) L.departments = [...L.departments, category].sort(); }
@@ -427,6 +430,8 @@
     .ldonehead { display: block; width: 100%; padding: 6px 10px; background: var(--brand); color: #fff; border: 0; border-top: 1px solid rgba(255,255,255,.25); font: inherit; font-weight: 700; font-size: 14px; text-align: center; cursor: pointer; }
     .lbin { flex: none; width: 40px; align-self: stretch; border: 0; background: transparent; color: var(--del-text, #c92a2a); cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .lshare { display: grid; gap: 4px; }
+    /* ⭐ important: the calendar's important yellow (not on Completed - it's done) */
+    .litems li.limp:not(.ldone), .lminerow.limp { background: var(--important); } .limpbox { font-weight: 600; }
     .litems small.ljob, .lminerow small { color: var(--muted); font-size: 11.5px; } .litems small.ljob.late, .lminerow small.late { color: var(--del-text, #c92a2a); }
     .lmine { margin-bottom: 14px; } .lminerow { display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; } .lminerow input { width: 22px; height: 22px; flex: none; }
     .lminerow button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 10px 12px 10px 0; cursor: pointer; } .lminerow b { font-weight: 600; font-size: 15px; }
