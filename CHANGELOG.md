@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.51
+- 🛒 Lists: a list's name shows its place first - "🏠 Town House – Groceries" - on the list, in For me, Move to, WhatsApp and notifications (the same name can be at more than one house).
+
 ## 1.0.50
 - 🔔 Calendar: the bell sits between the time and the title, with ✅ next to it once done, e.g. "10:00 🔔✅ Clean the bird cage".
 

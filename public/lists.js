@@ -17,6 +17,8 @@
   // the same icon the calendar shows for the house (Settings > Places); a named other place gets a pin
   const OTHER = "📍", placeIcon = (l) => l.place === "other" ? OTHER : places().find((p) => p.key === l.place)?.icon || "";
   const where = (l) => placeName(l) ? `${placeIcon(l)} ${placeName(l)}`.trim() : "";
+  // a list's full name, place first: "🏠 Town House – Groceries" (the same name can be at more than one house); no place = just the name
+  const fullName = (l) => where(l) ? `${where(l)} – ${l.name}` : l.name;
   // everyone in the family who has a login (owner + members) = "Shared with all"; otherwise the names
   const sharedAll = (l) => L.people.length > 1 && L.people.every((p) => p.id === l.owner_id || l.members.some((m) => m.id === p.id));
   const shared = (l) => l.members?.length ? (sharedAll(l) ? "Shared with all" : `Shared with ${l.members.map((m) => esc(m.name)).join(", ")}`) : l.owner_id === L.me ? "Just you" : `From ${esc(l.owner || "")}`;
@@ -76,8 +78,9 @@
     const daysLeft = (d) => { if (!d) return ["", ""]; const n = Math.round((Date.parse(`${d}T00:00`) - Date.parse(`${todayISO()}T00:00`)) / 864e5);
       const words = n < 0 ? `${-n} day${n === -1 ? "" : "s"} late` : n === 0 ? "Today" : n === 1 ? "Tomorrow" : `${n} days`;
       return [`${n < 0 ? "🔴" : n <= 2 ? "🟠" : "🟢"} ${words}`, n < 0 ? "late" : n <= 2 ? "soon" : ""]; };
+    const mineList = (m) => fullName({ name: m.list, place: m.list_place, place_name: m.list_place_name });
     const mineRow = (m) => { const late = m.due && m.due < todayISO() ? "late" : "", [dl, dc] = daysLeft(m.due);
-      return `<div class="lrow lminerow${m.important ? " limp" : ""}"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${m.important ? "⭐ " : ""}${esc(m.text)}</b><small class="lmsub ${late}">${esc([m.list, m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(m.list)}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
+      return `<div class="lrow lminerow${m.important ? " limp" : ""}"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${m.important ? "⭐ " : ""}${esc(m.text)}</b><small class="lmsub ${late}">${esc([mineList(m), m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(mineList(m))}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
     const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? ""
       : `<div class="lmhead"><span>Item</span><span class="lmlist">List</span><span class="lmdue">Due</span><span class="lmdays">Days left</span></div>${mine.map(mineRow).join("")}`}</section>` : "";
     const cols = [...places().map((p) => [p.key, `${p.icon || ""} ${p.label}`.trim(), L.lists.filter((l) => l.place === p.key), false]), ["_other", `${OTHER} Other places`, L.lists.filter((l) => !l.place || l.place === "other" || !places().some((p) => p.key === l.place)), true]].filter(([, , ls]) => ls.length);
@@ -256,7 +259,7 @@
     const shopBtn = !l.members?.length ? "" : `<button type="button" class="lshopbtn ${shopOn ? "on" : ""}" id="lshop" data-on="${mineShop ? 0 : 1}" aria-label="${esc(shopLabel)}" title="${esc(shopLabel)}"><span class="lshopdot">${shopOn ? "🟢" : "🔵"}</span>🛒${shopOn ? `<small>${mineShop ? "" : `${esc(l.shopper || "")} `}till ${until}</small>` : ""}</button>`;
     const topHTML = `<div class="lback"><button type="button" class="lbackl" id="lall">← All lists</button><span>${shopBtn}<button type="button" class="ackbtn" id="lwa">💬 Send by WhatsApp</button></span></div>`;
     // (the shopping time sits under the 🟢🛒 itself, not in a line here)
-    const shopNote = "", metaHTML = `<div class="lbar"><i></i><button type="button" class="lbartog" id="ltitle" aria-expanded="${!addShut()}">${addShut() ? "▸" : "▾"} ${esc(l.name)}</button>${l.owner_id === L.me ? `<button type="button" class="lbaredit" id="ledit" aria-label="Change the list" title="Change the list">✎</button>` : "<i></i>"}</div>${shopNote}`;
+    const shopNote = "", metaHTML = `<div class="lbar"><i></i><button type="button" class="lbartog" id="ltitle" aria-expanded="${!addShut()}">${addShut() ? "▸" : "▾"} ${esc(fullName(l))}</button>${l.owner_id === L.me ? `<button type="button" class="lbaredit" id="ledit" aria-label="Change the list" title="Change the list">✎</button>` : "<i></i>"}</div>${shopNote}`;
     const restHTML = `<datalist id="lsug">${L.suggestions.filter((s) => !open.some((i) => i.text.toLowerCase() === s.toLowerCase())).map((s) => `<option value="${esc(s)}">`).join("")}</datalist>
       <datalist id="ldep">${L.departments.map((d) => `<option value="${esc(d)}">`).join("")}</datalist>
       ${open.length > 1 ? `<div class="lhead"><span><button type="button" data-sort="text">Item${arrow(shown(gs, "text"))}</button></span>${priv ? "" : `<button type="button" class="lwho" data-sort="added_by">Added by${arrow(shown(gs, "added_by"))}</button>`}<span class="lhpad"></span></div>` : ""}
@@ -277,7 +280,7 @@
     $("#ltitle").onclick = () => { store.set("lists.addShut", !addShut()); $(".lbox").classList.toggle("lshut", addShut()); drawList(); };
     ["#ltog"].forEach((s) => $(s)?.addEventListener("click", () => { store.set("lists.hideDone", !hideDone()); drawList(); }));
     $("#lwa").onclick = () => {
-      const lines = [`🛒 ${l.name}${placeName(l) ? ` (${placeName(l)})` : ""}`, ...gs.flatMap(([name, ls]) => [...(name ? ["", `*${name}*`] : []), ...ls.map((i) => `• ${i.important ? "⭐ " : ""}${i.text}${i.note ? ` – ${i.note}` : ""}`)])];
+      const lines = [`🛒 ${fullName(l)}`, ...gs.flatMap(([name, ls]) => [...(name ? ["", `*${name}*`] : []), ...ls.map((i) => `• ${i.important ? "⭐ " : ""}${i.text}${i.note ? ` – ${i.note}` : ""}`)])];
       window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank", "noopener");
     };
     $("#lopen").querySelectorAll("[data-drag]").forEach(dragger);
@@ -360,7 +363,7 @@
       <label>Due (optional – it goes on the calendar)<input type="date" name="due" value="${esc(it.due || "")}"></label>
       <div class="ldeps"><span class="meta">Category</span><div>${["", ...deps].map((d) => `<button type="button" class="ldepb ${(it.category || "") === d ? "on" : ""}" data-dep="${esc(d)}">${d ? esc(d) : "None"}</button>`).join("")}</div>
         <input name="category" maxlength="40" value="${esc(it.category || "")}" placeholder="or type a new one" aria-label="Category"></div>
-      ${others.length ? `<label>List<select name="move"><option value="">${esc(L.list.name)} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(x.name)}${placeName(x) ? ` – ${esc(placeName(x))}` : ""}</option>`).join("")}</select></label>` : ""}
+      ${others.length ? `<label>List<select name="move"><option value="">${esc(fullName(L.list))} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(fullName(x))}</option>`).join("")}</select></label>` : ""}
       <div class="actions"><button type="button" class="danger" id="del">Remove</button><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
       const f = $("#f"); $("#cancel").onclick = closeDialog;
       const forBoxes = [...f.querySelectorAll("[name=for]")];
