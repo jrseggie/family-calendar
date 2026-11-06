@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.43
+- 🛒 Lists: changing a list straight after a refresh inside it now shows the family's names to share with (it showed none, and saving would have unshared the list).
+
 ## 1.0.42
 - 🛒 Lists: shopping lists (or any list) for the family's own logins. Name a list, say which house it's for, keep it to yourself or share it
   with family members. Tick things off in the shop, even with no signal (it catches up when you're back online), and see what others

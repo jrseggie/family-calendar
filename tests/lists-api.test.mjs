@@ -44,6 +44,8 @@ test("only family logins; a list is private until people are added, and only its
   assert.equal((await call(2, "GET", "lists")).lists.length, 0);
   await call(1, "PUT", `lists/${id}`, { name: "Groceries", place: "town", members: [2] });
   assert.equal((await call(2, "GET", "lists")).lists.length, 1);
+  // the list itself brings the family's logins, so "Share with" works after a refresh inside the list (Nanny isn't family)
+  assert.deepEqual((await call(1, "GET", `lists/${id}`)).people.map((p) => p.name), ["Emma", "Leo"]);
   await assert.rejects(call(2, "PUT", `lists/${id}`, { name: "Groceries", place: "town", members: [] }), /Only the person who made the list/);
   await assert.rejects(call(2, "DELETE", `lists/${id}`), /Only the person who made the list/);
 });

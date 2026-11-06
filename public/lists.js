@@ -45,7 +45,7 @@
   // a copy from the server: drawn again only if something changed - the 5-second check would otherwise redraw the list under your
   // thumb and lose a tick now and then
   const take = (res) => { const sig = JSON.stringify([res.list, res.items]), same = sig === L.sig && L.list?.id === res.list?.id;
-    L.list = res.list; L.items = res.items; L.suggestions = res.suggestions || L.suggestions; L.dept = res.dept || L.dept; L.departments = res.departments || L.departments; L.me = res.me ?? L.me; store.set(`lists.copy.${L.list.id}`, { list: res.list, items: res.items, suggestions: L.suggestions, dept: L.dept, departments: L.departments }); if (res.duplicate) toast(`"${res.duplicate}" is already on the list`); if (state.view === "lists" && L.open && !same) drawList(); L.sig = sig; };
+    L.list = res.list; L.items = res.items; L.suggestions = res.suggestions || L.suggestions; L.dept = res.dept || L.dept; L.departments = res.departments || L.departments; L.people = res.people || L.people; L.me = res.me ?? L.me; store.set(`lists.copy.${L.list.id}`, { list: res.list, items: res.items, suggestions: L.suggestions, dept: L.dept, departments: L.departments }); if (res.duplicate) toast(`"${res.duplicate}" is already on the list`); if (state.view === "lists" && L.open && !same) drawList(); L.sig = sig; };
 
   // ---------- the lists
   async function render() {
@@ -72,7 +72,9 @@
     setTimeout(() => globalThis.fabFor?.("lists"), 0);
   }
 
-  function listForm(l) {
+  async function listForm(l) {
+    // the family's logins: never open "Share with" without them - saving an empty list of names would unshare the list
+    if (!L.people.length) { try { const r = await api("GET", "lists"); L.people = r.people; L.lists = r.lists; L.me = r.me; } catch (e) { toast(e.message); return; } }
     const others = L.people.filter((p) => p.id !== L.me), mine = new Set((l?.members || []).map((m) => m.id));
     openDialog(`<form class="form" id="f" autocomplete="off"><h2>${l ? "Change the list" : "New list"}</h2>
       <label>Name<input name="name" maxlength="80" value="${esc(l?.name || "")}" placeholder="e.g. Groceries" required></label>
