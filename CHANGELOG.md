@@ -2,6 +2,12 @@
 
 ## Next version (not released yet)
 
+## 1.0.52
+- 📌 Lists: a job can have a time and a 🔔 reminder as well as a due date (✎ box) - the reminder goes to whoever it's for, and ✅ Done on it ticks the line off the list (whoever gave the job hears that it's done).
+- 🔁 Calendar: Repeat sits right under the dates and times, and an existing entry can be made to repeat ("Repeat (from this one on)") - it stays the first one and the later ones are added.
+- ⏳ Calendar: a must-be-done entry whose time has passed without being done shows 🔔⏳ (🔔 = still to come, 🔔✅ = done).
+- 📝 Notes boxes grow to fit what's in them (and as you type), so a long note is easy to read - especially on phones.
+
 ## 1.0.51
 - 🛒 Lists: a list's name shows its place first - "🏠 Town House – Groceries" - on the list, in For me, Move to, WhatsApp and notifications (the same name can be at more than one house).
 

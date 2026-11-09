@@ -23,7 +23,7 @@ import { sendWelcome, welcomeMail, welcomeWhatsApp, canSendDirect, markWelcome }
 import { involvesOthers, ownEntry, tellParents } from "../../lib/child.js";
 import { extraApi, extraInboxes } from "../../src/extras.js";
 import { listsApi, isFamilyLogin } from "../../lib/lists.js";
-import { pushApi } from "../../lib/push.js";   // 🔔 phone notifications
+import { pushApi, queuePush } from "../../lib/push.js";   // 🔔 phone notifications
 import { doneNotice } from "../../lib/reminders.js";   // ✅ the parents hear when a must-be-done entry is done   // 🛒 Lists (shopping lists for the family's own logins)
 import { REQUEST_STATUS, sendRequests, queueAdminEmail, makerList, makerUpdate } from "../../lib/requests.js";   // optional extra pages (empty in the public release)
 
@@ -396,6 +396,18 @@ async function events(request, env, u, id) {
     if (before.status === "Tentative" && rec.status === "Confirmed") Object.assign(rec, { confirmed_at: now(), confirmed_by: u.name });
     if (rec.status === "Tentative" && before.confirmed_at) Object.assign(rec, { confirmed_at: null, confirmed_by: null });
     await update(env, "events", id, rec);
+    // 🔁 an existing one-off made into a repeat (edit form): this entry stays the first; the later dates are added as copies
+    // (not done / not snoozed), all sharing this entry's series
+    if (body.repeat && !before.series) {
+      const dates = repeatDates(rec.start, rec.end, body.repeat).filter(([s]) => s > rec.start);
+      if (dates.length) {
+        const copy = { ...rec, created_by: u.name, created_login: u.id || null, created_at: now(), series: id };
+        await env.DB.batch([env.DB.prepare("UPDATE events SET series=? WHERE id=?").bind(id, id),
+          ...dates.map(([s, e]) => { const r = { ...copy, start: s, end: e }; const cols = Object.keys(r);
+            return env.DB.prepare(`INSERT INTO events (${cols.join(",")}) VALUES (${cols.map(() => "?").join(",")})`).bind(...cols.map((c) => r[c])); })]);
+        await log(env, u, "Repeat added", `${describe(rec)} – repeats ${REPEAT_LABEL[body.repeat.every]} until ${dates[dates.length - 1][0]} (${dates.length + 1} times)`);
+      }
+    }
     await log(env, u, rec.confirmed_at ? "Confirmed event" : "Edited event", describe(rec) + (describe(before) !== describe(rec) ? `  (was: ${describe(before)})` : ""));
     if (pencil) await tellParents(env, u, "changed", rec, `${describe(before) !== describe(rec) ? `It was: ${describe(before)}. ` : ""}It includes other people, so it's ✏️ pencilled in until a parent taps "✅ It's on".`).catch(() => {});
     return json({ ok: true, pencilled: pencil });
@@ -1133,6 +1145,19 @@ export async function onRequest({ request, env, params, waitUntil }) {
       const on = !!body.done;
       await env.DB.prepare("UPDATE events SET done_at = ?, done_by = ?, updated_by = ?, updated_at = ? WHERE id = ?").bind(on ? at : null, on ? u.name : null, u.name, at, id).run();
       await log(env, u, on ? "Marked done" : "Marked not done", `${ev.start} ${ev.title}`);
+      // 📌 a job from a list (its calendar entry): done here = ticked off on the list too (the person who gave it hears, as from the list)
+      const job = String(ev.source || "").match(/^🛒 List item #(\d+)$/);
+      if (job && on) {
+        const it = await env.DB.prepare("SELECT * FROM list_items WHERE id = ?").bind(+job[1]).first();
+        if (it && !it.done) {
+          await env.DB.prepare("UPDATE list_items SET done = 1, done_by = ?, done_at = ?, updated_at = ? WHERE id = ?").bind(u.name, at, at, it.id).run();
+          // ✅ whoever gave the job hears, the same as when it's ticked on the list
+          if (it.assigned_by && it.assigned_by !== u.id) {
+            const list = await env.DB.prepare("SELECT * FROM lists WHERE id = ?").bind(it.list_id).first();
+            if (list) await queuePush(env, waitUntil, list, u, new Map([[it.assigned_by, "done"]]), it.text).catch((e) => console.log("push:", String(e)));
+          }
+        }
+      }
       if (on && !ev.done_at && ev.must_done) { const tell = doneNotice(env, ev, u).catch((e) => console.log("done notice:", String(e))); if (waitUntil) waitUntil(tell); else await tell; }
       return json({ ok: true, done_at: on ? at : null, done_by: on ? u.name : null });
     }

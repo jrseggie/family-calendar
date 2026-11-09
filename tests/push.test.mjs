@@ -45,9 +45,9 @@ function setup() {
   const db = new DatabaseSync(":memory:");
   db.exec(`CREATE TABLE users (id INTEGER PRIMARY KEY, name TEXT, role TEXT, person TEXT, active INTEGER DEFAULT 1);
            CREATE TABLE places (key TEXT, active INTEGER DEFAULT 1); CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT);
-           CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
+           CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, start_time TEXT, remind TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
            INSERT INTO users VALUES (1, 'Emma', 'admin', NULL, 1), (2, 'Max', 'admin', NULL, 1), (3, 'Leo', 'child', 'Leo', 1);`);
-  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql", "0054_list_job_time.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
   for (const id of [1, 2, 3]) db.prepare("INSERT INTO push_subs (user_id, endpoint, p256dh, auth, created_at) VALUES (?, ?, ?, ?, 'x')").run(id, `https://push.example/${id}`, phoneKeys.p256dh, phoneKeys.authB64);
   const sent = [], waits = [];
   const env = { DB: d1(db), PUSH_GROUP_MS: 30, PUSH_FETCH: async (url, init) => { sent.push({ to: url, init }); return new Response(null, { status: 201 }); } };
@@ -150,6 +150,8 @@ test("📌 jobs: whoever it's for hears about it, whoever gave it hears when it'
   assert.equal((await call(1, "GET", "lists")).mine.length, 0);
   sent.length = 0;
   await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { for: [2], due: "2026-11-20" });   // a new date: the entry moves, nobody new is told
+  await call(1, "PUT", `lists/${id}/items/c:j1aaaaaa`, { due_time: "17:30", remind: "15" });   // a time and a reminder: the entry gets them
+  assert.deepEqual({ ...db.prepare("SELECT start_time, remind FROM events WHERE source LIKE '🛒 List item #%'").get() }, { start_time: "17:30", remind: "15" });
   await settle();
   assert.equal(sent.length, 0);
   assert.equal(db.prepare("SELECT start FROM events WHERE source LIKE '🛒 List item #%'").get().start, "2026-11-20");

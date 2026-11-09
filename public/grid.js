@@ -122,7 +122,7 @@ function barHTML(it, key, n, person, label, repeat = 0, wide = false) {
   const who = label ? `<b>${esc(label)}:</b> ` : visit && !new RegExp(`\\b${visitor}\\b`, "i").test(title) ? `${esc(visitor)}: ` : "";   // "Mark: dinner", not "Mark: Emma with Mark"
   const tm = CalendarRules.timeText(e, key);   // "10:30" in front of the title (on the first day; "until 14:00" on the last)
   // time, then 🔔 (a phone reminder) and ✅ (done), then what it is
-  const bell = `${e.remind ? `<span class="pmark" title="Sends a phone reminder">🔔</span>` : ""}${e.done_at ? `<span class="pmark" title="Done">✅</span>` : ""}${e.remind || e.done_at ? " " : ""}`;   // 🔔 stays; ✅ next to it once done
+  const bell = `${e.remind ? `<span class="pmark" title="Sends a phone reminder">🔔</span>` : ""}${e.done_at ? `<span class="pmark" title="Done">✅</span>` : overdue(e) ? `<span class="pmark" title="Due and not done yet">⏳</span>` : ""}${e.remind || e.done_at ? " " : ""}`;   // 🔔 stays; ✅ done / ⏳ due and not done
   const text = `${icon}${who}${tm ? `<span class="tm">${esc(tm)}</span> ` : ""}${bell}${esc(title)}${stay ? "" : pencilMark(e)}`;
   const body = repeat ? Array(repeat).fill(`<span>${text}</span>`).join("") : text;
   return `<div class="${cls}${repeat ? " across" : ""}" style="--c:${COLORS[visit ? visitor : person || whoList(e.who)[0]]}${repeat ? `;grid-template-columns:repeat(${repeat},minmax(0,1fr))` : ""}" data-ev="${e.id}">${body}</div>`;   // label on every day, so each square makes sense on its own

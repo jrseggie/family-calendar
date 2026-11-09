@@ -26,8 +26,8 @@
   // 📌 jobs: who a line is for (",3,7," = logins) and when it's due
   const forIds = (v) => String(v || "").split(",").map(Number).filter((n) => n > 0);
   const nameOf = (id) => id === L.me ? "you" : L.people.find((p) => p.id === id)?.name || "";
-  const dueText = (d) => d ? `by ${fmtDay(d)}` : "";
-  const jobLine = (i) => { const f = forIds(i.for_ids).map(nameOf).filter(Boolean), bits = [f.length ? `📌 For ${f.join(", ")}` : "", i.done ? "" : dueText(i.due)].filter(Boolean);
+  const dueText = (d, t) => d ? `by ${fmtDay(d)}${t ? ` ${t}` : ""}` : "";
+  const jobLine = (i) => { const f = forIds(i.for_ids).map(nameOf).filter(Boolean), bits = [f.length ? `📌 For ${f.join(", ")}` : "", i.done ? "" : `${dueText(i.due, i.due_time)}${i.remind ? " 🔔" : ""}`].filter(Boolean);
     return bits.length ? `<small class="ljob${!i.done && i.due && i.due < todayISO() ? " late" : ""}">${esc(bits.join(" · "))}</small>` : ""; };
 
   // ---------- sending: straight away when there's a connection, otherwise kept and sent later in the same order
@@ -80,7 +80,7 @@
       return [`${n < 0 ? "🔴" : n <= 2 ? "🟠" : "🟢"} ${words}`, n < 0 ? "late" : n <= 2 ? "soon" : ""]; };
     const mineList = (m) => fullName({ name: m.list, place: m.list_place, place_name: m.list_place_name });
     const mineRow = (m) => { const late = m.due && m.due < todayISO() ? "late" : "", [dl, dc] = daysLeft(m.due);
-      return `<div class="lrow lminerow${m.important ? " limp" : ""}"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${m.important ? "⭐ " : ""}${esc(m.text)}</b><small class="lmsub ${late}">${esc([mineList(m), m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(mineList(m))}</span><span class="lmdue ${late}">${m.due ? fmtDay(m.due) : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
+      return `<div class="lrow lminerow${m.important ? " limp" : ""}"><input type="checkbox" data-mt="${m.list_id}|${esc(m.client_id ? `c:${m.client_id}` : m.id)}" aria-label="Done: ${esc(m.text)}"><button type="button" data-lo="${m.list_id}"><span class="lmitem"><b>${m.important ? "⭐ " : ""}${esc(m.text)}</b><small class="lmsub ${late}">${esc([mineList(m), m.due ? fmtDay(m.due) : ""].filter(Boolean).join(" · "))}</small></span><span class="lmlist">${esc(mineList(m))}</span><span class="lmdue ${late}">${m.due ? `${fmtDay(m.due)}${m.due_time ? ` ${m.due_time}` : ""}` : ""}</span><span class="lmdays ${dc}">${dl}</span></button></div>`; };
     const forMe = mine.length ? `<section class="lcol lmine"><button type="button" class="lcolh" data-fp="_mine" aria-expanded="${!shut.has("_mine")}">${shut.has("_mine") ? "▸" : "▾"} 📌 For me (${mine.length})</button>${shut.has("_mine") ? ""
       : `<div class="lmhead"><span>Item</span><span class="lmlist">List</span><span class="lmdue">Due</span><span class="lmdays">Days left</span></div>${mine.map(mineRow).join("")}`}</section>` : "";
     const cols = [...places().map((p) => [p.key, `${p.icon || ""} ${p.label}`.trim(), L.lists.filter((l) => l.place === p.key), false]), ["_other", `${OTHER} Other places`, L.lists.filter((l) => !l.place || l.place === "other" || !places().some((p) => p.key === l.place)), true]].filter(([, , ls]) => ls.length);
@@ -360,14 +360,19 @@
       <label>Note<input name="note" maxlength="200" value="${esc(it.note || "")}"></label>
       <label class="fatick limpbox"><input type="checkbox" name="important" ${it.important ? "checked" : ""}> ⭐ Important</label>
       ${onIt.length > 1 ? `<div class="lshare"><span class="meta">For (optional – they get a notification)</span>${onIt.map((p) => `<label class="fatick"><input type="checkbox" name="for" value="${p.id}" ${forNow.includes(p.id) ? "checked" : ""}> ${esc(p.id === L.me ? `${p.name} (you)` : p.name)}</label>`).join("")}</div>` : ""}
-      <label>Due (optional – it goes on the calendar)<input type="date" name="due" value="${esc(it.due || "")}"></label>
+      <div class="two"><label>Due (optional – it goes on the calendar)<input type="date" name="due" value="${esc(it.due || "")}"></label><label>Time (optional)<input type="time" name="due_time" value="${esc(it.due_time || "")}"></label></div>
+      <label>🔔 Remind (a notification for whoever it's for)<select name="remind">${[["", "No reminder"], ["at", "At the time"], ["15", "15 minutes before"], ["60", "1 hour before"], ["eve", "The evening before (18:00)"]].map(([v, t]) => `<option value="${v}" ${(it.remind || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
+      <div class="meta" id="lremhelp" style="margin-top:-6px" hidden>Needs a due date and a time – or pick "The evening before".</div>
       <div class="ldeps"><span class="meta">Category</span><div>${["", ...deps].map((d) => `<button type="button" class="ldepb ${(it.category || "") === d ? "on" : ""}" data-dep="${esc(d)}">${d ? esc(d) : "None"}</button>`).join("")}</div>
         <input name="category" maxlength="40" value="${esc(it.category || "")}" placeholder="or type a new one" aria-label="Category"></div>
       ${others.length ? `<label>List<select name="move"><option value="">${esc(fullName(L.list))} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(fullName(x))}</option>`).join("")}</select></label>` : ""}
       <div class="actions"><button type="button" class="danger" id="del">Remove</button><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
       const f = $("#f"); $("#cancel").onclick = closeDialog;
       const forBoxes = [...f.querySelectorAll("[name=for]")];
-      forBoxes.forEach((x) => x.onchange = () => { if (forNow.length && !forBoxes.some((y) => y.checked)) f.elements.due.value = ""; });
+      forBoxes.forEach((x) => x.onchange = () => { if (forNow.length && !forBoxes.some((y) => y.checked)) { f.elements.due.value = ""; f.elements.due_time.value = ""; f.elements.remind.value = ""; rh(); } });
+      // a reminder at / before the time needs a date and a time
+      const rh = () => { $("#lremhelp").hidden = !(f.elements.remind.value && (!f.elements.due.value || (f.elements.remind.value !== "eve" && !f.elements.due_time.value))); };
+      for (const n of ["remind", "due", "due_time"]) f.elements[n].addEventListener("input", rh); f.elements.remind.onchange = rh; rh();
       const mark = () => f.querySelectorAll("[data-dep]").forEach((b) => b.classList.toggle("on", b.dataset.dep === f.elements.category.value.trim()));
       f.querySelectorAll("[data-dep]").forEach((b) => b.onclick = () => { f.elements.category.value = b.dataset.dep; mark(); });
       f.elements.category.oninput = mark;
@@ -375,8 +380,9 @@
         const text = f.elements.text.value.trim() || it.text, note = f.elements.note.value.trim() || null, category = f.elements.category.value.trim() || null, to = +f.elements.move?.value || 0;
         const fr = [...f.querySelectorAll("[name=for]:checked")].map((x) => +x.value);
         const due = onIt.length > 1 && it.for_ids && !fr.length ? null : f.elements.due.value || null;   // nobody on it any more: no date either
-        const forStr = fr.length ? `,${fr.join(",")},` : null, jobChanged = (onIt.length > 1 && forStr !== (it.for_ids || null)) || due !== (it.due || null);
-        if (jobChanged) { it.for_ids = onIt.length > 1 ? forStr : it.for_ids; it.due = due; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { ...(onIt.length > 1 ? { for: fr } : {}), due } }); }
+        const dueTime = due ? f.elements.due_time.value || null : null, remind = due ? f.elements.remind.value || null : null;
+        const forStr = fr.length ? `,${fr.join(",")},` : null, jobChanged = (onIt.length > 1 && forStr !== (it.for_ids || null)) || due !== (it.due || null) || dueTime !== (it.due_time || null) || remind !== (it.remind || null);
+        if (jobChanged) { it.for_ids = onIt.length > 1 ? forStr : it.for_ids; Object.assign(it, { due, due_time: dueTime, remind }); send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { ...(onIt.length > 1 ? { for: fr } : {}), due, due_time: dueTime, remind } }); }
         const imp = f.elements.important.checked ? 1 : 0;
         if (imp !== (it.important ? 1 : 0)) { it.important = imp; send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { important: !!imp } }); }
         const changed = text !== it.text || note !== (it.note || null) || category !== (it.category || null);

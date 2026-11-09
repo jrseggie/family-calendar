@@ -274,7 +274,7 @@ function itemHTML(it, opts = {}) {
   const pl = e.location && LOC()[e.location];
   const loc = pl && e.status !== "Unavailable" ? ` <span class="badge loc">${pl.icon} ${pl.kind === "away" ? "Away" : esc(pl.label)}</span>` : "";
   return `<div class="${cls}" data-ev="${e.id}"><div class="who">${pchips(it.who)}</div>
-          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${e.remind ? `<span title="Sends a phone reminder">🔔</span>` : ""}${e.done_at ? `<span title="Done">✅</span>` : ""}${e.remind || e.done_at ? " " : ""}${esc(CalendarRules.stayText(state.data, e))}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
+          <div class="title">${e.important ? "⭐ " : ""}${CalendarRules.timeText(e, opts.day) ? `<span class="tm">${esc(CalendarRules.timeText(e, opts.day))}</span> ` : ""}${e.remind ? `<span title="Sends a phone reminder">🔔</span>` : ""}${e.done_at ? `<span title="Done">✅</span>` : overdue(e) ? `<span title="Due and not done yet">⏳</span>` : ""}${e.remind || e.done_at ? " " : ""}${esc(CalendarRules.stayText(state.data, e))}${typeof isHelperStay === "function" && isHelperStay(e) ? "" : ""}${loc}${
             CalendarRules.pencilled(state.data, e) ? ` ✏️ <small class="muted">maybe</small>` : CalendarRules.justConfirmed(e) ? ` ✅ <small class="muted">confirmed</small>` : ""}</div>
           ${opts.range === false ? "" : range}</div>`;
 }
@@ -413,6 +413,13 @@ function approvalCard() {
 
 // Links in the "items to approve" email open the site with ?p=<id>&do=approve (or ?batch=<id>). They never act on
 // their own (mail scanners such as Outlook Safe Links open every link) - they show the item(s) and wait for Confirm.
+// ⏳ a "must confirm it's done" entry whose time has come and gone without being marked done (all day: once the day is over)
+function overdue(e) {
+  if (!e.must_done || e.done_at) return false;
+  const today = todayISO(), now = new Date().toTimeString().slice(0, 5);
+  return e.start < today || (e.start === today && !!e.start_time && e.start_time <= now);
+}
+
 // 🔔 a tapped reminder opens /?event=<id>: the calendar, with that entry open
 function eventLink() {
   const id = +new URLSearchParams(location.search).get("event");
@@ -1019,6 +1026,13 @@ function eventForm(ev, preset = {}) {
       <label>To (optional)<input type="date" name="end" value="${e.end !== e.start ? e.end || "" : ""}"></label></div>
     <div class="two"><label>Time (optional)<input type="time" name="start_time" value="${esc(e.start_time || "")}"></label>
       <label>Until (optional)<input type="time" name="end_time" value="${esc(e.end_time || "")}"></label></div>
+    ${(!ev || !ev.series) && !preset.onSave ? `<div class="two"><label>${ev ? "Repeat (from this one on)" : "Repeat"}<select name="repeat">
+        <option value="">Doesn't repeat</option><option value="week">Every week</option>
+        <option value="2weeks">Every 2 weeks</option><option value="month">Every month</option></select></label>
+      <label class="until" hidden>Until<input type="date" name="until"></label></div>
+      <div class="rdays" hidden>${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) =>
+        `<label><input type="checkbox" name="rday" value="${(i + 1) % 7}"> ${d}</label>`).join("")}</div>` : ""}
+    ${ev?.series ? `<div class="meta">🔁 Part of a repeat – changes here are for this one only.</div>` : ""}
     <label>🔔 Remind (a notification on the phones of the people in Who)<select name="remind">${[["", "No reminder"], ["at", "At the time"], ["15", "15 minutes before"], ["60", "1 hour before"], ["eve", "The evening before (18:00)"]]
       .map(([v, t]) => `<option value="${v}" ${(e.remind || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>
     <div class="meta" id="remind-help" style="margin-top:-6px" hidden>Needs a time – or pick "The evening before".</div>
@@ -1045,13 +1059,6 @@ function eventForm(ev, preset = {}) {
     <label>Notes<textarea name="notes" rows="2">${esc(e.notes || "")}</textarea></label>
     ${CalendarRules.tracked(state.data).length && state.data.me.canEditAll ? `<label>In the printout for ${esc(CalendarRules.tracked(state.data).join(" / "))}<select name="share">
       ${SHARE_PICK.map(([v, t]) => `<option value="${v}" ${(e.share || "") === v ? "selected" : ""}>${t}</option>`).join("")}</select></label>` : ""}
-    ${!ev && !preset.onSave ? `<div class="two"><label>Repeat<select name="repeat">
-        <option value="">Doesn't repeat</option><option value="week">Every week</option>
-        <option value="2weeks">Every 2 weeks</option><option value="month">Every month</option></select></label>
-      <label class="until" hidden>Until<input type="date" name="until"></label></div>
-      <div class="rdays" hidden>${["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) =>
-        `<label><input type="checkbox" name="rday" value="${(i + 1) % 7}"> ${d}</label>`).join("")}</div>` : ""}
-    ${ev?.series ? `<div class="meta">🔁 Part of a repeat – changes here are for this one only.</div>` : ""}
     ${ev ? `<div class="meta">${ev.source ? `From: ${esc(ev.source)} · ` : ""}${ev.updated_by ? `Last changed by ${esc(ev.updated_by)} ${esc(localDay(ev.updated_at))}` : `Added by ${esc(ev.created_by || "")}`}</div>` : ""}
     <div class="err"></div>
     <div class="actions">${ev ? `<button type="button" class="danger" id="del">Delete</button>` : ""}
@@ -2480,6 +2487,17 @@ function requestView(r) {
   };
   const scan = (root) => root.querySelectorAll?.('input[type="date"]:not([data-dmy])').forEach(fix);
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches?.('input[type="date"]')) fix(n); else scan(n); } })
+    .observe(document.documentElement, { childList: true, subtree: true });
+  scan(document);
+})();
+
+// 📝 notes boxes grow to fit what's in them (a long note was hidden behind a 2-line scroll box, worst on phones): on opening and while
+// typing, up to most of the screen. Every <textarea> on every page, forms included (a watcher catches new ones).
+(function () {
+  const fit = (t) => { if (!t.isConnected) return; t.style.height = "auto"; t.style.height = `${Math.min(t.scrollHeight + 2, Math.round(innerHeight * 0.6))}px`; };
+  const setUp = (t) => { if (t.dataset.grow) return; t.dataset.grow = "1"; t.style.overflowY = "auto"; t.style.resize = "vertical"; t.addEventListener("input", () => fit(t)); requestAnimationFrame(() => fit(t)); setTimeout(() => fit(t), 150); };
+  const scan = (root) => root.querySelectorAll?.("textarea:not([data-grow])").forEach(setUp);
+  new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches?.("textarea")) setUp(n); else scan(n); } })
     .observe(document.documentElement, { childList: true, subtree: true });
   scan(document);
 })();
