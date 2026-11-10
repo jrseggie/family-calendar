@@ -141,3 +141,19 @@ test("⭐ a whole list marked important: everyone on it sees the star; unticking
   await call(1, "PUT", `lists/${id}`, { name: "Groceries", place: "town", important: false, members: [2] });
   assert.equal((await call(2, "GET", "lists")).lists[0].important, 0);
 });
+
+test("copy to another list: the line stays here and goes there too; already there = no second one; completed there = that one comes back", async () => {
+  const { call } = setup();
+  const a = (await call(1, "POST", "lists", { name: "Groceries", members: [] })).id, b = (await call(1, "POST", "lists", { name: "To take", members: [] })).id;
+  const milk = (await call(1, "POST", `lists/${a}/items`, { text: "Milk", note: "2 litres", client_id: "cccccccc1" })).items[0];
+  await call(1, "PUT", `lists/${a}/items/${milk.id}`, { copy_to: b });
+  assert.deepEqual(open(await call(1, "GET", `lists/${a}`)), ["Milk"]);
+  const there = await call(1, "GET", `lists/${b}`);
+  assert.deepEqual(open(there), ["Milk"]); assert.equal(there.items[0].note, "2 litres");
+  assert.equal((await call(1, "PUT", `lists/${a}/items/${milk.id}`, { copy_to: b })).copied, "already");
+  assert.equal((await call(1, "GET", `lists/${b}`)).items.length, 1);
+  await call(1, "PUT", `lists/${b}/items/${there.items[0].id}`, { done: true });
+  await call(1, "PUT", `lists/${a}/items/${milk.id}`, { copy_to: b });
+  const again = await call(1, "GET", `lists/${b}`);
+  assert.equal(again.items.length, 1); assert.deepEqual(open(again), ["Milk"]);
+});

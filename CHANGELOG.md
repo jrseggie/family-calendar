@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.54
+- 📋 Lists: an item can be copied to another list as well as moved (✎ › List › "Copy to …") - it stays on this list too; already on the other list = no second one.
+
 ## 1.0.53
 - 🛒 Lists: "← All lists" is a blue button with white text, like the rest of the site.
 - ⬅ Phones: swipe in from the left edge to go back (home-screen app), like other iPhone apps - out of a list to All lists. Android's back gesture does the same.

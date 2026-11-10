@@ -380,7 +380,7 @@
       <div class="meta" id="lremhelp" style="margin-top:-6px" hidden>Needs a due date and a time – or pick "The evening before".</div>
       <div class="ldeps"><span class="meta">Category</span><div>${["", ...deps].map((d) => `<button type="button" class="ldepb ${(it.category || "") === d ? "on" : ""}" data-dep="${esc(d)}">${d ? esc(d) : "None"}</button>`).join("")}</div>
         <input name="category" maxlength="40" value="${esc(it.category || "")}" placeholder="or type a new one" aria-label="Category"></div>
-      ${others.length ? `<label>List<select name="move"><option value="">${esc(fullName(L.list))} (this list)</option>${others.map((x) => `<option value="${x.id}">Move to ${esc(fullName(x))}</option>`).join("")}</select></label>` : ""}
+      ${others.length ? `<label>List<select name="move"><option value="">${esc(fullName(L.list))} (this list)</option><optgroup label="Move to (off this list)">${others.map((x) => `<option value="m${x.id}">Move to ${esc(fullName(x))}</option>`).join("")}</optgroup><optgroup label="Copy to (stays here too)">${others.map((x) => `<option value="c${x.id}">Copy to ${esc(fullName(x))}</option>`).join("")}</optgroup></select></label>` : ""}
       <div class="actions"><button type="button" class="danger" id="del">Remove</button><button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
       const f = $("#f"); $("#cancel").onclick = closeDialog;
       const forBoxes = [...f.querySelectorAll("[name=for]")];
@@ -392,7 +392,7 @@
       f.querySelectorAll("[data-dep]").forEach((b) => b.onclick = () => { f.elements.category.value = b.dataset.dep; mark(); });
       f.elements.category.oninput = mark;
       f.onsubmit = (e) => { e.preventDefault();
-        const text = f.elements.text.value.trim() || it.text, note = f.elements.note.value.trim() || null, category = f.elements.category.value.trim() || null, to = +f.elements.move?.value || 0;
+        const text = f.elements.text.value.trim() || it.text, note = f.elements.note.value.trim() || null, category = f.elements.category.value.trim() || null, pick = f.elements.move?.value || "", to = pick[0] === "m" ? +pick.slice(1) : 0, copyTo = pick[0] === "c" ? +pick.slice(1) : 0;
         const fr = [...f.querySelectorAll("[name=for]:checked")].map((x) => +x.value);
         const due = onIt.length > 1 && it.for_ids && !fr.length ? null : f.elements.due.value || null;   // nobody on it any more: no date either
         const dueTime = due ? f.elements.due_time.value || null : null, remind = due ? f.elements.remind.value || null : null;
@@ -408,6 +408,11 @@
           L.items = L.items.filter((x) => x !== it);
           send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { move_to: to } });
           toast(`Moved to ${others.find((x) => x.id === to)?.name || "the other list"}`);
+        }
+        if (copyTo) {   // onto another list as well: this line stays (already on that list = nothing changes there)
+          const name = others.find((x) => x.id === copyTo)?.name || "the other list";
+          send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { copy_to: copyTo } });
+          toast(`Copied to ${name}`);
         }
         closeDialog(); drawList();
       };
