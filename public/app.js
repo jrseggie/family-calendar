@@ -823,6 +823,9 @@ function render() {
   setBarH();
   const stay = state.lastView === state.view;   // re-render after a save/filter: keep scroll position
   state.lastView = state.view; state.stay = stay;
+  // another page: the one you left goes at once - a page that
+  // has to fetch first shows "Loading…", a page that can draw straight away just replaces it
+  if (!stay) { $("#main").innerHTML = `<p class="muted pad">Loading…</p>`; window.scrollTo(0, 0); }
   const y = window.scrollY;
   fabFor(state.view);
   document.body.classList.toggle("printing", state.view === "print");
@@ -2500,4 +2503,37 @@ function requestView(r) {
   new MutationObserver((ms) => { for (const m of ms) for (const n of m.addedNodes) if (n.nodeType === 1) { if (n.matches?.("textarea")) setUp(n); else scan(n); } })
     .observe(document.documentElement, { childList: true, subtree: true });
   scan(document);
+})();
+
+// ⬅ Swipe from the left edge = back, like other iPhone apps. A home-screen web app has no back gesture of its own
+// (Safari only does it in the browser, and Android has the phone's own back), so only the installed app on a touch screen gets this.
+// Back = the step the page added (an open list, a Tracker photo / PDF) or, for a list that was open when the app started, All lists.
+// The page follows the finger; let go past a third of the way (or a quick flick) = back, otherwise it slides home again.
+(() => {
+  if (!(matchMedia("(display-mode: standalone)").matches || navigator.standalone) || !("ontouchstart" in window)) return;
+  const EDGE = 24;
+  let s = null;
+  // something to go back to: a Tracker photo / PDF open, or a list open (with or without a step in the history)
+  const canBack = () => !!history.state?.xview || (state.view === "lists" && !!document.querySelector("#lall"));
+  const slide = (x, ms) => { const m = $("#main"); m.style.transition = ms ? `transform ${ms}ms ease-out` : "none"; m.style.transform = x ? `translateX(${x}px)` : ""; };
+  addEventListener("touchstart", (e) => {
+    const t = e.touches[0];
+    s = e.touches.length === 1 && t.clientX <= EDGE && !document.querySelector("dialog[open]:not(#xview)") && canBack() ? { x: t.clientX, y: t.clientY, at: Date.now(), on: false } : null;
+  }, { passive: true });
+  addEventListener("touchmove", (e) => {
+    if (!s) return;
+    const t = e.touches[0], dx = t.clientX - s.x, dy = Math.abs(t.clientY - s.y);
+    if (!s.on) { if (dy > 12 && dy > dx) { s = null; return; } if (dx > 10) s.on = true; else return; }   // up / down = an ordinary scroll
+    slide(Math.max(0, dx), 0);
+  }, { passive: true });
+  addEventListener("touchend", (e) => {
+    if (!s?.on) { s = null; return; }
+    const dx = e.changedTouches[0].clientX - s.x, fast = dx > 60 && Date.now() - s.at < 250;
+    s = null;
+    if (dx > innerWidth / 3 || fast) {
+      slide(innerWidth, 120);
+      setTimeout(() => { slide(0, 0); if (history.state?.xview || history.state?.list) history.back(); else globalThis.listsBack?.(); }, 120);
+    } else slide(0, 150);
+  }, { passive: true });
+  addEventListener("touchcancel", () => { if (s?.on) slide(0, 150); s = null; }, { passive: true });
 })();

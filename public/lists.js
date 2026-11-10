@@ -59,6 +59,10 @@
   // ---------- the lists
   async function render() {
     if (L.open) return openList(L.open);
+    // the copy on this phone first, so the lists show the moment you tap Lists; the fresh copy replaces it a moment later
+    const had = store.get("lists.all", null);
+    if (had && !L.lists) { L.lists = had.lists; L.people = had.people; L.mine = had.mine; L.me = had.me; }
+    if (L.lists) drawAll();
     try { const r = await api("GET", "lists"); L.lists = r.lists; L.people = r.people; L.mine = r.mine; L.me = r.me; store.set("lists.all", r); }
     catch (e) { const c = store.get("lists.all", null); if (!c) { $("#main").innerHTML = `<p class="pad err">${esc(e.message)}</p>`; return; } L.lists = c.lists; L.people = c.people; L.mine = c.mine; L.me = c.me; }
     drawAll();
@@ -70,7 +74,7 @@
     // lists with no place); a row per list: name, who it's shared with under it, how many to get on the right. A private list sits under
     // its place too: nobody else sees it anyway. Side by side on a PC, one under another on a phone. Empty boxes aren't shown.
     const shut = new Set(store.get("lists.foldPlaces", []));
-    const line = (l, other) => `<button type="button" class="lrow" data-lo="${l.id}"><span><b>${esc(l.name)}</b><small>${[other ? esc(where(l) || "Anywhere") : "", !l.members?.length && l.owner_id === L.me ? "🔒 Just you" : shared(l)].filter(Boolean).join(" · ")}</small></span><em class="${l.open ? "" : "lzero"}" title="${l.open} to get">${l.open}</em><i aria-hidden="true">›</i></button>`;
+    const line = (l, other) => `<button type="button" class="lrow${l.important ? " limp" : ""}" data-lo="${l.id}"><span><b>${esc(l.name)}</b><small>${[other ? esc(where(l)) : "", !l.members?.length && l.owner_id === L.me ? "🔒 Just you" : shared(l)].filter(Boolean).join(" · ")}</small></span><em class="${l.open ? "" : "lzero"}" title="${l.open} to get">${l.open}</em><i aria-hidden="true">›</i></button>`;
     // 📌 For me: everything still to do that's for you, from every list (only when there's something)
     const mine = L.mine || [];
     // PC: a table - Item | List | Due | Days left; phone: list and date under the name
@@ -88,7 +92,7 @@
       ${forMe}${cols.length ? `<div class="lcols">${cols.map(([k, t, ls, other]) => `<section class="lcol"><button type="button" class="lcolh" data-fp="${esc(k)}" aria-expanded="${!shut.has(k)}">${shut.has(k) ? "▸" : "▾"} ${esc(t)} (${ls.length})</button>${shut.has(k) ? "" : ls.map((l) => line(l, other)).join("")}</section>`).join("")}</div>`
         : `<p class="muted pad">No lists yet: tap the round + to make one.</p>`}<p class="meta" id="lsync"></p></div>`;
     $("#main").querySelectorAll("[data-fp]").forEach((b) => b.onclick = () => { const f = new Set(store.get("lists.foldPlaces", [])); f.has(b.dataset.fp) ? f.delete(b.dataset.fp) : f.add(b.dataset.fp); store.set("lists.foldPlaces", [...f]); drawAll(); });
-    $("#main").querySelectorAll("[data-lo]").forEach((b) => b.onclick = () => openList(+b.dataset.lo));
+    $("#main").querySelectorAll("[data-lo]").forEach((b) => b.onclick = () => { history.pushState({ list: +b.dataset.lo }, ""); openList(+b.dataset.lo); });   // a step back = All lists (swipe / phone back)
     $("#main").querySelectorAll("[data-mt]").forEach((c) => c.onchange = () => {   // done, straight from For me
       const [lid, k] = c.dataset.mt.split("|"); L.mine = (L.mine || []).filter((m) => `${m.list_id}|${m.client_id ? `c:${m.client_id}` : m.id}` !== c.dataset.mt);
       drawAll(); toast("Done"); send({ method: "PUT", path: `lists/${lid}/items/${k}`, body: { done: true } });
@@ -105,17 +109,22 @@
       <label>Name<input name="name" maxlength="80" value="${esc(l?.name || "")}" placeholder="e.g. Groceries" required></label>
       <label>Where<select name="place"><option value="">Anywhere</option>${places().map((p) => `<option value="${esc(p.key)}" ${l?.place === p.key ? "selected" : ""}>${p.icon || ""} ${esc(p.label)}</option>`).join("")}<option value="other" ${l?.place === "other" ? "selected" : ""}>${OTHER} Other…</option></select></label>
       <label id="lpn" ${l?.place === "other" ? "" : "hidden"}>Which place<input name="place_name" maxlength="60" value="${esc(l?.place_name || "")}"></label>
+      <label class="fatick limpbox"><input type="checkbox" name="important" ${l?.important ? "checked" : ""}> ⭐ Important</label>
       <div class="lshare"><span class="meta">Share with (nobody ticked = just you)</span>${others.length ? others.map((p) => `<label class="fatick"><input type="checkbox" name="members" value="${p.id}" ${mine.has(p.id) ? "checked" : ""}> ${esc(p.name)}</label>`).join("") : `<span class="meta">Nobody else in the family has a login yet.</span>`}</div>
       <div class="err"></div><div class="actions">${l ? `<button type="button" class="danger" id="del">Remove</button>` : ""}<button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
       const f = $("#f"), err = (t) => { f.querySelector(".err").textContent = t; };
       $("#cancel").onclick = closeDialog;
       f.elements.place.onchange = () => { $("#lpn").hidden = f.elements.place.value !== "other"; };
       f.onsubmit = async (e) => { e.preventDefault();
-        const body = { name: f.elements.name.value, place: f.elements.place.value, place_name: f.elements.place_name.value, members: new FormData(f).getAll("members").map(Number) };
+        const body = { name: f.elements.name.value, place: f.elements.place.value, place_name: f.elements.place_name.value, important: f.elements.important.checked, members: new FormData(f).getAll("members").map(Number) };
         try { if (l) { take(await api("PUT", `lists/${l.id}`, body)); closeDialog(); toast("Saved"); } else { const r = await api("POST", "lists", body); closeDialog(); openList(r.id); } } catch (x) { err(x.message); } };
       $("#del")?.addEventListener("click", async () => { if (!confirm(`Remove the list "${l.name}" and everything on it?`)) return; try { await api("DELETE", `lists/${l.id}`); closeDialog(); L.open = null; remember(null); render(); toast("Removed"); } catch (x) { err(x.message); } });
     });
   }
+
+  // ⬅ back (the phone's back gesture / the swipe from the left edge, app.js): out of a list = All lists
+  addEventListener("popstate", () => { if (state.view === "lists" && L.open && !history.state?.list) L.back?.(); });
+  globalThis.listsBack = () => state.view === "lists" && L.open && L.back ? (L.back(), true) : false;
 
   // ---------- one list
   async function openList(id) {
@@ -257,7 +266,7 @@
     // shop"), 🟢 for the 2 hours someone is (not red - that reads as broken).
     const shopLabel = mineShop ? "Done shopping" : shopOn ? `${l.shopper || "Someone"} is shopping – tap if you're going too` : "Going shopping – tell everyone on this list";
     const shopBtn = !l.members?.length ? "" : `<button type="button" class="lshopbtn ${shopOn ? "on" : ""}" id="lshop" data-on="${mineShop ? 0 : 1}" aria-label="${esc(shopLabel)}" title="${esc(shopLabel)}"><span class="lshopdot">${shopOn ? "🟢" : "🔵"}</span>🛒${shopOn ? `<small>${mineShop ? "" : `${esc(l.shopper || "")} `}till ${until}</small>` : ""}</button>`;
-    const topHTML = `<div class="lback"><button type="button" class="lbackl" id="lall">← All lists</button><span>${shopBtn}<button type="button" class="ackbtn" id="lwa">💬 Send by WhatsApp</button></span></div>`;
+    const topHTML = `<div class="lback"><button type="button" class="primary lbackb" id="lall">← All lists</button><span>${shopBtn}<button type="button" class="ackbtn" id="lwa">💬 Send by WhatsApp</button></span></div>`;
     // (the shopping time sits under the 🟢🛒 itself, not in a line here)
     const shopNote = "", metaHTML = `<div class="lbar"><i></i><button type="button" class="lbartog" id="ltitle" aria-expanded="${!addShut()}">${addShut() ? "▸" : "▾"} ${esc(fullName(l))}</button>${l.owner_id === L.me ? `<button type="button" class="lbaredit" id="ledit" aria-label="Change the list" title="Change the list">✎</button>` : "<i></i>"}</div>${shopNote}`;
     const restHTML = `<datalist id="lsug">${L.suggestions.filter((s) => !open.some((i) => i.text.toLowerCase() === s.toLowerCase())).map((s) => `<option value="${esc(s)}">`).join("")}</datalist>
@@ -269,7 +278,13 @@
     else $("#main").innerHTML = `<div class="ls"><div id="ltop">${topHTML}</div><div class="lbox ${addShut() ? "lshut" : ""}"><div id="lmetaw">${metaHTML}</div>
       <form id="ladd" autocomplete="off" data-list="${l.id}"><input name="text" list="lsug" maxlength="120" placeholder="Add something…" value="${esc(keep)}" aria-label="Add to the list" enterkeyhint="done" required><input name="note" maxlength="200" placeholder="Note" aria-label="Note"><input name="category" list="ldep" maxlength="40" placeholder="Category" aria-label="Category" enterkeyhint="done"><button class="lsubmit" tabindex="-1" aria-hidden="true"></button></form>
       <div id="lrest">${restHTML}</div></div><p class="meta" id="lsync"></p></div>`;
-    $("#lall").onclick = () => { L.open = null; remember(null); clearInterval(L.timer); render(); };
+    $("#lall").onclick = () => { if (history.state?.list) history.back(); else allLists(); };
+    function allLists() {   // back at once: the lists from memory, this list's count from what's on screen
+      const was = L.list; L.open = null; remember(null); clearInterval(L.timer);
+      if (!L.lists) { const had = store.get("lists.all", null); if (had) { L.lists = had.lists; L.people = had.people; L.mine = had.mine; L.me = had.me; } }
+      const me = was && L.lists?.find((x) => x.id === was.id); if (me) Object.assign(me, { open: L.items.filter((i) => !i.done).length, name: was.name, place: was.place, place_name: was.place_name, important: was.important });
+      window.scrollTo(0, 0); render(); }
+    L.back = allLists;
     $("#ledit")?.addEventListener("click", () => listForm(l));
     const shopping = async (on) => {
       try { take(await api("POST", `lists/${l.id}/shopping`, { on })); toast(on ? "🛒 Everyone on the list has been told" : "Done shopping"); } catch (x) { toast(x.message); }
@@ -427,6 +442,7 @@
     .lbartog { border: 0; background: transparent; color: #fff; font: inherit; font-weight: 700; font-size: 16px; cursor: pointer; padding: 4px 0; }
     .lshut #ladd, .lshut .lhead { display: none; }
     .lbaredit { border: 0; background: transparent; color: #fff; font-size: 17px; cursor: pointer; padding: 4px 0; }
+    .lback .lbackb { padding: 4px 12px; font-size: 12px; line-height: inherit; border-radius: 999px; }   /* ← All lists: the blue button, as tall as the WhatsApp one */
     .lbackl { border: 0; background: transparent; color: var(--text); font: inherit; font-weight: 600; padding: 6px 2px; cursor: pointer; } .lbackl:hover { text-decoration: underline; } .lmeta { text-align: center; margin: 6px 10px; }
     #ladd { position: relative; display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1.3fr) minmax(0, 1.3fr); gap: 6px; padding: 6px 10px; border-bottom: 1px solid var(--line); }
     #ladd input { padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); color: var(--text); font: inherit; font-size: 16px; min-width: 0; }
@@ -440,7 +456,7 @@
     .lbin { flex: none; width: 40px; align-self: stretch; border: 0; background: transparent; color: var(--del-text, #c92a2a); cursor: pointer; display: flex; align-items: center; justify-content: center; }
     .lshare { display: grid; gap: 4px; }
     /* ⭐ important: the calendar's important yellow (not on Completed - it's done) */
-    .litems li.limp:not(.ldone), .lminerow.limp { background: var(--important); } .limpbox { font-weight: 600; }
+    .litems li.limp:not(.ldone), .lminerow.limp, .lcol .lrow.limp { background: var(--important); }   /* ⭐ list: its row on the Lists page */ .limpbox { font-weight: 600; }
     .litems small.ljob, .lminerow small { color: var(--muted); font-size: 11.5px; } .litems small.ljob.late, .lminerow small.late { color: var(--del-text, #c92a2a); }
     .lmine { margin-bottom: 14px; } .lminerow { display: flex; align-items: center; gap: 10px; padding: 0 0 0 12px; } .lminerow input { width: 22px; height: 22px; flex: none; }
     .lminerow button { flex: 1; min-width: 0; display: flex; align-items: center; gap: 12px; text-align: left; border: 0; background: transparent; color: var(--text); font: inherit; padding: 10px 12px 10px 0; cursor: pointer; } .lminerow b { font-weight: 600; font-size: 15px; }
@@ -450,6 +466,15 @@
     .lmhead { display: flex; gap: 12px; background: var(--brand); color: #fff; font-weight: 600; font-size: 13px; padding: 6px 12px 6px 51px; border-top: 1px solid rgba(255,255,255,.25); } .lmhead > span:first-child { flex: 1; }
     .lmsub { display: none; }
     @media (max-width: 699px) { .lmhead, .lmlist, .lmdue { display: none; } .lmsub { display: block; } .lmdays { width: 104px; font-size: 12.5px; } }   /* phone: days left stays as its own column, so the lights line up */
+    /* phone: the lists page condensed - each list on ONE line (name, then who it's shared with, cut short with … if it's long),
+       slimmer bars and rows, the boxes closer together */
+    @media (max-width: 699px) {
+      .lcols { gap: 8px; } .lmine { margin-bottom: -4px; }   /* + the page's 12px = 8px, like the boxes */ .lcolh { padding: 6px 9px; font-size: 14px; }
+      .lcol .lrow { padding: 7px 12px; gap: 8px; } .lcol .lrow > span { display: flex; align-items: baseline; gap: 8px; }
+      .lcol .lrow > span b { flex: none; max-width: 65%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal; }
+      .lcol .lrow > span small { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+      .lminerow button { padding: 6px 12px 6px 0; gap: 8px; } .lmine .lmdays { width: 88px; font-size: 12px; } .lminerow b { font-size: 14px; } .lminerow input { width: 20px; height: 20px; }
+    }
     .ldeps { display: grid; gap: 6px; } .ldeps > div { display: flex; flex-wrap: wrap; gap: 6px; }
     .ldepb { border: 1px solid var(--line); background: var(--card); color: var(--text); border-radius: 999px; padding: 6px 12px; font: inherit; font-size: 14px; cursor: pointer; }
     .ldepb.on { background: var(--brand); border-color: var(--brand); color: #fff; }

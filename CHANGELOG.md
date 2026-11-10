@@ -2,6 +2,14 @@
 
 ## Next version (not released yet)
 
+## 1.0.53
+- 🛒 Lists: "← All lists" is a blue button with white text, like the rest of the site.
+- ⬅ Phones: swipe in from the left edge to go back (home-screen app), like other iPhone apps - out of a list to All lists. Android's back gesture does the same.
+- 📱 Going to another section no longer shows the page you left while the new one loads; Lists appears straight away from the copy on the phone, and so does "← All lists" from inside a list.
+- 📱 Lists on phones: the page of lists is condensed - each list on one line, slimmer bars and rows. A list with no place no longer says "Anywhere".
+- ⭐ Lists: a whole list can be marked Important (✎ on the list) - its row shows yellow on the Lists page, for everyone on it.
+- 🎨 Every page's tabs and filter buttons look the same and sit centred, the Calendar's too.
+
 ## 1.0.52
 - 📌 Lists: a job can have a time and a 🔔 reminder as well as a due date (✎ box) - the reminder goes to whoever it's for, and ✅ Done on it ticks the line off the list (whoever gave the job hears that it's done).
 - 🔁 Calendar: Repeat sits right under the dates and times, and an existing entry can be made to repeat ("Repeat (from this one on)") - it stays the first one and the later ones are added.

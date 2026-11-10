@@ -61,12 +61,16 @@ button, input, select, textarea { font: inherit; color: inherit; }
   dialog { margin-top: calc(env(safe-area-inset-top) + 16px); max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px); } }
 .me { font-size: 13px; opacity: .85; }
 
-.tabs { display: flex; gap: 4px; overflow-x: auto; padding: 8px 12px; background: var(--card); border-bottom: 1px solid var(--line);
-  scrollbar-width: none; }
-.tabs button { border: 0; background: transparent; padding: 7px 12px; border-radius: 999px; white-space: nowrap; cursor: pointer; color: var(--muted); }
-.tabs button.active { background: var(--brand); color: var(--brand-text); }
+/* the Calendar's tabs look like every other page's tabs (.stabs: dark text, underline on the current one, centred like Firearms / Settings) -
+   The strip keeps the page background because the bar stays at the top while the calendar scrolls. */
+.tabs { display: flex; justify-content: center; flex-wrap: wrap; gap: 0; padding: 6px 12px 0; background: var(--bg); }
+.tabs button { border: 0; border-bottom: 3px solid transparent; background: none; color: var(--text); padding: 9px 12px; border-radius: 0;
+  white-space: nowrap; cursor: pointer; font: inherit; font-size: 15px; font-weight: 500; box-shadow: 0 1px 0 var(--line); }
+.tabs button:hover { border-bottom-color: var(--line); }
+.tabs button.active { border-bottom-color: #2f6fd6; font-weight: 700; }
+@media (max-width: 480px) { .tabs { padding: 4px 4px 0; } .tabs button { padding: 8px 7px; font-size: 14px; } }
 
-.filters { display: flex; gap: 6px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none;
+.filters { display: flex; justify-content: safe center; gap: 6px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none;
   background: var(--bg); border-bottom: 1px solid var(--line); }
 .chip { border: 1.5px solid var(--c, var(--line)); background: var(--card); color: var(--c, var(--text));
   padding: 4px 10px; border-radius: 999px; font-size: 13px; white-space: nowrap; cursor: pointer; }
@@ -240,7 +244,7 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .role.limited { background: var(--important); }
 /* ⚙ Settings: tabs, block headings with their own "+ Add", rows you can tap (›) */
 /* tabs inside a page: plain dark text, the current one underlined; they wrap, so every tab stays in view */
-.stabs { display: flex; flex-wrap: wrap; gap: 0 2px; padding: 6px 0 0; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
+.stabs { display: flex; flex-wrap: wrap; justify-content: safe center; gap: 0 2px; padding: 6px 0 0; margin-bottom: 12px; border-bottom: 1px solid var(--line); }
 .stabs button { border: 0; border-bottom: 3px solid transparent; margin-bottom: -1px; background: none; color: var(--text); padding: 9px 12px; border-radius: 0; white-space: nowrap; cursor: pointer; font: inherit; font-size: 15px; font-weight: 500; }
 .stabs button:hover { border-bottom-color: var(--line); }
 .stabs button.active { border-bottom-color: #2f6fd6; font-weight: 700; }
@@ -782,3 +786,14 @@ body.nosections .sections { display: none; }
 /* tick boxes on forms: big enough to see and hit (the browser's own are 13px) */
 .form .checks input[type="checkbox"], .form .fatick input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
 .form .checks label { display: flex; align-items: center; gap: 10px; }
+
+/* One look: every filter row is centred under the page's centred tabs, on every page ("make everything consistent").
+   The `main` in front wins over the modules' own styles, which load later. Buttons that act on the page (Print, Excel…) sit at the end
+   of the centred row instead of being pushed to the far right; a search box keeps a sensible width instead of stretching. */
+.filters, main .xfilters, main .xyears, main .fachips, main .vfilters { justify-content: center; }
+main .xfilters > *, main .fachips > *, main .xyears > * { margin-left: 0; }
+main #xbody > p.meta:first-child, main .fanote { text-align: center; }   /* the one-line note under the tabs, too */
+@media (min-width: 700px) {
+  main .xtop .xyears { flex: 0 1 auto; }
+  main .xfilters input[type=search], main .fachips input[type=search] { flex: 0 1 280px; }
+}

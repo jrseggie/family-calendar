@@ -15,7 +15,7 @@ test("only the family's own logins: admins and logins whose person is part of th
 
 test("a list needs a name; its place is a house or 'other' with a name; members are numbers, once each", () => {
   const l = cleanList({ name: " Groceries ", place: "town", members: ["3", 3, "x", 5] }, bad, ["town", "farm"]);
-  assert.deepEqual(l, { name: "Groceries", place: "town", place_name: null, members: [3, 5] });
+  assert.deepEqual(l, { name: "Groceries", place: "town", place_name: null, members: [3, 5], important: 0 });
   assert.equal(cleanList({ name: "Hardware", place: "other", place_name: "Builders" }, bad, []).place_name, "Builders");
   assert.throws(() => cleanList({ name: "" }, bad, []), /name/);
   assert.throws(() => cleanList({ name: "A", place: "moon" }, bad, ["town"]), /place/);

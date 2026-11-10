@@ -23,7 +23,7 @@ function setup() {
            CREATE TABLE places (key TEXT, active INTEGER DEFAULT 1); CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE events (id INTEGER PRIMARY KEY, start TEXT, end TEXT, start_time TEXT, remind TEXT, who TEXT, title TEXT, category TEXT, status TEXT, important INTEGER, source TEXT, created_by TEXT, created_at TEXT, updated_by TEXT, updated_at TEXT);
            INSERT INTO users VALUES (1, 'Emma', 'admin', NULL, 1), (2, 'Leo', 'child', 'Leo', 1), (3, 'Nanny', 'limited', NULL, 1);
            INSERT INTO places VALUES ('town', 1), ('farm', 1);`);
-  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql", "0054_list_job_time.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
+  for (const f of ["0045_lists.sql", "0046_list_order_departments.sql", "0048_push_notifications.sql", "0049_list_jobs.sql", "0050_list_important.sql", "0054_list_job_time.sql", "0055_whole_list_important.sql"]) db.exec(readFileSync(new URL(`../migrations/${f}`, import.meta.url), "utf8"));
   const env = { DB: d1(db) }, people = [{ name: "Leo", family: 1 }, { name: "Nanny", family: 0 }];
   const users = { 1: { id: 1, name: "Emma", role: "admin" }, 2: { id: 2, name: "Leo", role: "child", person: "Leo" }, 3: { id: 3, name: "Nanny", role: "limited" } };
   const call = async (who, method, path, body) => {
@@ -132,4 +132,12 @@ test("undo after a delete puts the line back exactly as it was", async () => {
   assert.deepEqual([r.items[0].id, r.items[0].done, r.items[0].category, r.items[0].done_at], [was.id, 1, "Pantry", was.done_at]);
   r = await call(1, "POST", `lists/${id}/restore`, { item: was });   // sent twice (no signal): still one
   assert.equal(r.items.length, 1);
+});
+
+test("⭐ a whole list marked important: everyone on it sees the star; unticking takes it off", async () => {
+  const { call } = setup();
+  const { id } = await call(1, "POST", "lists", { name: "Groceries", place: "town", important: true, members: [2] });
+  assert.equal((await call(2, "GET", "lists")).lists[0].important, 1);   // Leo is on it: he sees it starred too
+  await call(1, "PUT", `lists/${id}`, { name: "Groceries", place: "town", important: false, members: [2] });
+  assert.equal((await call(2, "GET", "lists")).lists[0].important, 0);
 });
