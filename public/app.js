@@ -70,6 +70,15 @@ async function api(method, path, body) {
 }
 const myBuild = (document.querySelector('script[src*="app.js"]')?.src.match(/\?v=(\d+)/) || [])[1] || "";
 const installed = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+// 🚪 an admin signed this login out (Settings › Logins): forget the copies kept on this device (the calendar and the lists - changes
+// still waiting to be sent stay), then Cloudflare's sign-out page ends the sign-in here; the next visit asks for the emailed code
+let signingOut = false;
+async function signedOut() {
+  if (signingOut) return; signingOut = true;
+  try { for (const k of Object.keys(localStorage)) if (k === "lists.all" || k.startsWith("lists.copy.")) localStorage.removeItem(k); } catch { /* private mode */ }
+  try { for (const k of await caches.keys()) await caches.delete(k); } catch { /* no caches */ }
+  location.replace("/cdn-cgi/access/logout");
+}
 async function apiCall(method, path, body) {
   const headers = { "content-type": "application/json", "X-Build": `${myBuild}${installed ? " app" : " browser"}` };   // which version each device runs (table health)
   const as = load("viewAs");                       // demo only: "View as" another login
@@ -81,6 +90,7 @@ async function apiCall(method, path, body) {
   catch { throw Object.assign(new Error(navigator.onLine ? "Couldn't reach the calendar – check the connection" : "You're offline – this needs a connection"), { offline: true }); }
   const data = await r.json().catch(() => ({}));
   if (r.status === 401 && data.setup) { setupLogin(!!code); throw new Error("setup"); }
+  if (r.status === 401 && data.signin) { signedOut(); throw new Error("Please sign in again"); }
   if (!r.ok) throw new Error(data.error || `Request failed (${r.status})`);
   return data;
 }
@@ -1890,11 +1900,19 @@ function userForm(u) {
     <div class="meta" style="margin-top:-6px">Used by 📅 Send invite. Addresses come from the Weekly email list below.</div>
     <div class="checks"><label><input type="checkbox" name="active" ${x.active ? "checked" : ""}> Login enabled</label>
       ${u ? "" : `<label><input type="checkbox" name="welcome" checked> Then send them the welcome (from my email or WhatsApp)</label>`}</div>
+    ${u?.session_from ? `<div class="meta">🔐 Latest sign-in ${fmtLong(u.session_from.slice(0, 10))}${u.session_to ? ` · stays signed in until ${fmtLong(u.session_to.slice(0, 10))}` : ""}${u.signed_out_at && u.signed_out_at > u.session_from ? ` · 🚪 signed out ${fmtLong(u.signed_out_at.slice(0, 10))}` : ""}</div>` : ""}
     <div class="err"></div>
-    <div class="actions">${u ? `<button type="button" class="danger" id="del">Remove</button>` : ""}${u?.active ? `<button type="button" id="uwelcome">👋 Send welcome</button>` : ""}
+    <div class="actions">${u ? `<button type="button" class="danger" id="del">Remove</button>` : ""}${u?.active ? `<button type="button" id="uwelcome">👋 Send welcome</button>` : ""}${u?.active && u.session_from ? `<button type="button" id="usignout">🚪 Sign out</button>` : ""}
       <button type="button" id="cancel">Cancel</button><button class="primary">Save</button></div></form>`, () => {
     const f = $("#f");
     $("#uwelcome")?.addEventListener("click", () => welcomeForm(u));
+    // 🚪 lost phone / borrowed computer: every device this login is signed in on asks for the emailed code again (the login stays on)
+    $("#usignout")?.addEventListener("click", async () => {
+      if (!confirm(`Sign ${u.name} out on every phone and computer?
+
+They stay on the calendar - next time they open it they sign in again with the code emailed to them.`)) return;
+      try { await api("POST", `setup/users/${u.id}/signout`); toast(`${u.name} is signed out everywhere`); u.signed_out_at = new Date().toISOString(); } catch (e) { toast(e.message); }
+    });
     // "Can add / change entries for": a tick box per person they see (e.g. a helper sees the child but only adds her own entries);
     // nothing ticked = view only. A line underneath says it in words.
     const edit = new Set(x.can_edit ? (whoList(x.edit_who || "").length ? whoList(x.edit_who) : [...see]) : []);

@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.55
+- 🚪 Settings › Logins: "Sign out" on a login signs that person out on every phone and computer (a lost phone, a borrowed computer) - they stay on the calendar and sign in again with the emailed code. The login's form shows its latest sign-in and how long it lasts.
+
 ## 1.0.54
 - 📋 Lists: an item can be copied to another list as well as moved (✎ › List › "Copy to …") - it stays on this list too; already on the other list = no second one.
 

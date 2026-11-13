@@ -74,7 +74,7 @@ async function verifiedAccessEmail(request, env) {
   const claims = JSON.parse(new TextDecoder().decode(b64url(p)));
   const aud = Array.isArray(claims.aud) ? claims.aud : [claims.aud];
   if (!aud.includes(env.ACCESS_AUD) || claims.exp * 1000 < Date.now() || claims.iss !== `https://${env.ACCESS_TEAM_DOMAIN}`) return "";
-  return String(claims.email || "").toLowerCase();
+  return { email: String(claims.email || "").toLowerCase(), iat: +claims.iat || 0, exp: +claims.exp || 0 };
 }
 
 // ---------- who is asking
@@ -92,7 +92,7 @@ async function currentUser(request, env) {
   const setup = await setupUser(request, env);
   if (setup) return { ...setup, seeList: split(setup.see), editList: editList(setup), setup: true };
   // live site: only a verified Access token counts. Demo: the "View as" header. Anything else: nobody.
-  const accessEmail = env.ACCESS_AUD ? await verifiedAccessEmail(request, env) : "";
+  const session = env.ACCESS_AUD ? await verifiedAccessEmail(request, env) : "", accessEmail = session?.email || "";
   if (!env.ACCESS_AUD && !demo(env)) return null;
   let email = accessEmail;
   if (!email && demo(env)) email = (request.headers.get("X-Demo-User") || "").toLowerCase();
@@ -105,6 +105,13 @@ async function currentUser(request, env) {
     u = { id: 0, email: accessEmail, name: accessEmail.split("@")[0], role: "admin", active: 1 };
   }
   if (!u || !u.active) return null;
+  // 🚪 signed out by an admin after this sign-in started: this device has to sign in again (the page sends it to Cloudflare's sign-out)
+  if (session?.iat && u.signed_out_at && session.iat * 1000 < Date.parse(u.signed_out_at)) return { signin: true };
+  // the latest sign-in (start and end), for the login's form - written only when a new sign-in shows up
+  if (u.id && session?.iat && "session_from" in u) {
+    const from = new Date(session.iat * 1000).toISOString(), to = new Date(session.exp * 1000).toISOString();
+    if ((u.session_from || "") < from) await env.DB.prepare("UPDATE users SET session_from = ?, session_to = ? WHERE id = ?").bind(from, to, u.id).run().catch(() => {});
+  }
   // the day this login last opened the calendar (at most one write a day; for the usage check-in, lib/usage.js)
   const today = new Date().toISOString().slice(0, 10);
   if (u.id && "last_seen" in u && (u.last_seen || "") < today) await env.DB.prepare("UPDATE users SET last_seen = ? WHERE id = ?").bind(today, u.id).run().catch(() => {});
@@ -1098,6 +1105,7 @@ export async function onRequest({ request, env, params, waitUntil }) {
     }
     const u = await currentUser(request, env);
     if (!u && setupMode(env)) return json({ error: "Enter the setup password you chose when installing", setup: true }, 401);
+    if (u?.signin) return json({ error: "Please sign in again", signin: true }, 401);
     if (!u) return fail(403, "Your email hasn't been given access to this calendar yet – ask whoever runs this calendar.");
     if (Object.hasOwn(extraApi, parts[0])) return await extraApi[parts[0]]({ request, env, u, parts, json, deny, invalid });
     if (parts[0] === "countries" && request.method === "GET") {   // Setup / wizard: countries, their time zones and states
@@ -1231,6 +1239,14 @@ export async function onRequest({ request, env, params, waitUntil }) {
           "content-disposition": `attachment; filename="calendar-backup-${day}.sql"` } });
       }
       if (parts[1] === "users" && parts[3] === "welcome" && /^\d+$/.test(parts[2])) return await setupWelcome(request, env, u, +parts[2]);
+      if (parts[1] === "users" && parts[3] === "signout" && /^\d+$/.test(parts[2]) && request.method === "POST") {   // 🚪 every device signs in again
+        if (!isAdmin(u)) deny("Only an admin can sign people out");
+        const who = await env.DB.prepare("SELECT id, name, email FROM users WHERE id = ?").bind(+parts[2]).first();
+        if (!who) invalid("That login has gone");
+        await env.DB.prepare("UPDATE users SET signed_out_at = ? WHERE id = ?").bind(new Date().toISOString(), who.id).run();
+        await log(env, u, "Signed out a login", `${who.name} <${who.email}> - every device signs in again`);
+        return json({ ok: true });
+      }
       if (parts[1] === "users") return await setupUsers(request, env, u, id);
       if (parts[1] === "digest") return await setupDigest(request, env, u, id);
     }
