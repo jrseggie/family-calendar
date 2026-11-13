@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.56
+- ↔ Month calendar: an entry for several people sits on the same line in each of their columns, so a day reads straight across; the grid lines are darker, and the line between days darkest, so one day isn't mistaken for the next.
+
 ## 1.0.55
 - 🚪 Settings › Logins: "Sign out" on a login signs that person out on every phone and computer (a lost phone, a borrowed computer) - they stay on the calendar and sign in again with the emailed code. The login's form shows its latest sign-in and how long it lasts.
 

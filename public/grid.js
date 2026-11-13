@@ -147,8 +147,9 @@ function gridMonth(m, days, where, cols, showClashes) {
     const strip = famOn ? info.items.filter((it) => !it.who.some((p) => all.includes(p)) && (it.kind === "birthday" || visible(it.who))) : [];
     const phx = info.phx.map((x) => `<div class="gi phx">${x.flag} ${esc(x.name)}</div>`).join("");   // another country's holiday (information only)
     const clashes = showClashes ? clashesFor(key, wh, info) : [], maybes = showClashes ? CalendarRules.maybesFor(state.data, key) : [];
+    const slots = daySlots(info, key, cols), rows = slots.rows + (strip.length || info.ph || phx ? 1 : 0);
     html += `<div class="gd ${rowCls}" id="g-${key}" data-day="${key}" ${clashes.length || maybes.length ? `data-clash="${key}"` : ""}
-      title="${esc(info.ph || "")}" ${strip.length || info.ph || phx ? `style="grid-row: span 2"` : ""}>
+      title="${esc(info.ph || "")}" ${rows > 1 ? `style="grid-row: span ${rows}"` : ""}>
       <b>${n}</b><small>${DOW1[wd]}</small>${clashes.length ? `<span class="warn">⚠</span>` : maybes.length ? `<span class="maybe" title="Only if a pencilled-in plan goes ahead">❔</span>` : ""}</div>`;
     if (strip.length || info.ph || phx) {
       html += `<div class="gf ${rowCls}" data-day="${key}">${info.ph ? `<div class="gi across phbar" style="grid-template-columns:repeat(${cols.length},minmax(0,1fr))">${   // like Family: the name under every column
@@ -159,12 +160,53 @@ function gridMonth(m, days, where, cols, showClashes) {
         return barHTML(it, key, n, null, p.length && !it.who.includes("Family") ? p.join(" & ") : "");
       }).join("")}</div>`;
     }
-    for (const c of cols) html += gridCell(c, key, n, info, wh, rowCls);
+    for (const c of cols) html += gridCell(c, key, n, info, wh, rowCls, slots);
   }
   return html + `</div></section>`;
 }
 
-function gridCell(person, key, n, info, wh, rowCls) {
+// ↔ one line per entry across the day: an entry for several people sits on the same line in each of their
+// columns, so a column can have a gap where another person's entry is. Each column keeps its own order (all-day first, then by
+// time); at the same time, entries for more people go first. A school-holiday bar takes the first line(s) of that child's column.
+// The cells share their line heights (CSS subgrid, .gc.slots), so a title that wraps keeps the lines level. MAX lines a day; more = "+n".
+const MAX_LINES = 4;
+function daySlots(info, key, cols) {
+  const used = Object.fromEntries(cols.map((c) => [c, holidayBars(c, key, info).length])), at = new Map();
+  const tk = (it) => it.kind === "event" ? CalendarRules.timeKey(it.ev, key) : "";
+  const list = info.items.map((it, i) => ({ it, i, on: cols.filter((c) => it.who.includes(c)) })).filter((x) => x.on.length)
+    .sort((a, b) => (b.it.kind === "birthday") - (a.it.kind === "birthday") || (!!tk(a.it)) - (!!tk(b.it)) || tk(a.it).localeCompare(tk(b.it)) || b.on.length - a.on.length || a.i - b.i);
+  for (const { it, on } of list) { const r = Math.max(...on.map((c) => used[c])); at.set(it, r); on.forEach((c) => { used[c] = r + 1; }); }
+  const most = Math.max(1, ...Object.values(used));
+  return { at, rows: Math.min(most, MAX_LINES) + (most > MAX_LINES ? 1 : 0), shown: Math.min(most, MAX_LINES) };
+}
+// a child's school-holiday bar (on its first day and the 1st of each month) and the 🎒 day back
+function holidayBars(person, key, info) {
+  if (!KIDS().includes(person)) return [];
+  const items = info.items.filter((it) => it.who.includes(person));
+  const back = (h) => fmtDay(iso(addDays(parse(h.end), 1)));
+  const closes = (h) => CalendarRules.closesAt(h);
+  return [...info.offs.filter((h) => h.child === person && (h.start === key || key.endsWith("-01"))).map((h) => `<div class="gi shol" data-sh="${h.id}" style="--c:${COLORS[person]}" ${h.notes ? `title="${esc(h.notes)}"` : ""}>🌿 ${esc(h.name)}
+    <small>${h.start === key ? (closes(h) ? `closes ${closes(h)} · ` : "") : "cont. · "}back ${back(h)}</small></div>`),
+    // (not when a "Boarders Return" entry already says it, nor after a holiday that runs to 31 Dec because the next year isn't known)
+    ...(!items.some((it) => /boarders return/i.test(it.ev?.title || ""))
+      ? state.data.schoolHolidays.filter((h) => h.child === person && iso(addDays(parse(h.end), 1)) === key && !h.end.endsWith("-12-31"))
+        .map((h) => `<div class="gi sback" data-sh="${h.id}" style="--c:${COLORS[person]}">🎒 Back to school</div>`) : [])];
+}
+
+function gridCell(person, key, n, info, wh, rowCls, slots) {
+  if (slots) {   // ↔ lined up with the other columns (see daySlots)
+    const items = info.items.filter((it) => it.who.includes(person) && slots.at.has(it));
+    let bg = "";
+    if (KIDS().includes(person) && info.off.includes(person)) bg = `color-mix(in srgb, ${COLORS[person]} 22%, var(--card))`;
+    const slot = (r, h) => `<div class="gslot" style="grid-row:${r + 1}">${h}</div>`;
+    const hol = holidayBars(person, key, info).slice(0, slots.shown).map((h, i) => slot(i, h));
+    const shown = items.filter((it) => slots.at.get(it) < slots.shown), hidden = items.length - shown.length;
+    const lines = hol.join("") + shown.map((it) => slot(slots.at.get(it), barHTML(it, key, n, person))).join("");
+    const more = hidden ? `<div class="gmore" style="grid-row:${slots.shown + 1}">+${hidden}</div>` : "";
+    const w = wh[person], pin = w?.loc === "conflict" ? "⚠" : w?.loc === "unknown" ? "❓" : "";
+    return `<div class="gc slots ${rowCls}" data-cell="${key}|${esc(person)}" style="grid-row: span ${slots.rows};${bg ? `background:${bg}` : ""}">
+    ${pin ? `<span class="pin">${pin}</span>` : ""}${lines}${more}</div>`;
+  }
   const items = info.items.filter((it) => it.who.includes(person));
   let bg = "";
   if (KIDS().includes(person) && info.off.includes(person)) bg = `color-mix(in srgb, ${COLORS[person]} 22%, var(--card))`;

@@ -308,7 +308,9 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 /* ===== Family grid (Excel-style: days x people) ===== */
 .fgrid, .ghrow { --dcol: 46px; }
 .fgrid { display: grid; gap: 0; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
-.fgrid > div { border-bottom: 1px solid var(--line); border-right: 1px solid var(--line); min-width: 0; }
+.fgrid > div { --gline: color-mix(in srgb, var(--text) 16%, var(--card)); border-bottom: 1px solid var(--gline); border-right: 1px solid var(--gline); min-width: 0; }   /* every grid line a bit darker */
+/* the line under each whole day is darker than the lines inside it (the family strip), so one day can't be taken for the next */
+.fgrid > .gd, .fgrid > .gc { border-bottom-color: color-mix(in srgb, var(--text) 32%, var(--card)); }
 .ghead { position: sticky; top: var(--bar-h, 140px); z-index: 3; background: var(--bg); padding-top: 10px; }
 .gtitle { font-size: 18px; font-weight: 800; padding: 0 4px 6px; }
 .ghrow { display: grid; background: var(--weekbg); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
@@ -797,3 +799,10 @@ main #xbody > p.meta:first-child, main .fanote { text-align: center; }   /* the 
   main .xtop .xyears { flex: 0 1 auto; }
   main .xfilters input[type=search], main .fachips input[type=search] { flex: 0 1 280px; }
 }
+
+/* ↔ the Month grid: a day's columns share their lines (grid.js daySlots), so one entry for several people sits level across them */
+.gc.slots { display: grid; grid-template-rows: subgrid; align-content: start; }
+.gc.slots > .gslot { min-width: 0; }
+.gc.slots > .gslot > .gi { margin-top: 2px; }
+.gc.slots > .gslot:not([style^="grid-row:1;"]):not([style="grid-row:1"]) > .gi:not(.cont) { margin-top: 5px; }   /* the gap between lines, the same in every column */
+.gc.slots > .gslot > .gi.cont { margin-top: -3px; }
