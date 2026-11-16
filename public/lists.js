@@ -153,9 +153,9 @@
     return ` · ${fmtDay(iso)} ${d.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}`; };
   function groups(open) {
     if (!open.some((i) => i.category)) return [["", open]];
-    const g = new Map();   // "Other" too sits where it was dragged to
-    open.forEach((i) => { const k = i.category || NONE; if (!g.has(k)) g.set(k, []); g.get(k).push(i); });
-    return [...g.entries()];
+    const g = new Map(), shown = new Map();   // "Other" too sits where it was dragged to; "dairy" and "Dairy" = one section (the first spelling)
+    open.forEach((i) => { const k = (i.category || NONE).trim().toLowerCase(); if (!g.has(k)) { g.set(k, []); shown.set(k, (i.category || NONE).trim()); } g.get(k).push(i); });
+    return [...g.entries()].map(([k, ls]) => [shown.get(k), ls]);
   }
   const ikey = (i) => i.client_id ? `c:${i.client_id}` : String(i.id);
   // a move (an item within its department, or a whole department) = the new order of everything still to get, sent in one go
@@ -269,14 +269,15 @@
     const topHTML = `<div class="lback"><button type="button" class="primary lbackb" id="lall">← All lists</button><span>${shopBtn}<button type="button" class="ackbtn" id="lwa">💬 Send by WhatsApp</button></span></div>`;
     // (the shopping time sits under the 🟢🛒 itself, not in a line here)
     const shopNote = "", metaHTML = `<div class="lbar"><i></i><button type="button" class="lbartog" id="ltitle" aria-expanded="${!addShut()}">${addShut() ? "▸" : "▾"} ${esc(fullName(l))}</button>${l.owner_id === L.me ? `<button type="button" class="lbaredit" id="ledit" aria-label="Change the list" title="Change the list">✎</button>` : "<i></i>"}</div>${shopNote}`;
-    const restHTML = `<datalist id="lsug">${L.suggestions.filter((s) => !open.some((i) => i.text.toLowerCase() === s.toLowerCase())).map((s) => `<option value="${esc(s)}">`).join("")}</datalist>
-      <datalist id="ldep">${L.departments.map((d) => `<option value="${esc(d)}">`).join("")}</datalist>
+    // no suggestions under "Add something…" (on a phone the list of earlier things covered half the screen) - just type
+    const restHTML = `
+
       ${open.length > 1 ? `<div class="lhead"><span><button type="button" data-sort="text">Item${arrow(shown(gs, "text"))}</button></span>${priv ? "" : `<button type="button" class="lwho" data-sort="added_by">Added by${arrow(shown(gs, "added_by"))}</button>`}<span class="lhpad"></span></div>` : ""}
       <div id="lopen">${open.length ? openHTML : `<ul class="litems"><li class="lempty">Nothing to get. Add something above.</li></ul>`}</div>
       ${done.length ? `<button type="button" class="ldonehead" id="ltog" aria-expanded="${!hideDone()}">${hideDone() ? "▸" : "▾"} Completed (${done.length})</button>${hideDone() ? "" : `<ul class="litems">${done.map((i) => row(i, false)).join("")}</ul>`}` : ""}`;
     if ($("#ladd")?.dataset.list === String(l.id)) { $("#ltop").innerHTML = topHTML; $("#lmetaw").innerHTML = metaHTML; $("#lrest").innerHTML = restHTML; }
     else $("#main").innerHTML = `<div class="ls"><div id="ltop">${topHTML}</div><div class="lbox ${addShut() ? "lshut" : ""}"><div id="lmetaw">${metaHTML}</div>
-      <form id="ladd" autocomplete="off" data-list="${l.id}"><input name="text" list="lsug" maxlength="120" placeholder="Add something…" value="${esc(keep)}" aria-label="Add to the list" enterkeyhint="done" required><input name="note" maxlength="200" placeholder="Note" aria-label="Note"><input name="category" list="ldep" maxlength="40" placeholder="Category" aria-label="Category" enterkeyhint="done"><button class="lsubmit" tabindex="-1" aria-hidden="true"></button></form>
+      <form id="ladd" autocomplete="off" data-list="${l.id}"><input name="text" autocomplete="off" autocorrect="on" maxlength="120" placeholder="Add something…" value="${esc(keep)}" aria-label="Add to the list" enterkeyhint="done" required><input name="note" maxlength="200" placeholder="Note" aria-label="Note"><input name="category" autocomplete="off" maxlength="40" placeholder="Category" aria-label="Category" enterkeyhint="done"><button class="lsubmit" tabindex="-1" aria-hidden="true"></button></form>
       <div id="lrest">${restHTML}</div></div><p class="meta" id="lsync"></p></div>`;
     $("#lall").onclick = () => { if (history.state?.list) history.back(); else allLists(); };
     function allLists() {   // back at once: the lists from memory, this list's count from what's on screen

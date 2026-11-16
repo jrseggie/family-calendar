@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.57
+- 🛒 Lists: no more pop-up suggestions of earlier things under "Add something…" or Category (on a phone they covered half the screen) - just type. A category typed in another case ("dairy") goes into the one the list already has ("Dairy"), so there are never two.
+
 ## 1.0.56
 - ↔ Month calendar: an entry for several people sits on the same line in each of their columns, so a day reads straight across; the grid lines are darker, and the line between days darkest, so one day isn't mistaken for the next.
 

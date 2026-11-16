@@ -157,3 +157,19 @@ test("copy to another list: the line stays here and goes there too; already ther
   const again = await call(1, "GET", `lists/${b}`);
   assert.equal(again.items.length, 1); assert.deepEqual(open(again), ["Milk"]);
 });
+
+test("a category typed in another case is the one the list already has: Dairy, dairy and ' DAIRY ' = one Dairy", async () => {
+  const { call } = setup();
+  const { id } = await call(1, "POST", "lists", { name: "Groceries", members: [] });
+  await call(1, "POST", `lists/${id}/items`, { text: "Milk", category: "Dairy", client_id: "dddddddd1" });
+  await call(1, "POST", `lists/${id}/items`, { text: "Cheese", category: "dairy", client_id: "dddddddd2" });
+  const r = await call(1, "POST", `lists/${id}/items`, { text: "Yoghurt", category: " DAIRY ", client_id: "dddddddd3" });
+  assert.deepEqual([...new Set(r.items.map((i) => i.category))], ["Dairy"]);
+  const butter = (await call(1, "POST", `lists/${id}/items`, { text: "Butter", client_id: "dddddddd4" })).items.find((i) => i.text === "Butter");
+  const back = await call(1, "PUT", `lists/${id}/items/${butter.id}`, { text: "Butter", category: "dAiRy" });
+  assert.equal(back.items.find((i) => i.text === "Butter").category, "Dairy");
+  const other = (await call(1, "POST", "lists", { name: "Snacks", members: [] })).id;
+  await call(1, "POST", `lists/${other}/items`, { text: "Chips", category: "Crisps", client_id: "dddddddd5" });
+  await call(1, "PUT", `lists/${other}/items/${(await call(1, "GET", `lists/${other}`)).items[0].id}`, { text: "Chips", category: "crisps" });
+  assert.equal((await call(1, "GET", `lists/${other}`)).items[0].category, "Crisps");
+});
