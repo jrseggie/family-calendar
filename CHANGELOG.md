@@ -2,6 +2,9 @@
 
 ## Next version (not released yet)
 
+## 1.0.58
+- 🌙 Dark mode: people's names written in their colour (the Month calendar's column headings, the person filter buttons, the Changes tab, school pages) were hard to read on the dark background. Headings now show the name in white with the person's colour as a bar under it, the filter buttons keep their colour on the border, and coloured names elsewhere use a lighter shade in dark mode.
+
 ## 1.0.57
 - 🛒 Lists: no more pop-up suggestions of earlier things under "Add something…" or Category (on a phone they covered half the screen) - just type. A category typed in another case ("dairy") goes into the one the list already has ("Dairy"), so there are never two.
 

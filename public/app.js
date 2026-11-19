@@ -545,7 +545,7 @@ function renderUpcoming() {
         <div class="title">🌿 ${esc(b.name)} starts${CalendarRules.closesAt(b) ? ` – school closes <span class="tm">${esc(CalendarRules.closesAt(b))}</span>` : ""}${b.status === "Tentative" ? " (?)" : ""}${b.notes ? `<div class="hnote">📝 ${esc(b.notes)}</div>` : ""}</div>
         <span class="range">${fmtShort(b.start)} – ${fmtShort(b.end)}</span></div>`);
       const stillOn = ongoing.length ? `<div class="still">Still on: ${ongoing.map((it) =>
-        `<span data-ev="${it.ev.id}"><b style="color:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
+        `<span data-ev="${it.ev.id}"><b class="pname" style="--c:${COLORS[it.who[0]]}">${esc(it.who.join(" & "))}</b> ${it.ev.location && LOC()[it.ev.location] ? LOC()[it.ev.location].icon + " " : ""}${esc(it.ev.title)}${CalendarRules.pencilled(state.data, it.ev) ? " ✏️" : ""} <small>(to ${fmtShort(it.ev.end)})</small></span>`).join(" · ")}</div>` : "";
       const dow = parse(key).getDay();
       const cls = ["day", isToday ? "today" : "", dow === 0 || dow === 6 ? "weekend" : "", key < today ? "past" : ""].join(" ");
       const warn = dayWarnings(key);   // ⚠ things to sort that day (grid.js)

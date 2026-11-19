@@ -72,7 +72,7 @@ button, input, select, textarea { font: inherit; color: inherit; }
 
 .filters { display: flex; justify-content: safe center; gap: 6px; overflow-x: auto; padding: 8px 12px; scrollbar-width: none;
   background: var(--bg); border-bottom: 1px solid var(--line); }
-.chip { border: 1.5px solid var(--c, var(--line)); background: var(--card); color: var(--c, var(--text));
+.chip { border: 1.5px solid var(--c, var(--line)); background: var(--card); color: var(--text); /* person colour = border only: coloured text was unreadable on dark (2026-11-19) */
   padding: 4px 10px; border-radius: 999px; font-size: 13px; white-space: nowrap; cursor: pointer; }
 .chip.on { background: var(--c, var(--brand)); color: #fff; }
 
@@ -314,8 +314,9 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .ghead { position: sticky; top: var(--bar-h, 140px); z-index: 3; background: var(--bg); padding-top: 10px; }
 .gtitle { font-size: 18px; font-weight: 800; padding: 0 4px 6px; }
 .ghrow { display: grid; background: var(--weekbg); border: 1px solid var(--line); border-bottom: 0; border-radius: var(--radius) var(--radius) 0 0; }
-.gh { font-size: 12px; font-weight: 800; text-align: center; padding: 6px 2px; color: var(--c, var(--text));
-  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--line); }
+.gh { font-size: 12px; font-weight: 800; text-align: center; padding: 6px 2px 3px; color: var(--text);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--line); border-bottom: 3px solid var(--c, transparent); }
+/* names in plain text, the person's colour as a bar under it: coloured text was unreadable in dark mode (2026-11-19) */
 .fgrid { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
 .gd { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding: 3px 0; cursor: pointer; }
 .gd b { font-size: 17px; } .gd small { font-size: 12px; font-weight: 700; color: var(--text); opacity: .75; text-transform: uppercase; letter-spacing: .3px; }
@@ -806,3 +807,8 @@ main #xbody > p.meta:first-child, main .fanote { text-align: center; }   /* the 
 .gc.slots > .gslot > .gi { margin-top: 2px; }
 .gc.slots > .gslot:not([style^="grid-row:1;"]):not([style="grid-row:1"]) > .gi:not(.cont) { margin-top: 5px; }   /* the gap between lines, the same in every column */
 .gc.slots > .gslot > .gi.cont { margin-top: -3px; }
+
+/* a name in its person's colour: lighter in dark mode so it reads on the dark background (2026-11-19) */
+.pname { color: var(--c); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) :is(.pname, .byname, .pill, .leavebar .lb-p b, .snk, .tl-name, .sck) { color: color-mix(in srgb, var(--c) 50%, #fff); } }
+:root[data-theme="dark"] :is(.pname, .byname, .pill, .leavebar .lb-p b, .snk, .tl-name, .sck) { color: color-mix(in srgb, var(--c) 50%, #fff); }
