@@ -2,6 +2,10 @@
 
 ## Next version (not released yet)
 
+## 1.0.59
+- 📅 Month calendar: each person's name at the top of the grid sits on a light shade of their colour, so the columns are easier to tell apart.
+- 📅 Month calendar: on a day where entries carry on from the day before, the second and third lines no longer squash on top of each other.
+
 ## 1.0.58
 - 🌙 Dark mode: people's names written in their colour (the Month calendar's column headings, the person filter buttons, the Changes tab, school pages) were hard to read on the dark background. Headings now show the name in white with the person's colour as a bar under it, the filter buttons keep their colour on the border, and coloured names elsewhere use a lighter shade in dark mode.
 

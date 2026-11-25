@@ -317,6 +317,10 @@ dialog .form > .actions { position: sticky; bottom: 0; z-index: 3; background: v
 .gh { font-size: 12px; font-weight: 800; text-align: center; padding: 6px 2px 3px; color: var(--text);
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; border-right: 1px solid var(--line); border-bottom: 3px solid var(--c, transparent); }
 /* names in plain text, the person's colour as a bar under it: coloured text was unreadable in dark mode (2026-11-19) */
+/* the name's box a light shade of the person's colour, bar under it unchanged (2026-11-25); mixed with the card colour so dark mode gets a dark shade */
+.gh[style*="--c"] { background: color-mix(in srgb, var(--c) var(--ghtint, 22%), var(--card)); }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .gh { --ghtint: 30%; } }
+:root[data-theme="dark"] .gh { --ghtint: 30%; }
 .fgrid { border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; }
 .gd { display: flex; flex-direction: column; align-items: center; justify-content: center; line-height: 1.1; padding: 3px 0; cursor: pointer; }
 .gd b { font-size: 17px; } .gd small { font-size: 12px; font-weight: 700; color: var(--text); opacity: .75; text-transform: uppercase; letter-spacing: .3px; }
@@ -807,6 +811,7 @@ main #xbody > p.meta:first-child, main .fanote { text-align: center; }   /* the 
 .gc.slots > .gslot > .gi { margin-top: 2px; }
 .gc.slots > .gslot:not([style^="grid-row:1;"]):not([style="grid-row:1"]) > .gi:not(.cont) { margin-top: 5px; }   /* the gap between lines, the same in every column */
 .gc.slots > .gslot > .gi.cont { margin-top: -3px; }
+.gc.slots > .gslot:not([style^="grid-row:1;"]):not([style="grid-row:1"]) > .gi.cont { margin-top: 5px; }   /* a bar continuing from the day before joins up only on the first line; lower lines keep the normal gap (2026-11-25: weekends squashed) */
 
 /* a name in its person's colour: lighter in dark mode so it reads on the dark background (2026-11-19) */
 .pname { color: var(--c); }
